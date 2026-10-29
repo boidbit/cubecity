@@ -616,7 +616,7 @@ func _player_plow() -> void:
 			var b: Building = col.get_meta("bld")
 			var cells: int = main.world.car_hit_building(b, r["position"], dirv, fwd_speed)
 			if cells > 0:
-				linear_velocity *= clampf(1.0 - cells * 0.005, 0.7, 1.0)
+				linear_velocity *= clampf(1.0 - cells * 0.003, 0.8, 1.0)
 				hit_cd = 0.12
 				hurt(minf(cells * 0.025, 3.0))
 				nitro = minf(100.0, nitro + cells * 0.08)

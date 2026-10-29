@@ -408,8 +408,19 @@ func _route(a: Vector2i, b: Vector2i, h: Vector2i, x_first: bool) -> Array[Vecto
 			if out.size() == 1 and step == -h:
 				return []
 			c += step
+			if _blocked(c):
+				return []
 			out.append(c)
 	return out
+
+
+# Intersections next to a flyover: its ramps block the cross street there, and the
+# road under the deck runs into the underside of the ramp.
+func _blocked(n: Vector2i) -> bool:
+	for f in world.flyovers:
+		if n.x == f.x and absi(n.y - f.y) <= 1:
+			return true
+	return false
 
 
 # Prefer carrying straight on, then turning; fall back to the other order.
@@ -484,7 +495,7 @@ func plan_ramp() -> bool:
 		var before := Vector2i(k, m if s > 0 else m + 1) if r["along_z"] else Vector2i(m if s > 0 else m + 1, k)
 		var pre := before - step
 		var after := before + step * 2
-		if not _inside(pre) or not _inside(after) or not _inside(before):
+		if not _inside(pre) or not _inside(after) or not _inside(before) or _blocked(before) or _blocked(after):
 			continue
 		var man := absi(pre.x - a.x) + absi(pre.y - a.y)
 		if man > 6:

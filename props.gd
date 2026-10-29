@@ -562,7 +562,9 @@ func _physics_process(delta: float) -> void:
 						if dist < 2.6 and spd > 2.0:
 							_boom(d, 0.05)
 					"gas":
-						if dist < 7.0 and spd > 6.0:
+						if dist < 6.0 and spd > 5.0:
+							_boom(d, 0.05)   # driving into the forecourt is enough
+						elif dist < 7.0 and spd > 6.0:
 							for pump in d.get("pumps", []):
 								if is_instance_valid(pump) and (pump as Node3D).global_position.distance_to(pp) < 3.4:
 									_boom(d, 0.05)

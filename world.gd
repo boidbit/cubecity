@@ -31,6 +31,7 @@ var load_queue: Array[Vector2i] = []
 var rng := RandomNumberGenerator.new()
 var ramp_points: Array[Vector3] = []
 var ramps: Array[Dictionary] = []   # jump ramps: p0 (low end), p1 (high end), road k, block m, along_z, sgn
+var flyovers: Array[Vector2i] = []  # (kx, jz): road x = line(kx) rises over node jz
 var total_cells := 0
 var props: Props
 
@@ -375,6 +376,7 @@ func _make_flyover(kx: int, jz: int) -> void:
 	for s in [-1.0, 1.0]:
 		_static_box(Vector3(0.5, 0.9, 72.0), Transform3D(Basis.IDENTITY, Vector3(x + s * 3.75, hd + 0.45, zc)), Color(0.7, 0.7, 0.72))
 	ramp_points.append(Vector3(x, hd, zc))
+	flyovers.append(Vector2i(kx, jz))
 
 
 # ------------------------------------------------------------ streaming

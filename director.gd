@@ -71,11 +71,21 @@ func setup(main_node, cfg: Dictionary) -> void:
 func _place_start() -> void:
 	var n := World.N
 	var dirs := [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]
-	var h: Vector2i = dirs[randi() % 4]
-	var k := randi_range(4, n - 4)
-	var edge := 5 if mode == "destroy" else 3
-	var j0 := n - edge if (h.x < 0 or h.y < 0) else edge
-	var node := Vector2i(k, j0) if h.x == 0 else Vector2i(j0, k)
+	var h := Vector2i.ZERO
+	var node := Vector2i.ZERO
+	for attempt in 40:
+		h = dirs[randi() % 4]
+		var k := randi_range(4, n - 4)
+		var edge := 5 if mode == "destroy" else 3
+		var j0 := n - edge if (h.x < 0 or h.y < 0) else edge
+		node = Vector2i(k, j0) if h.x == 0 else Vector2i(j0, k)
+		# keep clear of the flyovers for the first stretch
+		var clear := true
+		for i in 7:
+			if bot._blocked(node + h * i):
+				clear = false
+		if clear:
+			break
 	var f := Vector3(h.x, 0, h.y)
 	var p: Vector3 = main.world.node_pos(node) + f * 36.0
 	var pl: Car = main.player
