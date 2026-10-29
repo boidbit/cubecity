@@ -25,6 +25,26 @@ PC controls: W/S to accelerate and brake, A/D to steer, Shift for the handbrake,
 
 The project uses the Compatibility (OpenGL ES 3) renderer so it runs on more phones.
 
+### Automatic (GitHub Actions)
+
+Every push to `main` builds an APK with `.github/workflows/android.yml`:
+
+1. Open the **Actions** tab and click the latest **Build Android APK** run.
+2. Under **Artifacts**, download `cube-city-chase-apk` (a zip that contains the APK).
+
+You can also start a build by hand with **Run workflow**. If you push a tag such as `v3.1`, the APK is attached to a GitHub release for that tag.
+
+**Signing:** without a secret, each run signs the APK with a new key. Android then refuses to install the new APK over the old one until you uninstall the old one. To keep one key across builds:
+
+```bash
+keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+base64 -w0 debug.keystore
+```
+
+Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64` (Settings > Secrets and variables > Actions).
+
+### Manual
+
 1. In Godot, install the export templates.
 2. Set the Android SDK, JDK and a debug keystore in Editor Settings > Export > Android.
 3. Go to Project > Export > Android and export an APK (arm64-v8a).
