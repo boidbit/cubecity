@@ -560,14 +560,22 @@ func _update_cam(dt: float) -> void:
 		cine_ang += dt * 0.3
 		var c := player.global_position
 		var cp := c + Vector3(cos(cine_ang) * 15.0, 8.0, sin(cine_ang) * 15.0)
+		var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(c + Vector3(0, 2.0, 0), cp, 1))
+		if not hit.is_empty():
+			cp = (hit["position"] as Vector3) + (c - cp).normalized() * 1.0
 		cam.global_position = cam.global_position.lerp(cp, 1.0 - exp(-2.0 * dt))
 		cam.look_at(c + Vector3(0, 1.0, 0), Vector3.UP)
 		return
 	if cine_t > 0.0 and not game_over:
 		cine_t -= dt
 		cine_ang += dt * 0.35
-		var dist := 30.0 + cine_h * 0.9
-		var cp := cine_target + Vector3(cos(cine_ang) * dist, cine_h * 0.45 + 5.0, sin(cine_ang) * dist)
+		var dist := 24.0 + cine_h * 0.9
+		var cp := cine_target + Vector3(cos(cine_ang) * dist, maxf(cine_h * 0.45 + 5.0, 12.0), sin(cine_ang) * dist)
+		# stay out of buildings: pull in toward the target if a wall is in the way
+		var from := cine_target + Vector3(0, 3.0, 0)
+		var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, cp, 1))
+		if not hit.is_empty():
+			cp = (hit["position"] as Vector3) + (from - cp).normalized() * 1.0
 		cam.global_position = cam.global_position.lerp(cp, 1.0 - exp(-3.0 * dt))
 		cam.look_at(cine_target + Vector3(0, cine_h * 0.3, 0), Vector3.UP)
 		return
@@ -597,9 +605,9 @@ func _cam_chase(dt: float) -> void:
 	var ahead := 6.0
 	if vertical:
 		# higher and steeper, so the police behind the car stay in the frame
-		back = 9.5 + spd * 0.08
-		up = 7.5 + spd * 0.05
-		ahead = 7.0
+		back = 8.0 + spd * 0.06
+		up = 6.0 + spd * 0.04
+		ahead = 6.0
 	var target := _cam_clear(player.global_position - cam_dir * back + Vector3(0, up, 0))
 	var p := target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-9.0 * dt))
 	p += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake
@@ -617,9 +625,10 @@ func _cam_front(dt: float) -> void:
 	fwd.y = 0.0
 	fwd = fwd.normalized()
 	var side := fwd.cross(Vector3.UP)
-	var target := _cam_clear(player.global_position + fwd * (11.0 + player.speed * 0.25) + side * 2.0 + Vector3(0, 3.2, 0))
+	var ahead := 8.0 + player.speed * 0.18 if vertical else 11.0 + player.speed * 0.25
+	var target := _cam_clear(player.global_position + fwd * ahead + side * 1.6 + Vector3(0, 2.6 if vertical else 3.2, 0))
 	cam.global_position = target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-10.0 * dt))
-	cam.look_at(player.global_position - fwd * 7.0 + Vector3(0, 1.0, 0), Vector3.UP)
+	cam.look_at(player.global_position - fwd * 5.0 + Vector3(0, 0.8, 0), Vector3.UP)
 	cam.fov = lerpf(cam.fov, 58.0, 6.0 * dt)
 
 

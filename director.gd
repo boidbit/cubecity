@@ -182,8 +182,8 @@ func tick(dt: float) -> void:
 	if main.game_over:
 		return
 	var pl: Car = main.player
-	# a clip must not end early: no wreck, no bust until the last seconds
-	main.protect = t < duration - 3.0
+	# a clip must not end early: no wreck, no bust
+	main.protect = true
 	pl.dmg_scale = 0.35 if t < climax_t else 0.6
 	if main.protect and pl.hp < 15.0:
 		pl.hp = 15.0
