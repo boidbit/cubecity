@@ -1,0 +1,8 @@
+# Godot cache and exports
+.godot/
+*.import
+export_presets.cfg
+*.apk
+*.aab
+*.idsig
+*.keystore
