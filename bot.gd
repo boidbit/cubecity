@@ -97,9 +97,6 @@ func drive(dt: float) -> void:
 	# speed: cruise, slower for corners ahead, flat out on ramps and smashes
 	var want := cruise
 	var full: bool = kind in ["ramp", "smash", "hit"]
-	if kind == "smash" and idx + 1 < pts.size() and kinds[idx + 1] == "road" and p.distance_to(_flat(pts[idx])) < 11.0:
-		full = false   # about to pop out onto the far road: ease off for the turn
-		want = 18.0
 	if full:
 		want = 60.0
 	else:
@@ -136,7 +133,7 @@ func drive(dt: float) -> void:
 		stuck_t = 0.0
 		stuck_count += 1
 		# against a wall mid-smash: back up further for a run-up (ploughing needs 9 m/s)
-		reverse_t = randf_range(1.5, 1.9) if kind in ["smash", "hit"] else randf_range(0.8, 1.2)
+		reverse_t = randf_range(1.8, 2.2) if kind in ["smash", "hit"] else randf_range(1.2, 1.6)
 		rev_steer = -signf(st) if absf(st) > 0.1 else (1.0 if randf() < 0.5 else -1.0)
 		stuck_times.append(main.clock)
 		while stuck_times.size() > 0 and main.clock - stuck_times[0] > 10.0:
@@ -522,15 +519,19 @@ func plan_ramp() -> bool:
 	return true
 
 
-# Drive at a building from the road beside its block and plough straight through
-# to the road on the far side.
+# Swerve off the straight ahead into a building beside the road, plough through it
+# at full speed and come back onto the road. Ploughing needs speed (each bite of
+# building slows the car), so this beats turning into a block from a standstill.
 func plan_smash(min_h: int) -> bool:
-	var a := node_ahead()
-	var h := _grid_dir()
-	var p := car.global_position
-	var best := {}
+	var straight := straight_ahead()
+	if straight < 150.0:
+		return false
+	var p := _flat(car.global_position)
+	var dirv: Vector3 = point_ahead(0.0)["dir"]
+	var left := Vector3.UP.cross(dirv)
+	var best: Building = null
 	var best_s := -1e9
-	var bk: Vector2i = world.block_of(p)
+	var bk: Vector2i = world.block_of(car.global_position)
 	for di in range(-3, 4):
 		for dj in range(-3, 4):
 			var key := Vector2i(bk.x + di, bk.y + dj)
@@ -539,89 +540,56 @@ func plan_smash(min_h: int) -> bool:
 			for b: Building in world.block_buildings[key]:
 				if b.ny < min_h or b.collapsing or b.total_alive() < b.nx * b.nz * b.ny * 0.4:
 					continue
-				var c := b.center()
-				var d := _flat(c).distance_to(_flat(p))
-				if d < 50.0 or d > 230.0:
+				var rel := _flat(b.center()) - p
+				var along := rel.dot(dirv)
+				var lat := absf(rel.dot(left))
+				if along < 75.0 or along > straight - 50.0 or lat < 12.0 or lat > 32.0:
 					continue
-				var s := float(b.ny) * 0.4 - d / 60.0 + randf()
-				if s > best_s:
-					var opt := _smash_route(a, h, key, c)
-					if not opt.is_empty():
-						best_s = s
-						best = opt
-	if best.is_empty():
+				var sc := float(b.ny) * 0.5 - along / 80.0 + randf()
+				if sc > best_s:
+					best_s = sc
+					best = b
+	if best == null:
 		return false
-	_commit(best["route"], best["extra"], best["kinds"], "smash")
-	return true
+	return _swipe(best.center(), "smash", "smash")
 
 
-# Route into block `key` from one of its four sides, through point `c`, out the far side.
-func _smash_route(a: Vector2i, h: Vector2i, key: Vector2i, c: Vector3) -> Dictionary:
-	var opts := []
-	# [entry road is along z (x fixed)?, entry line index, exit line index]
-	opts.append([true, key.x, key.x + 1])
-	opts.append([true, key.x + 1, key.x])
-	opts.append([false, key.y, key.y + 1])
-	opts.append([false, key.y + 1, key.y])
-	opts.shuffle()
-	for o in opts:
-		var along_z: bool = o[0]
-		var li: int = o[1]
-		var lo: int = o[2]
-		var e: Vector3
-		var x: Vector3
-		var n1: Vector2i
-		var n2: Vector2i
-		var after: Vector2i
-		if along_z:
-			e = Vector3(world.line(li), 0.9, c.z)
-			x = Vector3(world.line(lo), 0.9, c.z)
-			n1 = Vector2i(li, key.y)
-			n2 = Vector2i(li, key.y + 1)
-			after = Vector2i(lo, key.y if randf() < 0.5 else key.y + 1)
-		else:
-			e = Vector3(c.x, 0.9, world.line(li))
-			x = Vector3(c.x, 0.9, world.line(lo))
-			n1 = Vector2i(key.x, li)
-			n2 = Vector2i(key.x + 1, li)
-			after = Vector2i(key.x if randf() < 0.5 else key.x + 1, lo)
-		if not _inside(after):
-			continue
-		for entry: Vector2i in [n1, n2]:
-			if not _inside(entry):
-				continue
-			var route := _best_route(a, entry, h)
-			if route.is_empty():
-				continue
-			# reaching `entry` and then doubling back to `e` would need a U-turn
-			var into := h if route.size() < 2 else route[route.size() - 1] - route[route.size() - 2]
-			var ep := world.node_pos(entry)
-			var out := Vector2i(0, signi(roundi(e.z - ep.z))) if along_z else Vector2i(signi(roundi(e.x - ep.x)), 0)
-			if out == -into:
-				continue
-			var dirv := _flat(x - e).normalized()
-			return {"route": route, "extra": [e, e + dirv * 6.0, x, world.node_pos(after)],
-				"kinds": ["road", "smash", "smash", "road"]}
-	return {}
-
-
-# Straight at a gas station's pumps: the biggest bang in the city.
+# Same swerve, aimed at a gas station's pumps beside the road: the biggest bang in the city.
 func plan_gas(r: float) -> bool:
-	var a := node_ahead()
-	var h := _grid_dir()
-	var list: Array = world.props.gas_stations_near(car.global_position, r)
-	list.shuffle()
-	for g: Dictionary in list:
-		var c: Vector3 = g["p"]
-		if _flat(c).distance_to(_flat(car.global_position)) < 45.0:
-			continue
-		var key: Vector2i = world.block_of(c)
-		var opt := _smash_route(a, h, key, c)
-		if opt.is_empty():
-			continue
-		var ex: Array = opt["extra"]
-		# e, run-up, the pumps, the far road, the next node
-		var extra := [ex[0], ex[1], Vector3(c.x, 0.9, c.z), ex[2], ex[3]]
-		_commit(opt["route"], extra, ["road", "hit", "hit", "smash", "road"], "gas")
-		return true
+	var straight := straight_ahead()
+	if straight < 150.0:
+		return false
+	var p := _flat(car.global_position)
+	var dirv: Vector3 = point_ahead(0.0)["dir"]
+	var left := Vector3.UP.cross(dirv)
+	for g: Dictionary in world.props.gas_stations_near(car.global_position, r):
+		var rel := _flat(g["p"]) - p
+		var along := rel.dot(dirv)
+		var lat := absf(rel.dot(left))
+		if along >= 75.0 and along <= straight - 50.0 and lat >= 12.0 and lat <= 32.0:
+			return _swipe(g["p"], "hit", "gas")
 	return false
+
+
+# Replace the stretch of the current straight around `target` with a detour through it.
+func _swipe(target: Vector3, kind: String, name: String) -> bool:
+	var p := _flat(car.global_position)
+	var dirv: Vector3 = point_ahead(0.0)["dir"]
+	var along := (_flat(target) - p).dot(dirv)
+	var keep_p: Array = []
+	var keep_k: Array = []
+	var cur := p
+	var acc := 0.0
+	for i in range(idx, pts.size()):
+		acc += cur.distance_to(_flat(pts[i]))
+		cur = _flat(pts[i])
+		if acc > along + 45.0:
+			keep_p.append(pts[i])
+			keep_k.append(kinds[i])
+	if keep_p.is_empty():
+		return false
+	var sp: Vector3 = point_ahead(along - 40.0)["pos"]
+	var rp: Vector3 = point_ahead(along + 40.0)["pos"]
+	var none: Array[Vector2i] = []
+	_commit(none, [sp, Vector3(target.x, 0.9, target.z), rp] + keep_p, ["smash", kind, "smash"] + keep_k, name)
+	return true

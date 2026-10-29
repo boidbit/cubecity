@@ -452,7 +452,7 @@ func _physics_process(delta: float) -> void:
 		if fwd_speed > 1.5:
 			brake_f = 26.0 * -gas
 		elif fwd_speed > -12.0:
-			eng = gas * engine_max * 0.45
+			eng = gas * engine_max * 0.9   # strong enough to back out of a pin
 	else:
 		brake_f = 1.2
 	engine_force = -eng   # VehicleBody3D drives toward +Z for positive force

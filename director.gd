@@ -104,8 +104,7 @@ func start() -> void:
 			_opening_police(4)
 		_:
 			main.spawn_gap = Vector2(2.5, 4.0)
-	if mode != "destroy" or not bot.plan_smash(4):
-		bot.plan_flee(_away_point())
+	bot.plan_flee(_away_point())
 	# the hook: open on the car racing at the camera with the police behind it
 	main.cam_mode = "chase" if mode == "destroy" else "front"
 	main.cam_cut = true
@@ -190,8 +189,6 @@ func tick(dt: float) -> void:
 	_break_free(dt)
 	_jump_moment()
 	if bot.replan_needed or bot.needs_plan():
-		if mode == "destroy" and bot.plan_smash(4):
-			return
 		bot.plan_flee(_away_point())
 
 
@@ -210,16 +207,21 @@ func _heat(t: float) -> void:
 func _beats(t: float) -> void:
 	var f := t / duration
 	if mode == "destroy":
-		if f > 0.45 and not done.has("gas") and not bot.busy() and bot.plan_gas(240.0):
-			done["gas"] = t
-		if t >= climax_t - 4.0 and not done.has("tower") and not bot.busy() and bot.plan_smash(10):
+		# a smash whenever the road ahead allows one; the tallest towers for the finale
+		if bot.busy():
+			return
+		if t >= climax_t - 6.0 and not done.has("tower") and bot.plan_smash(9):
 			done["tower"] = t
+		elif f > 0.3 and not done.has("gas") and bot.plan_gas(240.0):
+			done["gas"] = t
+		else:
+			bot.plan_smash(3)
 		return
 	if f > 0.12 and f < 0.4 and not done.has("ramp1") and not bot.busy() and bot.plan_ramp():
 		done["ramp1"] = t
 	if f > 0.3 and f < 0.62 and not done.has("roadblock"):
 		_try_roadblock(t)
-	if mode == "chase" and f > 0.42 and f < 0.7 and not done.has("smash") and not bot.busy() and bot.plan_smash(6):
+	if mode == "chase" and f > 0.35 and f < 0.75 and not done.has("smash") and not bot.busy() and bot.plan_smash(5):
 		done["smash"] = t
 	if f > 0.62 and t < climax_t - 1.0 and not done.has("ramp2") and not bot.busy() and bot.plan_ramp():
 		done["ramp2"] = t
