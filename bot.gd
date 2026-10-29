@@ -55,20 +55,20 @@ func drive(dt: float) -> void:
 	dist_sum += car.speed * dt
 	_record_trail()
 	if pts.is_empty():
-		_set(0.0, 0.0, 0.0, false)
+		_apply(0.0, 0.0, 0.0, false)
 		return
 	if reverse_t > 0.0:
 		reverse_t -= dt
-		_set(-1.0, rev_steer, 0.0, false)
+		_apply(-1.0, rev_steer, 0.0, false)
 		return
 	if car.airtime > 0.05:
 		# airborne: gas or steer would tip the car (air control), so let it fly
-		_set(0.0, 0.0, 0.0, false)
+		_apply(0.0, 0.0, 0.0, false)
 		return
 	_advance()
 	if idx >= pts.size():
 		replan_needed = true
-		_set(0.4, 0.0, 0.0, false)
+		_apply(0.4, 0.0, 0.0, false)
 		return
 	var kind: String = kinds[idx]
 	var p := _flat(car.global_position)
@@ -141,10 +141,10 @@ func drive(dt: float) -> void:
 		if stuck_times.size() >= 3:
 			replan_needed = true
 			stuck_times.clear()
-	_set(gas, st, hb, nitro)
+	_apply(gas, st, hb, nitro)
 
 
-func _set(gas: float, st: float, hb: float, nitro: bool) -> void:
+func _apply(gas: float, st: float, hb: float, nitro: bool) -> void:
 	car.input_gas = gas
 	car.input_steer = st
 	car.input_hb = hb
