@@ -15,6 +15,10 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
 
+[editor]
+
+movie_writer/mjpeg_quality=0.92
+
 [input_devices]
 
 pointing/emulate_touch_from_mouse=true

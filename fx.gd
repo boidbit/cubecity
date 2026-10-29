@@ -326,6 +326,26 @@ func _make_sounds() -> void:
 	sounds["crash"] = _noise_burst(0.4, 11.0, 0.45, 0.0)
 	sounds["thud"] = _noise_burst(0.5, 8.0, 0.1, 70.0)
 	sounds["rumble"] = _noise_burst(0.9, 3.0, 0.05, 0.0)
+	sounds["siren"] = _siren(2.0)
+
+
+# Police wail: pitch sweeps 530-1370 Hz and back over one period. The sweep
+# averages to a whole number of cycles per period, so the loop point is seamless.
+func _siren(period: float) -> AudioStreamWAV:
+	var n := int(period * MIX)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / MIX
+		ph += (950.0 - 420.0 * cos(TAU * t / period)) / MIX
+		var p := ph * TAU
+		s[i] = (sin(p) * 0.6 + sin(2.0 * p) * 0.15 + sin(3.0 * p) * 0.1) * 0.55
+	var w := _wav(s)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_begin = 0
+	w.loop_end = n
+	return w
 
 
 func play(name: String, pos: Vector3, vol_db: float = 0.0) -> void:

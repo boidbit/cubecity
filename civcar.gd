@@ -38,10 +38,8 @@ func build(m, color: Color, traffic: bool) -> void:
 	cs.shape = bs
 	cs.position = Vector3(0, 0.65, 0)
 	add_child(cs)
-	var sh := Shader.new()
-	sh.code = Shaders.CAR
 	mat = ShaderMaterial.new()
-	mat.shader = sh
+	mat.shader = Shaders.get_shader(Shaders.CAR)
 	mat.set_shader_parameter("color", color)
 	var bmi := MeshInstance3D.new()
 	bmi.mesh = CarMesh.body("sedan")

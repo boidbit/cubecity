@@ -182,13 +182,7 @@ func load_block(key: Vector2i, parent: Node3D) -> void:
 			"lamp":
 				lamps.append(d)
 			"barrel":
-				var n := Node3D.new()
-				for o in [Vector3(0, 0.48, 0), Vector3(0.7, 0.48, 0.1), Vector3(0.3, 0.48, 0.65)]:
-					n.add_child(_mesh_node(barrel_mesh, o))
-				n.position = d["p"]
-				parent.add_child(n)
-				d["node"] = n
-				nodes.append(n)
+				nodes.append(_barrel_node(d, parent))
 			"parked":
 				var cc := CivCar.new()
 				parent.add_child(cc)
@@ -203,7 +197,7 @@ func load_block(key: Vector2i, parent: Node3D) -> void:
 				parent.add_child(pn)
 				d["node"] = pn
 				nodes.append(pn)
-				pn.visible = Time.get_ticks_msec() / 1000.0 >= float(d.get("respawn", 0.0))
+				pn.visible = main.clock >= float(d.get("respawn", 0.0))
 			"gas":
 				var g := _gas_node(d)
 				parent.add_child(g)
@@ -238,6 +232,43 @@ func load_block(key: Vector2i, parent: Node3D) -> void:
 	block_mm[key] = mms
 	block_nodes[key] = nodes
 	loaded[key] = true
+
+
+func _barrel_node(d: Dictionary, parent: Node3D) -> Node3D:
+	var n := Node3D.new()
+	for o in [Vector3(0, 0.48, 0), Vector3(0.7, 0.48, 0.1), Vector3(0.3, 0.48, 0.65)]:
+		n.add_child(_mesh_node(barrel_mesh, o))
+	n.position = d["p"]
+	parent.add_child(n)
+	d["node"] = n
+	return n
+
+
+# Director only: drops a barrel cluster mid-game (a police trap) and returns its record.
+func spawn_barrels(p: Vector3) -> Dictionary:
+	var key: Vector2i = world.block_of(p)
+	var d := {"t": "barrel", "p": Vector3(p.x, 0.0, p.z)}
+	_add(key, d)
+	if loaded.has(key):
+		block_nodes[key].append(_barrel_node(d, world.chunk_root))
+	return d
+
+
+func detonate(d: Dictionary) -> void:
+	_boom(d, 0.05)
+
+
+# Gas stations still standing within r of p, for the bot to aim at.
+func gas_stations_near(p: Vector3, r: float) -> Array:
+	var out := []
+	for key in block_props:
+		var c := Vector3(world.line(key.x) + World.PITCH * 0.5, 0.0, world.line(key.y) + World.PITCH * 0.5)
+		if c.distance_to(Vector3(p.x, 0.0, p.z)) > r + World.PITCH:
+			continue
+		for d: Dictionary in block_props[key]:
+			if d["t"] == "gas" and d["alive"] and (d["p"] as Vector3).distance_to(p) < r:
+				out.append(d)
+	return out
 
 
 func _mm(parent: Node3D, mesh: Mesh, count: int, colors: bool) -> MultiMesh:
@@ -483,6 +514,8 @@ func _boom(d: Dictionary, delay: float) -> void:
 				(d["node"] as Node).queue_free()
 		if big:
 			main.big_boom(p + Vector3(0, 1.5, 0), 15.0)
+		elif d.get("trap", false):
+			main.explode_at(p + Vector3(0, 0.8, 0), 9.0, 34.0, 70.0, true, 2.5)
 		else:
 			main.explode_at(p + Vector3(0, 0.8, 0), 6.5, 16.0, 35.0))
 
@@ -495,7 +528,7 @@ func _physics_process(delta: float) -> void:
 	var pp: Vector3 = pl.global_position
 	var spd: float = pl.speed
 	var bk: Vector2i = world.block_of(pp)
-	var now := Time.get_ticks_msec() / 1000.0
+	var now: float = main.clock
 	for di in range(-1, 2):
 		for dj in range(-1, 2):
 			var key := Vector2i(bk.x + di, bk.y + dj)
@@ -529,7 +562,9 @@ func _physics_process(delta: float) -> void:
 						if dist < 2.6 and spd > 2.0:
 							_boom(d, 0.05)
 					"gas":
-						if dist < 7.0 and spd > 6.0:
+						if dist < 6.0 and spd > 5.0:
+							_boom(d, 0.05)   # driving into the forecourt is enough
+						elif dist < 7.0 and spd > 6.0:
 							for pump in d.get("pumps", []):
 								if is_instance_valid(pump) and (pump as Node3D).global_position.distance_to(pp) < 3.4:
 									_boom(d, 0.05)

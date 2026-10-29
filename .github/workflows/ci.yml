@@ -1,0 +1,63 @@
+name: CI
+
+# On every push: the bot plays every mode headless (fails on any script error),
+# then a short half-size vertical clip is recorded to check the video pipeline.
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install Godot
+        run: echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Smoke test (headless, all bot modes)
+        run: tools/smoke.sh "$GODOT" smoke-out 45
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-logs
+          path: smoke-out/
+          retention-days: 7
+
+  preview:
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install Godot and recording tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg libgl1-mesa-dri libglx-mesa0 \
+            libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
+          echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Record a 20 s vertical preview (1080x1920, 30 fps)
+        env:
+          MODE: chase
+          ORIENTATION: vertical
+          DURATION: "20"
+          FPS: "30"
+          SEED: "7"
+        run: tools/record.sh "$GODOT" preview
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview
+          path: preview/
+          retention-days: 7

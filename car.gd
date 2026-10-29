@@ -3,6 +3,13 @@ extends VehicleBody3D
 # Player car, police cars and the SWAT truck. VehicleBody3D suspension and tyres,
 # plus arcade assists for the player (yaw control, side grip, drift boost, nitro).
 
+# Steering feel for the player. Tune these first if the car turns too fast or too slow.
+const STEER_IN := 5.5        # how fast steering builds up while an arrow is held (per second)
+const STEER_OUT := 9.0       # how fast it returns to centre when released
+const STEER_LOW := 3.0       # speed (m/s) from which full turning is available
+const STEER_GAIN_LO := 2.2   # max turn rate when slow (rad/s)
+const STEER_GAIN_HI := 1.0   # max turn rate at 40 m/s (rad/s)
+
 var main
 var kind := "sport"
 var is_player := false
@@ -25,6 +32,7 @@ var impact_threshold := 5.0
 
 var fwd_speed := 0.0
 var speed := 0.0
+var steer_smooth := 0.0
 var hb_smooth := 0.0
 var nitro := 40.0
 var nitro_active := false
@@ -47,6 +55,7 @@ var siren_a: StandardMaterial3D
 var siren_b: StandardMaterial3D
 var siren_light: OmniLight3D
 var siren_t := 0.0
+var siren_snd: AudioStreamPlayer3D
 var head_lights: Array[SpotLight3D] = []
 var smoke: CPUParticles3D
 var fire: CPUParticles3D
@@ -60,6 +69,9 @@ var pit_side := 1.0
 var top_speed := 28.0
 var path: Array[Vector3] = []
 var path_t := 0.0
+var backoff_t := 0.0
+var backoff_steer := 0.0
+var ram_cd := 0.0
 
 
 func build(color: Color, player: bool, k: String = "") -> void:
@@ -86,10 +98,8 @@ func build(color: Color, player: bool, k: String = "") -> void:
 		_shape(Vector3(1.82, 0.62, 4.1), Vector3(0, 0.6, 0))
 		_shape(Vector3(1.42, 0.45, 1.9), Vector3(0, 1.08, 0.25))
 
-	var sh := Shader.new()
-	sh.code = Shaders.CAR
 	mat_body = ShaderMaterial.new()
-	mat_body.shader = sh
+	mat_body.shader = Shaders.get_shader(Shaders.CAR)
 	mat_body.set_shader_parameter("color", color)
 	mat_body.set_shader_parameter("mesh_offset", Vector3.ZERO)
 	mat_body.set_shader_parameter("dent_radius", 1.1 if not swat else 1.6)
@@ -276,6 +286,27 @@ func set_headlights(night: float) -> void:
 		l.light_energy = night * 6.0
 
 
+# Looping wail for chasing police. Slightly different pitch per car so a pack of
+# them drifts out of phase instead of droning in unison.
+func add_siren() -> void:
+	siren_snd = AudioStreamPlayer3D.new()
+	siren_snd.stream = main.fx.sounds["siren"]
+	siren_snd.unit_size = 14.0
+	siren_snd.max_distance = 200.0
+	siren_snd.volume_db = -7.0
+	siren_snd.pitch_scale = randf_range(0.94, 1.06)
+	siren_snd.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_PHYSICS_STEP
+	siren_snd.position = Vector3(0, 1.4, 0)
+	siren_snd.autoplay = true
+	add_child(siren_snd)
+
+
+# Max yaw rate the steering assist asks for at full lock. The bot uses it to turn
+# a wanted turn rate into an arrow press.
+func yaw_gain(spd: float) -> float:
+	return clampf(spd / STEER_LOW, 0.0, 1.0) * lerpf(STEER_GAIN_LO, STEER_GAIN_HI, clampf(spd / 40.0, 0.0, 1.0))
+
+
 func rpm() -> float:
 	var s := absf(fwd_speed)
 	var gear := mini(int(s / 8.5), 4)
@@ -289,12 +320,14 @@ func hurt(amount: float) -> void:
 	if dead or amount <= 0.0:
 		return
 	hp -= amount * dmg_scale
-	last_hurt = Time.get_ticks_msec() / 1000.0
+	last_hurt = main.clock
 	if is_player:
 		main.on_player_hurt(amount)
 	_update_look()
 	if hp <= 0.0:
 		dead = true
+		if siren_snd != null:
+			siren_snd.stop()
 		main.on_car_dead(self)
 
 
@@ -385,8 +418,15 @@ func _physics_process(delta: float) -> void:
 	elif not is_block:
 		_ai(delta)
 
+	if is_player:
+		# Arrow presses are on/off: ease the steering in, and back to centre faster.
+		var back := absf(input_steer) < absf(steer_smooth) or input_steer * steer_smooth < 0.0
+		var rate := STEER_OUT if back else STEER_IN * lerpf(1.3, 0.8, clampf(speed / 35.0, 0.0, 1.0))
+		steer_smooth = move_toward(steer_smooth, input_steer, rate * delta)
+	else:
+		steer_smooth = input_steer
 	var max_steer := 0.55 / (1.0 + absf(fwd_speed) * (0.08 if is_player else 0.04))
-	steering = move_toward(steering, input_steer * max_steer, (4.0 if is_player else 2.6) * delta)
+	steering = move_toward(steering, steer_smooth * max_steer, (4.0 if is_player else 2.6) * delta)
 
 	hb_smooth = move_toward(hb_smooth, input_hb, 6.0 * delta)
 	var gm: float = main.grip_mult
@@ -401,7 +441,7 @@ func _physics_process(delta: float) -> void:
 	var brake_f := 0.0
 	var eng := 0.0
 	if is_block:
-		brake_f = 40.0
+		brake_f = 10.0   # parked across the road, but a fast hit can still shove it
 	elif gas > 0.0:
 		if fwd_speed < -1.5:
 			brake_f = 24.0 * gas
@@ -412,7 +452,7 @@ func _physics_process(delta: float) -> void:
 		if fwd_speed > 1.5:
 			brake_f = 26.0 * -gas
 		elif fwd_speed > -12.0:
-			eng = gas * engine_max * 0.45
+			eng = gas * engine_max * 0.9   # strong enough to back out of a pin
 	else:
 		brake_f = 1.2
 	engine_force = -eng   # VehicleBody3D drives toward +Z for positive force
@@ -432,7 +472,7 @@ func _physics_process(delta: float) -> void:
 	if grounded == 0 and is_player:
 		airtime += delta
 		var lv := global_transform.basis
-		apply_torque(lv.x * input_gas * -900.0 + lv.z * input_steer * -500.0)
+		apply_torque(lv.x * input_gas * -900.0 + lv.z * steer_smooth * -500.0)
 		apply_torque(-angular_velocity * 900.0)
 	else:
 		if is_player and airtime > 0.9:
@@ -454,8 +494,7 @@ func _physics_process(delta: float) -> void:
 		flip_t = 0.0
 
 	if is_player and not main.game_over:
-		var now := Time.get_ticks_msec() / 1000.0
-		if now - last_hurt > 4.0 and hp < max_hp:
+		if main.clock - last_hurt > 4.0 and hp < max_hp:
 			heal(5.0 * delta)
 
 	_skid_and_smoke()
@@ -469,14 +508,17 @@ func _assists(delta: float, grounded: int, fwd: Vector3) -> void:
 	var lat := linear_velocity.dot(right)
 	if grounded >= 2:
 		var spd := absf(fwd_speed)
-		var gain := clampf(spd / 5.0, 0.0, 1.0) * lerpf(2.3, 1.15, clampf(spd / 40.0, 0.0, 1.0))
-		var desired := input_steer * gain * signf(fwd_speed + 0.01) * (1.0 + 0.15 * hb_smooth)
+		var gain := yaw_gain(spd)
+		var desired := steer_smooth * gain * signf(fwd_speed + 0.01) * (1.0 + 0.15 * hb_smooth)
 		var slip := atan2(absf(lat), maxf(absf(fwd_speed), 1.0))
 		# past ~35 degrees of slip, steer the nose back so a drift never becomes a spin
 		if hb_smooth > 0.3 and slip > 0.6:
 			desired = -signf(lat) * 0.6 * gain
 		var err := desired - angular_velocity.y
-		apply_torque(Vector3.UP * err * 1700.0 * 6.0)
+		# softer when nearly stopped, so a shove from a police car can turn you
+		# instead of the assist locking the car in place
+		var stiff := lerpf(0.35, 1.0, clampf(spd / 6.0, 0.0, 1.0))
+		apply_torque(Vector3.UP * err * 1700.0 * 6.0 * stiff)
 		var grip_k := lerpf(5.0, 0.9, hb_smooth)
 		if slip > 0.7:
 			grip_k = maxf(grip_k, 2.5)
@@ -486,7 +528,7 @@ func _assists(delta: float, grounded: int, fwd: Vector3) -> void:
 		if fwd_speed > 5.0:
 			apply_central_force(fwd * absf(lat) * mass * 0.8)
 			if input_gas > 0.0:
-				apply_central_force(fwd * mass * absf(input_steer) * 4.5 * input_gas)
+				apply_central_force(fwd * mass * absf(steer_smooth) * 4.5 * input_gas)
 	if hb_smooth > 0.5 and absf(lat) > 3.0 and speed > 8.0:
 		drift_t += delta
 		nitro = minf(100.0, nitro + 9.0 * delta)
@@ -574,7 +616,7 @@ func _player_plow() -> void:
 			var b: Building = col.get_meta("bld")
 			var cells: int = main.world.car_hit_building(b, r["position"], dirv, fwd_speed)
 			if cells > 0:
-				linear_velocity *= clampf(1.0 - cells * 0.005, 0.7, 1.0)
+				linear_velocity *= clampf(1.0 - cells * 0.003, 0.8, 1.0)
 				hit_cd = 0.12
 				hurt(minf(cells * 0.025, 3.0))
 				nitro = minf(100.0, nitro + cells * 0.08)
@@ -597,6 +639,20 @@ func _ai(delta: float) -> void:
 	if target == null or target.dead or main.game_over:
 		input_gas = 0.0
 		input_steer = 0.0
+		return
+	ram_cd = maxf(0.0, ram_cd - delta)
+	if backoff_t > 0.0:
+		backoff_t -= delta
+		input_gas = -0.8
+		input_steer = backoff_steer
+		input_hb = 0.0
+		return
+	# Pressed against the player and barely moving: back off for a moment instead of
+	# pinning them. Being boxed in is handled by the BUSTED meter, not by a shove-lock.
+	if speed < 5.0 and get_colliding_bodies().has(target):
+		backoff_t = randf_range(0.6, 1.0)
+		ram_cd = randf_range(1.5, 2.5)
+		backoff_steer = 1.0 if randf() < 0.5 else -1.0
 		return
 	var tpos: Vector3 = target.global_position
 	var to := tpos - global_position
@@ -643,6 +699,18 @@ func _ai(delta: float) -> void:
 			st -= s * (1.2 - o.distance_to(r["position"]) / 11.0)
 	var qf := PhysicsRayQueryParameters3D.create(o, o + f * 9.0, 1)
 	var blocked := not space.intersect_ray(qf).is_empty()
+	# keep apart from other police so they do not pile into one heap
+	var left := -global_transform.basis.x
+	for other in main.police:
+		if other == self or not is_instance_valid(other) or other.dead:
+			continue
+		var dd: Vector3 = other.global_position - global_position
+		dd.y = 0.0
+		var l := dd.length()
+		if l < 8.0 and l > 0.1 and dd.dot(f) > -2.0:
+			st -= signf(dd.dot(left)) * (1.0 - l / 8.0) * 0.9
+			if dd.dot(f) > 0.0 and l < 5.0:
+				blocked = true
 	input_steer = clampf(st, -1.0, 1.0)
 
 	var want := top_speed
@@ -653,7 +721,7 @@ func _ai(delta: float) -> void:
 	if blocked:
 		want = minf(want, 8.0)
 	input_gas = clampf((want - fwd_speed) * 0.35, -1.0, 1.0)
-	if dist < 6.0 and absf(diff) < 0.6:
+	if dist < 6.0 and absf(diff) < 0.6 and ram_cd <= 0.0:
 		input_gas = 1.0
 	input_hb = 0.0
 
