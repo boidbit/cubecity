@@ -2,6 +2,18 @@ class_name Shaders
 extends RefCounted
 # All shader code lives here as strings. No external textures needed.
 
+static var _cache := {}
+
+
+# One Shader per source, shared by every material that uses it, so a car that
+# spawns mid-game does not trigger a fresh shader compile (a stutter on phones).
+static func get_shader(code: String) -> Shader:
+	if not _cache.has(code):
+		var sh := Shader.new()
+		sh.code = code
+		_cache[code] = sh
+	return _cache[code]
+
 const FACADE := """
 shader_type spatial;
 uniform float night = 0.0;

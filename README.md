@@ -5,21 +5,45 @@ A mobile car-chase and destruction game made in Godot 4. Everything (city, cars,
 ## Features
 
 - A 1.1 km road-grid city with districts: downtown glass towers, brick and concrete mid-rises, suburbs, industrial blocks and parks.
-- Destructible voxel buildings. Drive through them, blow them up, and bring them down in a full collapse.
+- Destructible voxel buildings. Drive through them and bring them down in a full collapse.
 - Arcade car physics built on `VehicleBody3D`: steering assist, handbrake drifts, nitro and drift boost.
 - Damage model with dents, parts that fly off, smoke and fire.
-- Police that follow the roads, PIT manoeuvres, roadblocks, a helicopter with a spotlight and a SWAT truck boss.
+- Wanted level from 0 to 5 stars. Your first crime brings the police; stay out of sight to lose them.
+- Police that follow the roads, PIT manoeuvres, roadblocks, a helicopter with a spotlight, a SWAT truck boss, and sirens.
+- BUSTED meter: stay boxed in by police for 7 seconds and you are arrested.
 - Street life: trees, street lamps, parked cars and traffic that drives on the left.
 - Chain explosions from barrels, parked cars and gas stations.
 - Slow motion on big moments and a cinematic camera when a tower collapses.
-- Day/night cycle, rain, minimap, and touch controls (left-side steering joystick).
+- Day/night cycle, rain, minimap and touch controls.
 
 ## Run
 
 1. Install [Godot 4.4](https://godotengine.org).
 2. Import `project.godot` and press F5.
 
-PC controls: W/S to accelerate and brake, A/D to steer, Shift for the handbrake, N for nitro, Space to blast, R to restart.
+Touch controls: left and right arrows on the left, GAS, BRAKE, DRIFT and NITRO on the right.
+PC controls: W/S or Up/Down to accelerate and brake, A/D or Left/Right to steer, Shift for the handbrake, N for nitro, R to restart.
+
+Steering feel is tuned by the `STEER_*` constants at the top of `car.gd`.
+
+## Bot videos (GitHub Actions)
+
+A bot can play the game while Godot's Movie Maker records it, for YouTube Shorts or normal videos.
+
+1. Open the repository's **Actions** tab, choose **Record video**, then **Run workflow**.
+2. Pick the options:
+   - **mode**: `chase` (1 car vs a growing pack of police, finale is a police trap), `destroy` (smash as much city as possible), `survive` (5 stars from the start).
+   - **orientation**: `vertical` (1080x1920, Shorts) or `horizontal` (1920x1080).
+   - **duration**, **fps**, **takes** (records several runs and keeps the most exciting), **time** of day, the on-screen **title**, and an optional **seed**.
+3. When the run finishes, download the `video-...` artifact from the run page: the MP4, a thumbnail and the run's stats.
+
+GitHub's machines have no graphics card, so frames are drawn on the CPU. The video is still smooth, but a 55 second clip takes a while to record.
+
+How it works: the bot (`bot.gd`) presses the same controls a player does and plans its route on the road grid. The director (`director.gd`) stages the run: it picks the start, raises the wanted level on a schedule, sets up ramp jumps, a roadblock, a smash through a building and the finale, and cuts between cameras. Until the last 12 seconds the run cannot end early, so a clip is never cut short.
+
+Locally: `tools/record.sh path/to/godot out` (Linux, needs `xvfb` and `ffmpeg`; settings come from environment variables, see the script), or run the game with `-- --bot=chase --orientation=vertical --duration=55` to watch the bot live.
+
+Every push runs **CI**: the bot plays every mode headless and the job fails on any script error, then a short half-size preview clip is recorded.
 
 ## Android build
 
@@ -33,13 +57,16 @@ The project uses the Compatibility (OpenGL ES 3) renderer so it runs on more pho
 
 | File | What it does |
 | --- | --- |
-| `main.gd` | Game loop, camera, wanted level, police, SWAT, traffic, slow motion, events |
-| `car.gd` | Player and police vehicles, handling assists, damage, police AI |
+| `main.gd` | Game loop, cameras, wanted level, BUSTED meter, police, SWAT, traffic, slow motion, events |
+| `car.gd` | Player and police vehicles, steering feel, handling assists, damage, police AI, sirens |
+| `bot.gd` | Bot driver for recorded videos: route planning, ramps, smashes, dodging |
+| `director.gd` | Stages bot runs: modes, beats, camera cuts, overlay text, run summary |
 | `carmesh.gd` | Procedural car body meshes |
 | `civcar.gd` | Parked cars and traffic |
 | `world.gd` | City generation, chunk streaming, ramps, flyovers, debris, routing |
 | `building.gd` | Destructible building data, meshes and collapse |
 | `props.gd` | Trees, lamps, barrels, gas stations, pickups, rooftop props |
 | `fx.gd` | Particles, skid marks, synthesized sounds |
-| `hud.gd` | HUD, minimap, touch controls |
+| `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade, ground, car and debris shaders |
+| `tools/` | Scripts used by the workflows: install Godot, smoke test, record, pick the best take |

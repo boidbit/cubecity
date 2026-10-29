@@ -30,6 +30,8 @@ var last_block := Vector2i(-9999, -9999)
 var load_queue: Array[Vector2i] = []
 var rng := RandomNumberGenerator.new()
 var ramp_points: Array[Vector3] = []
+var ramps: Array[Dictionary] = []   # jump ramps: p0 (low end), p1 (high end), road k, block m, along_z, sgn
+var total_cells := 0
 var props: Props
 
 
@@ -210,6 +212,8 @@ func _generate_city() -> void:
 				kind = "ind"
 			props.generate_block(key, kind)
 			_fill_block(key, list, line(bi) + 10.0, line(bj) + 10.0, kind)
+	for b in buildings:
+		total_cells += b.total_alive()
 
 
 func _fill_block(key: Vector2i, list: Array[Building], x0: float, z0: float, kind: String) -> void:
@@ -356,6 +360,7 @@ func _make_jump_ramps() -> void:
 			p1 = Vector3(mid + 6.0 * sgn, 2.3, line(k) + lane)
 		_slab(p0, p1, 5.0, 0.35, yellow)
 		ramp_points.append((p0 + p1) * 0.5)
+		ramps.append({"p0": p0, "p1": p1, "k": k, "m": m, "along_z": along_z, "sgn": sgn})
 
 
 func _make_flyover(kx: int, jz: int) -> void:
@@ -486,6 +491,7 @@ func _process(delta: float) -> void:
 			b.collapse_t = 0.0
 			var cells := b.collapse_step(2)
 			if cells.size() > 0:
+				main.cells_down += cells.size()
 				_emit_cells(cells, b.center(), 3.0, 14)
 				fx.dust(b.center() + Vector3(0, b.ny * 0.5, 0), cells.size())
 				main.shake_cam(0.35)

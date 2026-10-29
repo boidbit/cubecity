@@ -1,0 +1,119 @@
+name: Record video
+
+# Actions tab -> "Record video" -> Run workflow. Records one or more takes of a bot
+# run, keeps the most exciting one and attaches it (MP4 + thumbnail) to the run.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "What the bot does"
+        type: choice
+        options: [chase, destroy, survive]
+        default: chase
+      orientation:
+        description: "vertical = YouTube Shorts (1080x1920), horizontal = normal video (1920x1080)"
+        type: choice
+        options: [vertical, horizontal]
+        default: vertical
+      duration:
+        description: "Clip length in seconds"
+        type: string
+        default: "55"
+      fps:
+        type: choice
+        options: ["60", "30"]
+        default: "60"
+      takes:
+        description: "Record this many runs and keep the most exciting"
+        type: choice
+        options: ["1", "2", "3"]
+        default: "2"
+      time:
+        description: "Time of day"
+        type: choice
+        options: [dusk, day, night]
+        default: dusk
+      title:
+        description: "Hook text on screen (blank = the mode's default)"
+        type: string
+        default: ""
+      seed:
+        description: "Random seed (blank = random). Same seed = similar run, not identical"
+        type: string
+        default: ""
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      seeds: ${{ steps.seeds.outputs.seeds }}
+    steps:
+      - id: seeds
+        env:
+          TAKES: ${{ inputs.takes }}
+          SEED: ${{ inputs.seed }}
+        run: |
+          base="${SEED//[^0-9]/}"
+          [ -n "$base" ] || base=$(( RANDOM * 7 + RANDOM ))
+          seeds=$(python3 -c "import sys; n=int(sys.argv[1]); b=int(sys.argv[2]); print([b + i * 1009 for i in range(n)])" "$TAKES" "$base")
+          echo "seeds=$seeds" >> "$GITHUB_OUTPUT"
+          echo "Seeds: $seeds"
+
+  record:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: ${{ fromJSON(needs.plan.outputs.seeds) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install Godot and recording tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg libgl1-mesa-dri libglx-mesa0 \
+            libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
+          echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Record
+        env:
+          MODE: ${{ inputs.mode }}
+          ORIENTATION: ${{ inputs.orientation }}
+          DURATION: ${{ inputs.duration }}
+          FPS: ${{ inputs.fps }}
+          TIME: ${{ inputs.time }}
+          TITLE: ${{ inputs.title }}
+          SEED: ${{ matrix.seed }}
+        run: tools/record.sh "$GODOT" take
+      - uses: actions/upload-artifact@v4
+        with:
+          name: take-${{ matrix.seed }}
+          path: take/
+          retention-days: 7
+
+  pick:
+    needs: record
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: take-*
+          path: takes
+      - name: Pick the best take
+        env:
+          NAME: cubecity-${{ inputs.mode }}-${{ inputs.orientation }}-${{ github.run_number }}
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
+          python3 tools/pick.py takes video "$NAME"
+          python3 tools/report.py takes/*/summary.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ inputs.mode }}-${{ inputs.orientation }}-${{ github.run_number }}
+          path: video/
+          retention-days: 30
