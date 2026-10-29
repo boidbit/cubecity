@@ -16,7 +16,7 @@ run() {
   local name=$1
   shift
   echo "::group::$name"
-  timeout 900 "$GODOT" --headless "$@" > "$OUT/$name.log" 2>&1
+  timeout 300 "$GODOT" --headless "$@" > "$OUT/$name.log" 2>&1
   local rc=$?
   cat "$OUT/$name.log"
   echo "::endgroup::"
@@ -33,7 +33,9 @@ run() {
 run import --import
 run play --fixed-fps 60 --quit-after 1200
 for mode in chase destroy survive; do
-  run "bot-$mode" --fixed-fps 60 -- --bot="$mode" --duration="$SECS" --seed=11 --summary="$OUT/$mode.json"
+  # the director quits at the end of the clip; --quit-after is a safety net
+  run "bot-$mode" --fixed-fps 60 --quit-after $(( (SECS + 15) * 60 )) -- \
+    --bot="$mode" --duration="$SECS" --seed=11 --summary="$OUT/$mode.json"
   if [ ! -s "$OUT/$mode.json" ]; then
     echo "::error::bot-$mode wrote no summary"
     status=1

@@ -574,11 +574,17 @@ func _smash_route(a: Vector2i, h: Vector2i, key: Vector2i, c: Vector3) -> Dictio
 			after = Vector2i(key.x if randf() < 0.5 else key.x + 1, lo)
 		if not _inside(after):
 			continue
-		for entry in [n1, n2]:
+		for entry: Vector2i in [n1, n2]:
 			if not _inside(entry):
 				continue
 			var route := _best_route(a, entry, h)
 			if route.is_empty():
+				continue
+			# reaching `entry` and then doubling back to `e` would need a U-turn
+			var into := h if route.size() < 2 else route[route.size() - 1] - route[route.size() - 2]
+			var ep := world.node_pos(entry)
+			var out := Vector2i(0, signi(roundi(e.z - ep.z))) if along_z else Vector2i(signi(roundi(e.x - ep.x)), 0)
+			if out == -into:
 				continue
 			var dirv := _flat(x - e).normalized()
 			return {"route": route, "extra": [e, e + dirv * 6.0, x, world.node_pos(after)],

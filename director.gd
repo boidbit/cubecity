@@ -422,6 +422,9 @@ func _finish() -> void:
 	if finished:
 		return
 	finished = true
+	# quit first: it takes effect after this frame, so the clip ends on time even
+	# if something below goes wrong
+	get_tree().quit()
 	var js := JSON.stringify(summary())
 	print("SUMMARY ", js)
 	if summary_path != "":
@@ -429,4 +432,3 @@ func _finish() -> void:
 		if fa != null:
 			fa.store_string(js)
 			fa.close()
-	get_tree().quit()

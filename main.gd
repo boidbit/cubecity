@@ -148,7 +148,7 @@ func _make_env() -> void:
 	if vertical:
 		# portrait video: keep the horizontal view wide, let the vertical one grow
 		cam.keep_aspect = Camera3D.KEEP_WIDTH
-		cam.fov = 64.0
+		cam.fov = 60.0
 	else:
 		cam.fov = 62.0
 	add_child(cam)
@@ -606,8 +606,8 @@ func _cam_chase(dt: float) -> void:
 	cam.global_position = p
 	var side := cam_dir.cross(Vector3.UP)
 	cam.look_at(player.global_position + cam_dir * ahead - side * cam_steer * 2.5 + Vector3(0, 1.2, 0), Vector3.UP)
-	var base := 64.0 if vertical else 62.0
-	var fov := base + clampf(spd, 0.0, 40.0) * (0.3 if vertical else 0.5) + (8.0 if player.nitro_active else 0.0)
+	var base := 60.0 if vertical else 62.0
+	var fov := base + clampf(spd, 0.0, 40.0) * (0.2 if vertical else 0.5) + ((5.0 if vertical else 8.0) if player.nitro_active else 0.0)
 	cam.fov = lerpf(cam.fov, fov, 4.0 * dt)
 
 
