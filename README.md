@@ -35,7 +35,7 @@ A bot can play the game while Godot's Movie Maker records it, for YouTube Shorts
    - **mode**: `chase` (1 car vs a growing pack of police, finale is a police trap), `destroy` (smash as much city as possible), `survive` (5 stars from the start).
    - **orientation**: `vertical` (1080x1920, Shorts) or `horizontal` (1920x1080).
    - **duration**, **fps**, **takes** (records several runs and keeps the most exciting), **time** of day, the on-screen **title**, and an optional **seed**.
-3. When the run finishes, download the `video-...` artifact from the run page: the MP4, a thumbnail and the run's stats.
+3. When the run finishes, download the `video-...` artifact from the run page: the MP4, a thumbnail, the run's stats and `...-upload.txt` with ready-to-paste YouTube title options, description, tags, hashtags and a pinned comment, filled in with that run's numbers. The same text is shown on the run's summary page. Replace the Play Store link placeholder before posting.
 
 GitHub's machines have no graphics card, so frames are drawn on the CPU. The video is still smooth, but a 55 second clip takes a while to record.
 
@@ -69,4 +69,4 @@ The project uses the Compatibility (OpenGL ES 3) renderer so it runs on more pho
 | `fx.gd` | Particles, skid marks, synthesized sounds |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade, ground, car and debris shaders |
-| `tools/` | Scripts used by the workflows: install Godot, smoke test, record, pick the best take |
+| `tools/` | Scripts used by the workflows: install Godot, smoke test, record, pick the best take, write the upload text |

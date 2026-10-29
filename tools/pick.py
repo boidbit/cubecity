@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Keeps the most exciting take and grabs a thumbnail from its biggest moment.
+"""Keeps the most exciting take, grabs a thumbnail from its biggest moment and
+writes the YouTube upload text for it.
 
 Usage: tools/pick.py <takes dir> <out dir> <name>
 Each folder in <takes dir> holds video.mp4 and summary.json from tools/record.sh.
@@ -10,6 +11,8 @@ import os
 import shutil
 import subprocess
 import sys
+
+import upload_text
 
 # first event of these kinds (in this order) makes the thumbnail
 MOMENTS = ["collapse", "trap", "gas", "chain", "swat_down", "cop_wrecked", "big_air", "smash"]
@@ -42,6 +45,14 @@ def main(src, out, name):
     video = os.path.join(out, name + ".mp4")
     shutil.copy(os.path.join(d, "video.mp4"), video)
     shutil.copy(os.path.join(d, "summary.json"), os.path.join(out, name + ".json"))
+    # titles, description and tags for YouTube, filled in with this run's numbers
+    text = upload_text.build(s)
+    with open(os.path.join(out, name + "-upload.txt"), "w", encoding="utf-8") as f:
+        f.write(text)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as f:
+            f.write("## Upload text\n\nAlso saved as `" + name + "-upload.txt` next to the video.\n\n```\n" + text + "```\n\n")
     t = moment(s)
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", video,
                     "-frames:v", "1", "-q:v", "2", os.path.join(out, name + "-thumbnail.jpg")], check=False)

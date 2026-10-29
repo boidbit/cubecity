@@ -404,6 +404,7 @@ func summary() -> Dictionary:
 	var st: Dictionary = main.stats
 	var s := {
 		"mode": mode,
+		"orientation": "vertical" if main.vertical else "horizontal",
 		"title": title,
 		"duration": duration,
 		"end": main.end_title.to_lower() if main.game_over else "survived",
