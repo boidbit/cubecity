@@ -47,14 +47,13 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg libgl1-mesa-dri libglx-mesa0 \
             libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
-      - name: Record a 20 s half-size vertical preview
+      - name: Record a 20 s vertical preview (1080x1920, 30 fps)
         env:
           MODE: chase
           ORIENTATION: vertical
           DURATION: "20"
           FPS: "30"
           SEED: "7"
-          SCALE: "0.5"
         run: tools/record.sh "$GODOT" preview
       - uses: actions/upload-artifact@v4
         if: always()

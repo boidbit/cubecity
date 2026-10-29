@@ -148,7 +148,7 @@ func _make_env() -> void:
 	if vertical:
 		# portrait video: keep the horizontal view wide, let the vertical one grow
 		cam.keep_aspect = Camera3D.KEEP_WIDTH
-		cam.fov = 60.0
+		cam.fov = 56.0
 	else:
 		cam.fov = 62.0
 	add_child(cam)
@@ -605,16 +605,16 @@ func _cam_chase(dt: float) -> void:
 	var ahead := 6.0
 	if vertical:
 		# higher and steeper, so the police behind the car stay in the frame
-		back = 8.0 + spd * 0.06
-		up = 6.0 + spd * 0.04
-		ahead = 6.0
+		back = 6.5 + spd * 0.05
+		up = 4.8 + spd * 0.03
+		ahead = 5.0
 	var target := _cam_clear(player.global_position - cam_dir * back + Vector3(0, up, 0))
 	var p := target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-9.0 * dt))
 	p += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake
 	cam.global_position = p
 	var side := cam_dir.cross(Vector3.UP)
 	cam.look_at(player.global_position + cam_dir * ahead - side * cam_steer * 2.5 + Vector3(0, 1.2, 0), Vector3.UP)
-	var base := 60.0 if vertical else 62.0
+	var base := 56.0 if vertical else 62.0
 	var fov := base + clampf(spd, 0.0, 40.0) * (0.2 if vertical else 0.5) + ((5.0 if vertical else 8.0) if player.nitro_active else 0.0)
 	cam.fov = lerpf(cam.fov, fov, 4.0 * dt)
 
