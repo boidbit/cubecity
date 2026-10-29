@@ -28,6 +28,8 @@ H=$(python3 -c "print(int($H * $SCALE) // 2 * 2)")
 echo "Recording $MODE $ORIENTATION ${W}x${H} ${DURATION}s @ ${FPS}fps seed=$SEED time=$TIME"
 
 export LIBGL_ALWAYS_SOFTWARE=1
+# registers the script classes (class_name) the game needs; without it nothing loads
+timeout 300 "$GODOT" --headless --import > "$OUT/import.log" 2>&1 || true
 start=$(date +%s)
 set +e
 timeout 18000 xvfb-run -a -s "-screen 0 1920x1920x24" \
@@ -43,6 +45,7 @@ if grep -nE "SCRIPT ERROR" "$OUT/godot.log"; then
   echo "::warning::script errors while recording (see godot.log)"
 fi
 [ -s "$OUT/take.avi" ] || { echo "::error::no video was written"; exit 1; }
+[ -s "$OUT/summary.json" ] || { echo "::error::the bot run did not finish (no summary.json), see godot.log"; exit 1; }
 
 ffmpeg -y -loglevel error -i "$OUT/take.avi" -c:v libx264 -preset medium -crf 18 \
   -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart "$OUT/video.mp4"

@@ -35,6 +35,8 @@ var break_t := 0.0
 var jump_slowmo := false
 var end_card := false
 var finished := false
+var trace := false        # --trace: print what the bot is doing once a second (CI logs)
+var next_trace := 0.0
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -48,6 +50,8 @@ func setup(main_node, cfg: Dictionary) -> void:
 	if title == "":
 		title = TITLES[mode]
 	summary_path = cfg.get("summary", "")
+	trace = cfg.has("trace")
+	bot.trace = trace
 	climax_t = duration - FINALE
 	main.tod_rate = 0.0
 	match mode:
@@ -169,10 +173,14 @@ func tick(dt: float) -> void:
 	if main.game_over:
 		return
 	var pl: Car = main.player
-	main.protect = t < climax_t
-	pl.dmg_scale = 0.35 if main.protect else 0.6
+	# a clip must not end early: no wreck, no bust until the last seconds
+	main.protect = t < duration - 3.0
+	pl.dmg_scale = 0.35 if t < climax_t else 0.6
 	if main.protect and pl.hp < 15.0:
 		pl.hp = 15.0
+	if trace and t >= next_trace:
+		next_trace = t + 1.0
+		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)])
 	_heat(t)
 	if t >= next_try:
 		next_try = t + 0.5

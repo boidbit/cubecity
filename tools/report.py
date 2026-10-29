@@ -16,7 +16,8 @@ def main(paths):
     for p in paths:
         with open(p) as f:
             s = json.load(f)
-        s["file"] = os.path.basename(os.path.dirname(p)) or os.path.basename(p)
+        base = os.path.basename(p)
+        s["file"] = os.path.basename(os.path.dirname(p)) if base == "summary.json" else base[:-5]
         rows.append(s)
     head = ["file"] + COLS + ["beats"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]

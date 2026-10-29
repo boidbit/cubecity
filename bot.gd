@@ -35,6 +35,8 @@ var drift_on := false
 var drift_t := 0.0
 var drift_node := -1
 var replan_needed := false
+var trace := false
+var plan_name := ""
 var trail: Array[Vector3] = []
 var stuck_count := 0
 var stuck_times: Array[float] = []
@@ -95,7 +97,7 @@ func drive(dt: float) -> void:
 	# speed: cruise, slower for corners ahead, flat out on ramps and smashes
 	var want := cruise
 	var full: bool = kind in ["ramp", "smash", "hit"]
-	if kind == "smash" and idx + 1 < pts.size() and kinds[idx + 1] == "road" and p.distance_to(_flat(pts[idx])) < 24.0:
+	if kind == "smash" and idx + 1 < pts.size() and kinds[idx + 1] == "road" and p.distance_to(_flat(pts[idx])) < 11.0:
 		full = false   # about to pop out onto the far road: ease off for the turn
 		want = 18.0
 	if full:
@@ -133,7 +135,8 @@ func drive(dt: float) -> void:
 	if stuck_t > 0.8:
 		stuck_t = 0.0
 		stuck_count += 1
-		reverse_t = randf_range(0.8, 1.2)
+		# against a wall mid-smash: back up further for a run-up (ploughing needs 9 m/s)
+		reverse_t = randf_range(1.5, 1.9) if kind in ["smash", "hit"] else randf_range(0.8, 1.2)
 		rev_steer = -signf(st) if absf(st) > 0.1 else (1.0 if randf() < 0.5 else -1.0)
 		stuck_times.append(main.clock)
 		while stuck_times.size() > 0 and main.clock - stuck_times[0] > 10.0:
@@ -307,6 +310,13 @@ func _record_trail() -> void:
 
 # ------------------------------------------------------------ queries for the director
 
+func debug_line(t: float) -> String:
+	var p := car.global_position
+	var kind := kinds[idx] if idx < kinds.size() else "-"
+	return "TRACE t=%5.1f plan=%s kind=%s wp=%d/%d v=%d pos=(%d,%d) stuck=%d rev=%.1f air=%.1f" % [
+		t, plan_name, kind, idx, pts.size(), int(car.speed * 3.6), int(p.x), int(p.z), stuck_count, reverse_t, car.airtime]
+
+
 func needs_plan() -> bool:
 	return pts.size() - idx < 2
 
@@ -415,7 +425,10 @@ func _best_route(a: Vector2i, b: Vector2i, h: Vector2i) -> Array[Vector2i]:
 	return r
 
 
-func _commit(nodes: Array[Vector2i], extra_p: Array = [], extra_k: Array = []) -> void:
+func _commit(nodes: Array[Vector2i], extra_p: Array = [], extra_k: Array = [], name: String = "flee") -> void:
+	plan_name = name
+	if trace:
+		print("PLAN %s t=%.1f nodes=%s extra=%s" % [name, main.clock, str(nodes), str(extra_k)])
 	start = car.global_position
 	pts.clear()
 	kinds.clear()
@@ -505,7 +518,7 @@ func plan_ramp() -> bool:
 	var p1: Vector3 = rr2["p1"]
 	var dirv := _flat(p1 - p0).normalized()
 	var extra := [Vector3(p0.x, 0.9, p0.z) - dirv * 18.0, p0, p1, p1 + dirv * 40.0, world.node_pos(best["after"])]
-	_commit(best["route"], extra, ["road", "ramp", "ramp", "air", "road"])
+	_commit(best["route"], extra, ["road", "ramp", "ramp", "air", "road"], "ramp")
 	return true
 
 
@@ -538,7 +551,7 @@ func plan_smash(min_h: int) -> bool:
 						best = opt
 	if best.is_empty():
 		return false
-	_commit(best["route"], best["extra"], best["kinds"])
+	_commit(best["route"], best["extra"], best["kinds"], "smash")
 	return true
 
 
@@ -609,6 +622,6 @@ func plan_gas(r: float) -> bool:
 		var ex: Array = opt["extra"]
 		# e, run-up, the pumps, the far road, the next node
 		var extra := [ex[0], ex[1], Vector3(c.x, 0.9, c.z), ex[2], ex[3]]
-		_commit(opt["route"], extra, ["road", "hit", "hit", "smash", "road"])
+		_commit(opt["route"], extra, ["road", "hit", "hit", "smash", "road"], "gas")
 		return true
 	return false
