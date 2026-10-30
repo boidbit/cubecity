@@ -426,6 +426,14 @@ func stream_for(name: String, fallback: String) -> AudioStream:
 	return sounds[fallback]
 
 
+# Stops every sound. Headless test runs use it just before quitting: Godot reports loaded
+# sounds that are still playing at exit as leaked resources.
+func silence() -> void:
+	for n in get_tree().root.find_children("*", "AudioStreamPlayer3D", true, false):
+		(n as AudioStreamPlayer3D).stop()
+	engine_player.stop()
+
+
 # Plays one of the recorded sounds in `names` (at random). `key` and `cooldown` stop a
 # pile-up from stacking the same kind of sound. False if nothing played, so the caller
 # can fall back to a synthesized sound.

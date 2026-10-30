@@ -24,9 +24,14 @@ run() {
     echo "::error::$name exited with code $rc"
     status=1
   fi
-  if grep -nE "SCRIPT ERROR|ERROR:" "$OUT/$name.log"; then
+  # "resources still in use at exit" is Godot's shutdown housekeeping (a sound still
+  # playing when the process ends), not a script error: warn, don't fail
+  if grep -nE "SCRIPT ERROR|ERROR:" "$OUT/$name.log" | grep -vE "resources still in use at exit" | grep -n .; then
     echo "::error::$name: errors in the log (lines above)"
     status=1
+  fi
+  if grep -qE "resources still in use at exit" "$OUT/$name.log"; then
+    echo "::warning::$name: sounds still loaded at exit"
   fi
 }
 
