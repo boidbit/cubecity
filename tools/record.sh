@@ -47,7 +47,7 @@ fi
 [ -s "$OUT/take.avi" ] || { echo "::error::no video was written"; exit 1; }
 [ -s "$OUT/summary.json" ] || { echo "::error::the bot run did not finish (no summary.json), see godot.log"; exit 1; }
 
-ffmpeg -y -loglevel error -i "$OUT/take.avi" -c:v libx264 -preset medium -crf 26 -maxrate 8M -bufsize 16M \
+ffmpeg -y -loglevel error -i "$OUT/take.avi" -c:v libx264 -preset medium -crf 24 -maxrate 10M -bufsize 20M \
   -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "$OUT/video.mp4"
 rm -f "$OUT/take.avi"
 mkdir -p "$OUT/frames"

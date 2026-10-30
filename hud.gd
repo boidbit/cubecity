@@ -85,8 +85,34 @@ class Stars extends Control:
 			draw_polyline(pts, Color(0, 0, 0, 0.85) if on else Color(1, 1, 1, 0.5), 3.0)
 
 
+# Thin streaks flying out from the edges of the screen: the feeling of speed.
+class SpeedLines extends Control:
+	var intensity := 0.0
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		if intensity < 0.02:
+			return
+		var c := size * 0.5
+		var rmax := c.length()
+		for i in 34:
+			var a := (float(i) + randf()) * TAU / 34.0
+			var d := Vector2(cos(a), sin(a))
+			var r0 := rmax * randf_range(0.55, 0.8)
+			var r1 := r0 + rmax * randf_range(0.12, 0.3) * (0.5 + intensity)
+			draw_line(c + d * r0, c + d * r1, Color(1, 1, 1, 0.22 * intensity), 3.0)
+
+
 var main
 var video := false
+var speed_lines: SpeedLines
+var progress: ColorRect
+var progress_bg: ColorRect
+var lbl_caption: Label
+var cap_tw: Tween
+var flash_rect: ColorRect
 var in_gas := 0.0
 var in_steer := 0.0
 var in_hb := 0.0
@@ -307,6 +333,51 @@ func _build_video() -> void:
 	minimap.custom_minimum_size = Vector2(ms, ms)
 	add_child(minimap)
 
+	# retention extras: thin progress strip on top, speed lines, vignette, caption line
+	progress_bg = ColorRect.new()
+	progress_bg.color = Color(0, 0, 0, 0.35)
+	progress_bg.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	progress_bg.offset_bottom = 10.0 if v else 6.0
+	progress_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(progress_bg)
+	progress = ColorRect.new()
+	progress.color = Color(1.0, 0.82, 0.2)
+	progress.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	progress.offset_bottom = progress_bg.offset_bottom
+	progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(progress)
+
+	speed_lines = SpeedLines.new()
+	speed_lines.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(speed_lines)
+
+	var vg := Gradient.new()
+	vg.set_color(0, Color(0, 0, 0, 0.0))
+	vg.set_color(1, Color(0, 0, 0, 0.6))
+	vg.add_point(0.55, Color(0, 0, 0, 0.0))
+	var vt := GradientTexture2D.new()
+	vt.gradient = vg
+	vt.fill = GradientTexture2D.FILL_RADIAL
+	vt.fill_from = Vector2(0.5, 0.5)
+	vt.fill_to = Vector2(1.0, 0.5)
+	vt.width = 256
+	vt.height = 256
+	var vr := TextureRect.new()
+	vr.texture = vt
+	vr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	vr.stretch_mode = TextureRect.STRETCH_SCALE
+	vr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(vr)
+
+	lbl_caption = _label("", 84 if v else 52, 18 if v else 12)
+	lbl_caption.add_theme_color_override("font_color", Color.WHITE)
+	lbl_caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_at(lbl_caption, 0.52 if v else 0.62, 260.0 if v else 130.0)
+	lbl_caption.pivot_offset = Vector2((vs.x - 60.0) * 0.5, (260.0 if v else 130.0) * 0.5)
+	lbl_caption.modulate.a = 0.0
+	add_child(lbl_caption)
+
 	# the hook: big title in the middle for the first seconds, then it moves up
 	lbl_hook = _label(main.director.title, 112 if v else 72, 22 if v else 16)
 	lbl_hook.add_theme_color_override("font_color", Color(1.0, 0.86, 0.2))
@@ -356,6 +427,12 @@ func _build_common() -> void:
 	busted_box.add_child(busted_bar)
 	busted_box.visible = false
 	add_child(busted_box)
+
+	flash_rect = ColorRect.new()
+	flash_rect.color = Color(1, 0.95, 0.85, 0.0)
+	flash_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(flash_rect)
 
 	hurt_rect = ColorRect.new()
 	hurt_rect.color = Color(0.8, 0.05, 0.05, 0.0)
@@ -418,6 +495,7 @@ func _process(delta: float) -> void:
 	if main.game_over:
 		over_t += delta
 	hurt_rect.color.a = move_toward(hurt_rect.color.a, 0.0, delta * 1.4)
+	flash_rect.color.a = move_toward(flash_rect.color.a, 0.0, delta * 2.2)
 	if video:
 		return
 	var gas := 0.0
@@ -448,6 +526,10 @@ func update_hud() -> void:
 		if stars.level != main.level:
 			stars.level = main.level
 			stars.queue_redraw()
+		progress.offset_right = get_viewport().get_visible_rect().size.x * clampf(main.clock / main.director.duration, 0.0, 1.0)
+		var kmh := absf(p.fwd_speed) * 3.6
+		speed_lines.intensity = clampf((kmh - 90.0) / 70.0, 0.0, 1.0) * (1.0 if p.airtime < 0.2 else 0.5) + (0.4 if p.nitro_active else 0.0)
+		speed_lines.queue_redraw()
 	else:
 		lbl_speed.text = str(int(absf(p.fwd_speed) * 3.6))
 		lbl_score.text = str(main.score)
@@ -472,6 +554,25 @@ func banner(text: String) -> void:
 	banner_tw = create_tween()
 	banner_tw.tween_interval(1.1)
 	banner_tw.tween_property(lbl_banner, "modulate:a", 0.0, 0.6)
+
+
+# Big story line in the middle of the screen (video runs only).
+func caption(text: String, secs: float = 1.7) -> void:
+	if lbl_caption == null:
+		return
+	lbl_caption.text = text
+	if cap_tw != null:
+		cap_tw.kill()
+	lbl_caption.modulate.a = 1.0
+	lbl_caption.scale = Vector2.ONE * 0.6
+	cap_tw = create_tween()
+	cap_tw.tween_property(lbl_caption, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	cap_tw.tween_interval(secs)
+	cap_tw.tween_property(lbl_caption, "modulate:a", 0.0, 0.25)
+
+
+func flash(a: float) -> void:
+	flash_rect.color.a = clampf(maxf(flash_rect.color.a, a), 0.0, 0.5)
 
 
 func hurt_flash(a: float) -> void:

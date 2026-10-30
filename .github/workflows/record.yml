@@ -28,6 +28,10 @@ on:
         type: choice
         options: ["1", "2", "3"]
         default: "2"
+      teaser:
+        description: "Hook: open with a flash-forward of the biggest moment, then EARLIER..."
+        type: boolean
+        default: true
       time:
         description: "Time of day"
         type: choice
@@ -108,8 +112,9 @@ jobs:
       - name: Pick the best take
         env:
           NAME: cubecity-${{ inputs.mode }}-${{ inputs.orientation }}-${{ github.run_number }}
+          TEASER: ${{ inputs.teaser }}
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
+          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg fonts-dejavu-core
           python3 tools/pick.py takes video "$NAME"
           python3 tools/report.py takes/*/summary.json
       - uses: actions/upload-artifact@v4

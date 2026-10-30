@@ -52,6 +52,7 @@ var cam_mode := "chase"
 var cam_cut := false
 var cam_steer := 0.0
 var cam_cop_back := 0.0
+var fov_kick := 0.0
 var tod := 0.22
 var tod_rate := 1.0 / 480.0
 var rain_amt := 0.0
@@ -256,6 +257,7 @@ func _process(delta: float) -> void:
 	_update_cam(delta)
 	_update_env(delta)
 	shake = maxf(0.0, shake - delta * 1.8)
+	fov_kick = move_toward(fov_kick, 0.0, delta * 14.0)
 	fx.engine(player.rpm(), absf(player.input_gas), not game_over and not player.dead)
 	hud.update_hud()
 
@@ -642,11 +644,11 @@ func _cam_chase(dt: float) -> void:
 	var target := _cam_clear(player.global_position - cam_dir * back + Vector3(0, up, 0))
 	var p := target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-9.0 * dt))
 	p += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake
-	cam.global_position = p
+	cam.global_position = p + _intro_off()
 	var side := cam_dir.cross(Vector3.UP)
 	cam.look_at(player.global_position + cam_dir * ahead - side * cam_steer * 2.5 + Vector3(0, 1.2, 0), Vector3.UP)
 	var base := 56.0 if vertical else 62.0
-	var fov := base + clampf(spd, 0.0, 40.0) * (0.2 if vertical else 0.5) + ((5.0 if vertical else 8.0) if player.nitro_active else 0.0)
+	var fov := base + clampf(spd, 0.0, 40.0) * (0.2 if vertical else 0.5) + ((5.0 if vertical else 8.0) if player.nitro_active else 0.0) + fov_kick
 	cam.fov = lerpf(cam.fov, fov, 4.0 * dt)
 
 
@@ -658,17 +660,24 @@ func _cam_front(dt: float) -> void:
 	var side := fwd.cross(Vector3.UP)
 	var ahead := 8.0 + player.speed * 0.18 if vertical else 11.0 + player.speed * 0.25
 	var target := _cam_clear(player.global_position + fwd * ahead + side * 1.6 + Vector3(0, 2.6 if vertical else 3.2, 0))
-	cam.global_position = target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-10.0 * dt))
+	cam.global_position = (target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-10.0 * dt))) + _intro_off()
 	cam.look_at(player.global_position - fwd * 5.0 + Vector3(0, 0.8, 0), Vector3.UP)
-	cam.fov = lerpf(cam.fov, 58.0, 6.0 * dt)
+	cam.fov = lerpf(cam.fov, 58.0 + fov_kick, 6.0 * dt)
+
+
+# Drone shot at the start of a video run: the camera comes down from above the city.
+func _intro_off() -> Vector3:
+	if director == null or clock > 2.6:
+		return Vector3.ZERO
+	return Vector3(0, 34.0 * (1.0 - smoothstep(0.0, 2.6, clock)), 0)
 
 
 # High above and behind: shows the whole pack of police.
 func _cam_heli(dt: float) -> void:
-	var target := player.global_position - cam_dir * 16.0 + Vector3(0, 32.0, 0)
+	var target := player.global_position - cam_dir * 12.0 + Vector3(0, 22.0, 0)
 	cam.global_position = target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-4.0 * dt))
 	cam.look_at(player.global_position + cam_dir * 6.0, Vector3.UP)
-	cam.fov = lerpf(cam.fov, 62.0, 4.0 * dt)
+	cam.fov = lerpf(cam.fov, 62.0 + fov_kick, 4.0 * dt)
 
 
 # Pulls the camera in front of any wall between it and the car.
@@ -752,6 +761,9 @@ func explode_at(pos: Vector3, radius: float, force: float, dmg: float, hurt_play
 	fx.explosion(pos, radius)
 	fx.play("explosion", pos, 3.0)
 	shake_cam(0.5 + radius * 0.06)
+	fov_kick = maxf(fov_kick, 4.0 + radius * 0.5)
+	if radius >= 6.5 and director != null and player.global_position.distance_to(pos) < 60.0:
+		hud.flash(0.28)
 	boom_times.append(clock)
 	while boom_times.size() > 0 and clock - boom_times[0] > 1.6:
 		boom_times.remove_at(0)

@@ -13,6 +13,18 @@ extends Node
 #   survive  5 stars from the first second; just stay alive
 
 const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "BOT vs THE CITY", "survive": "SURVIVE 5 STARS"}
+# Story lines shown in the middle of the screen when these events happen (once each).
+const EVENT_CAPTIONS := {
+	"roadblock": "THEY BLOCKED THE ROAD", "heli": "NOW A HELICOPTER?!", "swat": "THE SWAT TRUCK ARRIVES",
+	"big_air": "SEND IT!", "mega_jump": "NO WAY...", "trap_set": "ONE LAST TRICK...", "trap": "BOOM.",
+	"collapse": "TIMBER!", "gas": "GAS STATION = BOMB", "chain": "CHAIN REACTION!", "near_miss": "TOO CLOSE!",
+	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!",
+}
+const START_CAPTIONS := {
+	"chase": "ONE BOT. NO BRAKES.", "survive": "5 STARS. NO ESCAPE.", "destroy": "HOW MUCH CAN IT BREAK?",
+	"heli": "THEY SENT A HELICOPTER.", "rush": "RUSH HOUR. NO RULES.", "stunt": "THE STUNT SHOW.",
+}
+const PRIORITY := ["trap", "heli_down", "mega_jump", "collapse", "gas"]
 const FINALE := 12.0      # seconds before the end when the protection lifts and the finale starts
 
 var main
@@ -37,6 +49,9 @@ var end_card := false
 var finished := false
 var trace := false        # --trace: print what the bot is doing once a second (CI logs)
 var next_trace := 0.0
+var ev_seen := 0
+var last_cap := -9.0
+var cap_kinds := {}
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -243,11 +258,40 @@ func tick(dt: float) -> void:
 		next_try = t + 0.5
 		_beats(t)
 	_update_traps(t)
+	_story(t)
 	_camera(t)
 	_break_free(dt)
 	_jump_moment()
 	if bot.replan_needed or bot.needs_plan():
 		bot.plan_flee(_away_point())
+
+
+func _cap(text: String, force: bool = false) -> void:
+	if not force and main.clock - last_cap < 1.3:
+		return
+	last_cap = main.clock
+	main.hud.caption(text)
+
+
+# Story line on screen: a start line, then one for each big thing that happens.
+func _story(t: float) -> void:
+	if not done.has("cap_start") and t > 0.8:
+		done["cap_start"] = t
+		_cap(START_CAPTIONS.get(mode, "GO!"), true)
+	if not done.has("cap_pack") and mode in ["chase", "survive", "rush"] and t > duration * 0.22:
+		done["cap_pack"] = t
+		_cap("%d COPS. AND COUNTING." % main.alive_police())
+	while ev_seen < main.events.size():
+		var kind: String = main.events[ev_seen]["type"]
+		ev_seen += 1
+		var text: String = EVENT_CAPTIONS.get(kind, "")
+		if text == "":
+			continue
+		var gap := 4.0 if kind in ["near_miss", "collapse"] else 1e9
+		if cap_kinds.has(kind) and t - float(cap_kinds[kind]) < gap:
+			continue
+		cap_kinds[kind] = t
+		_cap(text, kind in PRIORITY)
 
 
 # The wanted level climbs on a schedule so every clip escalates.

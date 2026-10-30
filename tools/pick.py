@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 
+import compose
 import upload_text
 
 # first event of these kinds (in this order) makes the thumbnail
@@ -42,8 +43,17 @@ def main(src, out, name):
     takes.sort(key=lambda t: t[0], reverse=True)
     score, d, s = takes[0]
     os.makedirs(out, exist_ok=True)
+    src = os.path.join(d, "video.mp4")
     video = os.path.join(out, name + ".mp4")
-    shutil.copy(os.path.join(d, "video.mp4"), video)
+    if os.environ.get("TEASER", "true") == "true":
+        # hook: flash forward to the biggest moment, then "EARLIER..." and the full clip
+        try:
+            compose.main(src, os.path.join(d, "summary.json"), video)
+        except Exception as e:  # never lose a good take over a failed hook
+            print(f"teaser failed ({e}); using the plain video")
+            shutil.copy(src, video)
+    else:
+        shutil.copy(src, video)
     shutil.copy(os.path.join(d, "summary.json"), os.path.join(out, name + ".json"))
     # titles, description and tags for YouTube, filled in with this run's numbers
     text = upload_text.build(s)
@@ -54,7 +64,7 @@ def main(src, out, name):
         with open(summary, "a", encoding="utf-8") as f:
             f.write("## Upload text\n\nAlso saved as `" + name + "-upload.txt` next to the video.\n\n```\n" + text + "```\n\n")
     t = moment(s)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", video,
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", src,
                     "-frames:v", "1", "-q:v", "2", os.path.join(out, name + "-thumbnail.jpg")], check=False)
     print(f"best take: {os.path.basename(d)} (excitement {score}), thumbnail at {t:.1f}s")
     for sc, dd, _ in takes:

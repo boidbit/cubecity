@@ -38,7 +38,7 @@ func setup(main_node) -> void:
 	var fm := StandardMaterial3D.new()
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fm.vertex_color_use_as_albedo = true
-	fm.albedo_color = Color(1, 0.55, 0.12)
+	fm.albedo_color = Color.WHITE   # the colour comes from the particle colour ramp
 	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fire_mesh = SphereMesh.new()
 	fire_mesh.radius = 0.3
@@ -97,20 +97,34 @@ func setup(main_node) -> void:
 	for i in 8:
 		dust_pool.append(_pool_node(dust_mesh, 24, 2.6, Vector3(0, 0.6, 0), 1.5, 5.0, 180.0, grow_fade, Color(0.8, 0.77, 0.72, 0.8)))
 	for i in 4:
-		var fp := _pool_node(fire_mesh, 40, 0.85, Vector3(0, -4, 0), 4.0, 13.0, 180.0, shrink, Color.WHITE)
+		# puffs start small, swell as they cool, then fade; they slow quickly, so the blast
+		# billows outward and hangs instead of flying off as separate balls
+		var fp := _pool_node(fire_mesh, 40, 0.95, Vector3(0, 1.5, 0), 5.0, 15.0, 180.0, grow_fade, Color.WHITE)
 		fp.color_ramp = fire_ramp
-		fp.scale_amount_min = 1.6
-		fp.scale_amount_max = 3.4
+		fp.scale_amount_min = 1.2
+		fp.scale_amount_max = 3.0
+		fp.damping_min = 5.0
+		fp.damping_max = 9.0
+		fp.hue_variation_min = -0.05
+		fp.hue_variation_max = 0.03
 		fire_pool.append(fp)
 		# flame column rising out of the middle of the blast
-		var cp := _pool_node(fire_mesh, 20, 0.8, Vector3(0, 5.0, 0), 2.0, 7.0, 32.0, shrink, Color.WHITE)
+		var cp := _pool_node(fire_mesh, 20, 0.85, Vector3(0, 6.0, 0), 2.0, 7.0, 32.0, grow_fade, Color.WHITE)
 		cp.color_ramp = fire_ramp
-		cp.scale_amount_min = 2.0
-		cp.scale_amount_max = 4.2
+		cp.scale_amount_min = 1.8
+		cp.scale_amount_max = 3.6
+		cp.damping_min = 1.5
+		cp.damping_max = 3.0
+		cp.hue_variation_min = -0.04
+		cp.hue_variation_max = 0.02
 		core_pool.append(cp)
-		var sp := _pool_node(smoke_mesh, 16, 2.6, Vector3(0, 2.2, 0), 1.0, 4.5, 180.0, grow_fade, Color(0.22, 0.21, 0.2, 0.9))
-		sp.scale_amount_min = 1.5
-		sp.scale_amount_max = 2.8
+		# smoke rises out of the fire a moment later (explosiveness < 1 staggers it)
+		var sp := _pool_node(smoke_mesh, 16, 2.8, Vector3(0, 2.4, 0), 1.0, 4.5, 180.0, grow_fade, Color(0.2, 0.19, 0.19, 0.9))
+		sp.scale_amount_min = 1.4
+		sp.scale_amount_max = 2.6
+		sp.explosiveness = 0.55
+		sp.damping_min = 0.6
+		sp.damping_max = 1.4
 		smoke_pool.append(sp)
 	for i in 8:
 		spark_pool.append(_pool_node(spark_mesh, 14, 0.6, Vector3(0, -14, 0), 4.0, 11.0, 60.0, shrink, Color.WHITE))
