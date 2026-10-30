@@ -38,6 +38,7 @@ var engine_pb: AudioStreamGeneratorPlayback
 var engine_phase := 0.0
 var engine_noise := 0.0
 const MIX := 22050.0
+const SCREECH_ON := false   # tyre squeal switched off: it sounded bad. true brings it back
 const MEDIUM_HIT := 6.0     # impact sizes (see Car._apply_impact) that get a recorded crash
 const HEAVY_HIT := 16.0
 
@@ -475,7 +476,8 @@ func boom(pos: Vector3, radius: float) -> void:
 
 
 func screech(pos: Vector3, vol_db: float) -> void:
-	play_big(["screech"], pos, vol_db, "screech", 1.4)
+	if SCREECH_ON:
+		play_big(["screech"], pos, vol_db, "screech", 1.4)
 
 
 func play(name: String, pos: Vector3, vol_db: float = 0.0) -> void:
