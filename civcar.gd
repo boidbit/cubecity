@@ -20,6 +20,7 @@ var target := Vector3.ZERO
 var cruise := 11.0
 var yaw := 0.0
 var last_v := Vector3.ZERO
+var straight_only := false   # crossing traffic for the director: never turns at an intersection
 
 
 static func palette(i: int) -> Color:
@@ -101,6 +102,9 @@ func _set_target() -> void:
 
 
 func _next_dir() -> void:
+	if straight_only:
+		node = node + Vector2i(roundi(dir.x), roundi(dir.z))
+		return
 	var opts := []
 	var right := dir.cross(Vector3.UP)
 	var left := -right

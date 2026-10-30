@@ -32,7 +32,7 @@ run() {
 
 run import --import
 run play --fixed-fps 60 --quit-after 1200
-for mode in chase destroy survive stunt heli; do
+for mode in chase destroy survive stunt heli rush; do
   for seed in 11 12; do
     # the director quits at the end of the clip; --quit-after is a safety net
     run "bot-$mode-$seed" --fixed-fps 60 --quit-after $(( (SECS + 15) * 60 )) -- \

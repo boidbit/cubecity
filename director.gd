@@ -62,6 +62,10 @@ var pending_tower: Building = null
 var tower_t := 0.0
 var stunt_i := 0
 var stunt_wait := 2.0
+var next_cross := 3.0
+var nm_min := {}          # car id -> closest approach while passing the bot
+var last_nm := -9.0
+var nm_count := 0
 var jump := {}            # heli mode: the mega jump the helicopter waits above
 var jump_stage := 0
 var pass_until := 0.0
@@ -96,6 +100,9 @@ func setup(main_node, cfg: Dictionary) -> void:
 		"heli":
 			bot.cruise = 31.0
 			start_heat = 32.0
+		"rush":
+			bot.cruise = 30.0
+			start_heat = 40.0
 		_:
 			bot.cruise = 31.0
 			start_heat = 14.0
@@ -156,6 +163,12 @@ func start() -> void:
 			main.heli_forced = true
 			main.heli.low = true
 			_opening_police(3)
+		"rush":
+			main.cap_bonus = 1
+			main.spawn_gap = Vector2(2.0, 3.5)
+			main.traffic_cap = 36
+			main.traffic_ahead = true
+			_opening_police(2)
 		_:
 			main.spawn_gap = Vector2(2.5, 4.0)
 	bot.plan_flee(_away_point())
@@ -185,9 +198,11 @@ func spawn_police() -> bool:
 	# a mix of directions: out of side streets, head-on from ahead, from behind.
 	# Returning false lets the game pick its own spot.
 	var r := randf()
-	if r < 0.35:
+	var side_p := 0.35 if mode != "rush" else 0.4
+	var ahead_p := 0.5 if mode != "rush" else 0.7       # rush hour: more of them head-on
+	if r < side_p:
 		return _spawn_side()
-	if r < 0.5:
+	if r < ahead_p:
 		return _spawn_ahead()
 	if r < 0.65:
 		return false
@@ -287,6 +302,7 @@ func tick(dt: float) -> void:
 		next_try = t + 0.5
 		_beats(t)
 	_update_traps(t)
+	_near_miss(t)
 	_heli_tick(t)
 	_tower_tick(t)
 	_story(t)
@@ -337,6 +353,8 @@ func _heat(t: float) -> void:
 			heat_floor = 14.0 if f < 0.5 else 32.0
 		"heli":
 			heat_floor = 32.0 if f < 0.5 else 45.0
+		"rush":
+			heat_floor = 40.0 if f < 0.5 else 62.0
 		_:
 			heat_floor = 90.0
 
@@ -349,6 +367,8 @@ func _beats(t: float) -> void:
 	if mode == "heli":
 		_heli_show(t)
 		return
+	if mode == "rush" and t >= next_cross and not bot.busy():
+		next_cross = t + (randf_range(3.0, 4.5) if _spawn_crossers() else 0.6)
 	if mode == "destroy":
 		# a smash whenever the road ahead allows one; the tallest towers for the finale
 		if bot.busy():
@@ -442,6 +462,74 @@ func _tower_tick(t: float) -> void:
 	if along < 40.0:
 		main.stunts.demolish(b)
 		pending_tower = null
+
+
+# Two cars cross the road ahead, one timed to pass just in front of the bot and one just
+# behind it: the bot goes through the gap between them.
+func _spawn_crossers() -> bool:
+	var n := bot.node_ahead()
+	if bot._blocked(n) or not bot._inside(n):
+		return false
+	var pl: Car = main.player
+	var h: Vector2i = bot._grid_dir()
+	var hv := Vector3(h.x, 0, h.y)
+	var np: Vector3 = main.world.node_pos(n)
+	var along := Vector3(np.x - pl.global_position.x, 0, np.z - pl.global_position.z).dot(hv)
+	if along < 60.0 or along > 115.0 or pl.speed < 14.0:
+		return false
+	var vb := maxf(pl.speed, 18.0)
+	var tb := along / vb
+	var perp := Vector3(-hv.z, 0, hv.x)
+	for k in 2:
+		var cd := perp * (1.0 if k == 0 else -1.0)
+		var left := Vector3.UP.cross(cd)
+		var off := left.dot(hv) * 3.5              # where this car's lane crosses the bot's path
+		var delta := -0.6 if k == 0 else 0.6       # just ahead of the bot / just behind it
+		var cc := CivCar.new()
+		main.add_child(cc)
+		cc.build(main, CivCar.palette(randi()), true)
+		cc.cruise = 15.0
+		cc.straight_only = true
+		var d0 := clampf(15.0 * (tb + off / vb + delta), 14.0, 58.0)
+		cc.start_route(np - cd * d0, cd)
+		main.civs.append(cc)
+	return true
+
+
+# A car that passes close at speed without touching is a near miss.
+func _near_miss(t: float) -> void:
+	var pl: Car = main.player
+	var pv := Vector3(pl.linear_velocity.x, 0, pl.linear_velocity.z)
+	if pv.length() < 12.0 or pl.airtime > 0.1:
+		return
+	var cars: Array = []
+	cars.append_array(main.civs)
+	cars.append_array(main.police)
+	for c in cars:
+		if not is_instance_valid(c) or c.dead:
+			continue
+		var id: int = c.get_instance_id()
+		var rel: Vector3 = c.global_position - pl.global_position
+		rel.y = 0.0
+		var d := rel.length()
+		if d < 8.0:
+			nm_min[id] = minf(float(nm_min.get(id, 99.0)), d)
+		elif nm_min.has(id):
+			var m: float = nm_min[id]
+			nm_min.erase(id)
+			var cv: Vector3 = c.linear_velocity
+			if c is CivCar and c.moving:
+				cv = c.dir * c.cruise
+			# touching cars are about 1.9 m apart centre to centre
+			if m > 2.05 and m < 3.6 and (cv - pv).length() > 12.0 and t - last_nm > 0.8:
+				last_nm = t
+				nm_count += 1
+				main.stats["near_miss"] += 1
+				main.bonus += 100
+				main.log_event("near_miss")
+				main.hud.banner("NEAR MISS x%d" % nm_count)
+				if m < 2.8:
+					main.slowmo(0.8, 0.45)
 
 
 # Helicopter mode: the chase, some ramps and barrels on the way, and as the finale a jump
@@ -721,6 +809,8 @@ func overlay_line() -> String:
 			return "SURVIVED %s   COPS %d" % [clock_s, cops]
 		"heli":
 			return "HELICOPTER CHASE %s   COPS %d" % [clock_s, cops]
+		"rush":
+			return "NEAR MISSES %d   COPS %d" % [nm_count, cops]
 		"stunt":
 			return "JUMPS %d   BOOMS %d   COPS %d" % [main.stats["big_air"], main.stats["chains"] + main.stats["gas"] + main.stats["collapses"], cops]
 	return "COPS %d   %s   %d KM/H" % [cops, clock_s, int(absf(main.player.fwd_speed) * 3.6)]

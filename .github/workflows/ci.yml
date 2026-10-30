@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [chase, stunt, heli]
+        mode: [chase, stunt, heli, rush]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4

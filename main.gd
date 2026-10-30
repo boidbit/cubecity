@@ -75,6 +75,8 @@ var events: Array = []
 var stats := {"collapses": 0, "chains": 0, "gas": 0, "big_air": 0, "drifts": 0, "smash": 0,
 	"cops_spawned": 0, "max_cops": 0, "mega_jump": 0, "near_miss": 0, "heli_down": 0}
 var cam_anchor := Vector3.ZERO
+var traffic_cap := 12          # director: rush hour has far more cars
+var traffic_ahead := false     # ... and puts them on the roads ahead of the player
 var cam_focus_heli := false   # the anchor camera looks between the car and the helicopter
 
 
@@ -341,9 +343,21 @@ func _update_traffic(dt: float) -> void:
 		elif c.global_position.distance_to(player.global_position) > 240.0:
 			civs.erase(c)
 			c.queue_free()
-	if civ_t <= 0.0 and civs.size() < 12:
-		civ_t = 0.5
-		var r: Dictionary = world.road_spawn(player.global_position, 70.0, 170.0)
+	if civ_t <= 0.0 and civs.size() < traffic_cap:
+		civ_t = 0.5 if traffic_cap <= 12 else 0.15
+		var centre := player.global_position
+		var dmin := 70.0
+		var dmax := 170.0
+		if traffic_ahead:
+			var fv := Vector3(player.linear_velocity.x, 0, player.linear_velocity.z)
+			if fv.length() < 5.0:
+				fv = -player.global_transform.basis.z
+			centre += fv.normalized() * 80.0
+			dmin = 5.0
+			dmax = 95.0
+		var r: Dictionary = world.road_spawn(centre, dmin, dmax)
+		if traffic_ahead and (r["pos"] as Vector3).distance_to(player.global_position) < 40.0:
+			return
 		var yaw: float = r["yaw"]
 		var d := Vector3(roundf(-sin(yaw)), 0, roundf(-cos(yaw)))
 		var c := CivCar.new()
