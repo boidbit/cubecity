@@ -12,7 +12,7 @@ import re
 import subprocess
 import sys
 
-TARGET = "I=-14:TP=-1.5:LRA=11"
+TARGET = "I=-14:TP=-2:LRA=11"
 
 
 def main(path):
@@ -29,7 +29,8 @@ def main(path):
     except ValueError:                       # "-inf"
         return 0
     print(f"loudnorm={TARGET}:measured_I={s['input_i']}:measured_TP={s['input_tp']}:"
-          f"measured_LRA={s['input_lra']}:measured_thresh={s['input_thresh']}:offset={s['target_offset']}:linear=true")
+          f"measured_LRA={s['input_lra']}:measured_thresh={s['input_thresh']}:offset={s['target_offset']}:linear=true,"
+          "alimiter=limit=0.85:level=disabled")      # catches the odd peak the steady gain pushes over
     return 0
 
 
