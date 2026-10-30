@@ -184,18 +184,37 @@ def write_json(prompt, system="", temperature=1.0, model=""):
     return json.loads(text), m
 
 
-def speak(text, voice, model=""):
-    """Text to speech. Returns (16-bit mono PCM bytes, sample rate, model name)."""
-    m = pick("tts", model or os.environ.get("GEMINI_TTS_MODEL", ""))
-    body = {"contents": [{"parts": [{"text": text}]}],
-            "generationConfig": {"responseModalities": ["AUDIO"],
-                                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}}
-    r = call(f"/{m}:generateContent", body, tries=6)
+def _audio_of(r):
     for c in r.get("candidates", []):
         for p in c.get("content", {}).get("parts", []):
             d = p.get("inlineData") or p.get("inline_data")
             if d and d.get("data"):
                 mime = d.get("mimeType") or d.get("mime_type") or ""
                 rate = re.search(r"rate=(\d+)", mime)
-                return base64.b64decode(d["data"]), int(rate.group(1)) if rate else 24000, m
+                return base64.b64decode(d["data"]), int(rate.group(1)) if rate else 24000
     raise GeminiError("no audio in the answer: " + json.dumps(r)[:400])
+
+
+def _speech(text, speech_config, model):
+    m = pick("tts", model or os.environ.get("GEMINI_TTS_MODEL", ""))
+    body = {"contents": [{"parts": [{"text": text}]}],
+            "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": speech_config}}
+    pcm, rate = _audio_of(call(f"/{m}:generateContent", body, tries=6))
+    return pcm, rate, m
+
+
+def speak(text, voice, model=""):
+    """Text to speech. Returns (16-bit mono PCM bytes, sample rate, model name)."""
+    return _speech(text, {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}, model)
+
+
+def speak_dialogue(lines, voices, model=""):
+    """A whole conversation between two speakers in one request (one request instead of one
+    per line). lines: [(speaker, text)], voices: {speaker: voice name}. The transcript is
+    "Speaker: text" per line. Returns (PCM bytes, sample rate, model name)."""
+    if len(voices) != 2:
+        raise GeminiError("a dialogue needs exactly two speakers")
+    cfg = {"multiSpeakerVoiceConfig": {"speakerVoiceConfigs": [
+        {"speaker": who, "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": v}}} for who, v in voices.items()]}}
+    text = "\n".join(f"{who}: {t}" for who, t in lines)
+    return _speech(text, cfg, model)

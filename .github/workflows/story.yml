@@ -100,7 +100,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg espeak-ng fonts-dejavu-core \
             libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
-          pip install --quiet edge-tts
+          pip install --quiet edge-tts numpy
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
           n=$(python3 -c "import sys; sys.path.insert(0, 'tools/story'); import gemini; print(len(gemini.keys()))")
           if [ "$n" -gt 0 ]; then echo "Gemini keys found: $n"; else echo "::warning::No GEMINI_API_KEY secret: using the saved episode and the free voices"; fi
