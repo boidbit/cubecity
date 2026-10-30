@@ -374,9 +374,15 @@ func _beats(t: float) -> void:
 		next_cross = t + (randf_range(3.0, 4.5) if _spawn_crossers() else 0.6)
 	if mode == "destroy":
 		# a smash whenever the road ahead allows one; the tallest towers for the finale
-		if bot.busy():
+		if bot.busy() or pending_tower != null:
 			return
-		if t >= climax_t - 6.0 and not done.has("tower") and bot.plan_smash(9):
+		if f > 0.2 and not done.has("tower1") and _plan_tower(8):
+			done["tower1"] = t
+		elif f > 0.4 and not done.has("corridor") and _plan_corridor():
+			done["corridor"] = t
+		elif t >= climax_t - 8.0 and not done.has("tower2") and _plan_tower(8):
+			done["tower2"] = t
+		elif t >= climax_t - 6.0 and not done.has("tower") and bot.plan_smash(9):
 			done["tower"] = t
 		elif f > 0.3 and not done.has("gas") and bot.plan_gas(240.0):
 			done["gas"] = t
@@ -834,6 +840,16 @@ func _break_free(dt: float) -> void:
 
 # ------------------------------------------------------------ text and results
 
+func _thousands(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	for i in s.length():
+		if i > 0 and (s.length() - i) % 3 == 0:
+			out += ","
+		out += s[i]
+	return out
+
+
 func _destroyed_pct() -> float:
 	return 100.0 * main.cells_down / maxf(main.world.total_cells, 1.0)
 
@@ -844,7 +860,7 @@ func overlay_line() -> String:
 	var cops: int = main.alive_police()
 	match mode:
 		"destroy":
-			return "CITY DESTROYED %.2f%%   COPS %d" % [_destroyed_pct(), cops]
+			return "CUBES SMASHED %s   BUILDINGS DOWN %d" % [_thousands(main.cells_down), main.stats["collapses"]]
 		"survive":
 			return "SURVIVED %s   COPS %d" % [clock_s, cops]
 		"heli":
@@ -860,7 +876,8 @@ func end_text(kind: String) -> String:
 	var lines := PackedStringArray([kind + ("!" if kind in ["SURVIVED", "HELICOPTER DOWN"] else ""), ""])
 	lines.append("COPS WRECKED  %d" % main.wrecked)
 	if mode == "destroy":
-		lines.append("CITY DESTROYED  %.2f%%" % _destroyed_pct())
+		lines.append("CUBES SMASHED  %s" % _thousands(main.cells_down))
+		lines.append("BUILDINGS DOWN  %d" % main.stats["collapses"])
 	lines.append("SCORE  %d" % main.score)
 	return "\n".join(lines)
 
@@ -891,6 +908,7 @@ func summary() -> Dictionary:
 		"stuck": bot.stuck_count,
 		"avg_kmh": int(bot.dist_sum / maxf(bot.time_sum, 0.1) * 3.6),
 		"destroyed_pct": snappedf(_destroyed_pct(), 0.01),
+		"cubes": main.cells_down,
 		"beats": done,
 		"events": main.events,
 	}

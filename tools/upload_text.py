@@ -91,8 +91,8 @@ def description(s):
         lines.append(f"🏢 Buildings brought down: {s['collapses']}")
     if s.get("near_miss"):
         lines.append(f"😳 Near misses: {s['near_miss']}")
-    if mode == "destroy":
-        lines.append(f"🏙️ City destroyed: {float(s.get('destroyed_pct', 0)):.2f}%")
+    if mode == "destroy" and s.get("cubes"):
+        lines.append(f"🏙️ Cubes smashed: {int(s['cubes']):,}")
     if seen:
         if len(seen) > 1:
             lines.append("👀 Watch for " + ", ".join(seen[:-1]) + " and " + seen[-1] + ".")

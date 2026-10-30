@@ -342,6 +342,8 @@ func hurt(amount: float) -> void:
 	if dead or amount <= 0.0:
 		return
 	hp -= amount * dmg_scale
+	if is_player and main.protect:
+		hp = maxf(hp, 4.0)      # video runs: a clip never ends on a wreck
 	last_hurt = main.clock
 	if is_player:
 		main.on_player_hurt(amount)
