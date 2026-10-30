@@ -69,6 +69,8 @@ WRITING RULES:
 - Show, do not explain the game: never talk about "the game", "bots", "ramps appearing" or "levels".
 - Every action you use must matter to the story, and the lines around it must react to it.
 - Keep it PG: cute, cringe, funny or emotional. No real people, brands or places, no hate, no real violence.
+- The voice actor only gets the words, so put the feeling into them: exclamations, "arre", "uff", "haha",
+  "hmm...", question marks and pauses ("...") where they belong.
 
 LANGUAGE:
 - hinglish: "sub" is natural Roman-script Hinglish like Instagram captions; "tts" is the SAME line written in
