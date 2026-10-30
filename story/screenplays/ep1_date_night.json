@@ -22,7 +22,7 @@
       },
       "look": {
         "style": "boy",
-        "skin": "#f2b58f",
+        "skin": "#e3a373",
         "hair": "#2b1d16",
         "shirt": "#3b7ddd"
       }
@@ -39,7 +39,7 @@
       },
       "look": {
         "style": "girl",
-        "skin": "#f6c3a0",
+        "skin": "#f0b48f",
         "hair": "#4a2616",
         "shirt": "#ff7ab8"
       }
