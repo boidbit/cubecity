@@ -589,7 +589,12 @@ func _heli_tick(t: float) -> void:
 		return
 	match jump_stage:
 		0:
-			if along > -75.0 and along < -20.0 and pl.speed > 12.0:
+			if along > 25.0:
+				# the car went over the ramp before the helicopter was in place: plan another
+				jump = {}
+				done.erase("jump")
+				return
+			if along < -8.0 and pl.speed > 10.0:
 				var hover := Vector3(lip.x, 0.0, lip.z) + dirv * float(jump["hover_d"]) + Vector3(0, float(jump["lip_h"]) + float(jump["hover_up"]), 0)
 				heli.start_intercept(hover, -dirv, 9.0)
 				jump_stage = 1
