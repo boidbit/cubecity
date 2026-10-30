@@ -47,7 +47,7 @@ const LEG := 0.93           # hip height when standing
 const WALK_SPEED := 1.7
 const RUN_SPEED := 4.6
 var seated := true
-var pose := "seated"        # seated, stand, sit, kneel, fall
+var pose := "seated"        # seated, stand, sit, bench, kneel, fall, dance, cheer
 var path: Array[Vector3] = []
 var running := false
 var pace := 1.0             # walking speed multiplier (brisk walk to and from the car)
@@ -56,6 +56,14 @@ var stride := 0.0
 var face_point := Vector3.INF    # stand facing this (and look at it); INF = no target
 var hug := false
 var fall_t := 0.0
+var pose_t := 0.0            # time in the current pose (cheer ends by itself)
+var seat_h := 0.45           # bench: seat height
+var then_pose := ""          # take this pose (facing then_yaw) when the walk ends
+var then_yaw := 0.0
+# something in the right hand (an ice cream, a glass of chai, flowers ...)
+var held: Node3D = null
+var reach_t := 0.0           # arm stretched out (giving or taking) while > 0
+var bite_t := 3.0            # food: next bite or sip
 var t := 0.0
 var blink_t := 2.5
 var face_key := ""
@@ -342,6 +350,7 @@ func sit_in_car(seat: Vector3) -> void:
 
 func walk_to(points: Array, run := false, brisk := 1.0) -> void:
 	path.clear()
+	then_pose = ""
 	for p in points:
 		path.append(Vector3(p.x, 0.0, p.z))
 	running = run
@@ -358,6 +367,46 @@ func arrived() -> bool:
 func sit_down() -> void:
 	path.clear()
 	pose = "sit"
+
+
+# Walks to a bench seat (the last point), turns to face `yaw` and sits down on it.
+func sit_on(points: Array, yaw: float, height: float) -> void:
+	walk_to(points)
+	seat_h = height
+	then_pose = "bench"
+	then_yaw = yaw
+
+
+func dance() -> void:
+	path.clear()
+	pose = "dance"
+	pose_t = 0.0
+
+
+func cheer() -> void:
+	path.clear()
+	pose = "cheer"
+	pose_t = 0.0
+
+
+func hold(prop: Node3D) -> void:
+	if held != null and is_instance_valid(held):
+		held.queue_free()
+	held = prop
+	if prop.get_parent() != null:
+		prop.reparent(arm_r, false)
+	else:
+		arm_r.add_child(prop)
+	prop.position = Vector3(0, -0.56, -0.06)
+	prop.scale = Vector3.ONE * 0.85
+	bite_t = 2.5
+
+
+# Lets go of the held thing (the caller takes it). null if the hand is empty.
+func let_go() -> Node3D:
+	var p := held
+	held = null
+	return p if p != null and is_instance_valid(p) else null
 
 
 func kneel() -> void:
@@ -390,12 +439,16 @@ func _locomotion(dt: float) -> void:
 		var d := tgt - here
 		if d.length() < 0.25:
 			path.pop_front()
+			if path.is_empty() and then_pose != "":
+				pose = then_pose
+				rotation.y = then_yaw
+				then_pose = ""
 		else:
 			want_speed = RUN_SPEED if running else WALK_SPEED * pace
 			rotation.y = lerp_angle(rotation.y, atan2(-d.x, -d.z), minf(10.0 * dt, 1.0))
 			var step := minf(speed_now * dt, d.length())
 			global_position += d.normalized() * step
-	elif face_point != Vector3.INF and pose == "stand":
+	elif face_point != Vector3.INF and pose in ["stand", "dance", "cheer"]:
 		rotation.y = lerp_angle(rotation.y, _yaw_to(face_point), minf(5.0 * dt, 1.0))
 	speed_now = move_toward(speed_now, want_speed, 9.0 * dt)
 	stride += dt * speed_now * (2.3 if running else 3.4)
@@ -407,6 +460,7 @@ func _locomotion(dt: float) -> void:
 	var kr := -maxf(0.0, sw) * amp * 1.4
 	var lift := LEG
 	var tilt := 0.0
+	pose_t += dt
 	match pose:
 		"sit":
 			hl = 1.45
@@ -414,6 +468,29 @@ func _locomotion(dt: float) -> void:
 			kl = -0.15
 			kr = -0.15
 			lift = 0.3
+		"bench":
+			hl = 1.5
+			hr = 1.5
+			kl = -1.45
+			kr = -1.45
+			lift = seat_h + 0.12
+		"dance":
+			# knees bounce to the beat, one leg then the other
+			var b := sin(pose_t * 7.0)
+			hl = maxf(b, 0.0) * 0.45
+			hr = maxf(-b, 0.0) * 0.45
+			kl = -hl * 1.3
+			kr = -hr * 1.3
+			lift = LEG - 0.06 + absf(b) * 0.05
+		"cheer":
+			# little jumps for joy
+			lift = LEG + absf(sin(pose_t * 8.0)) * 0.28
+			hl = 0.2
+			hr = 0.2
+			kl = -0.35
+			kr = -0.35
+			if pose_t > 2.2:
+				pose = "stand"
 		"kneel":
 			# one knee down (proposal style)
 			hl = 1.5
@@ -434,6 +511,7 @@ func _locomotion(dt: float) -> void:
 	global_position.y = lerpf(global_position.y, ground + lift + absf(sw) * 0.05 * amp, minf(12.0 * dt, 1.0))
 	rotation.x = lerpf(rotation.x, tilt, minf(10.0 * dt, 1.0))
 	torso.rotation.x = lerpf(torso.rotation.x, -0.22 if running and speed_now > 1.0 else 0.0, minf(6.0 * dt, 1.0))
+	torso.rotation.y = 0.35 * sin(pose_t * 3.5) if pose == "dance" else lerpf(torso.rotation.y, 0.0, minf(8.0 * dt, 1.0))
 
 
 func update(dt: float, partner: Node3D) -> void:
@@ -490,12 +568,20 @@ func _arms(dt: float, toward: float) -> void:
 		var sw := sin(stride) * clampf(speed_now / WALK_SPEED, 0.0, 1.0) * (0.9 if running else 0.5)
 		lx = 0.08 - sw
 		rx = 0.08 + sw
-		if pose == "sit":
+		if pose in ["sit", "bench"]:
 			lx = 0.7
 			rx = 0.7
 		elif pose == "fall":
 			lx = 2.6
 			rx = 2.4
+		elif pose == "dance":
+			lx = 2.3 + 0.6 * sin(pose_t * 7.0)
+			rx = 2.3 + 0.6 * sin(pose_t * 7.0 + PI)
+			ly = -0.3
+			ry = 0.3
+		elif pose == "cheer":
+			lx = 3.0 + 0.2 * sin(pose_t * 16.0)
+			rx = 3.0 + 0.2 * sin(pose_t * 16.0 + 1.0)
 	elif not driver:
 		lx = 0.95
 		rx = 0.95
@@ -518,6 +604,21 @@ func _arms(dt: float, toward: float) -> void:
 				rx = 1.25
 		"wave":
 			rx = 2.6 + 0.4 * sin(t * 10.0)
+	if held != null and is_instance_valid(held) and pose not in ["fall", "dance", "cheer"]:
+		# holding it up in front; food goes to the mouth now and then
+		rx = 0.95
+		ry = 0.0
+		if str(held.name) in ["icecream", "chai"] and not speaking:
+			bite_t -= dt
+			if bite_t < 0.0:
+				rx = 2.05
+				ry = -0.35
+				if bite_t < -0.8:
+					bite_t = randf_range(2.5, 4.0)
+	if reach_t > 0.0:
+		reach_t -= dt
+		rx = 1.45
+		ry = 0.0
 	if hug:
 		lx = 1.35
 		rx = 1.35
@@ -525,3 +626,5 @@ func _arms(dt: float, toward: float) -> void:
 		ry = 0.55
 	arm_l.rotation = arm_l.rotation.lerp(Vector3(lx, ly, 0), minf(12.0 * dt, 1.0))
 	arm_r.rotation = arm_r.rotation.lerp(Vector3(rx, ry, 0), minf(12.0 * dt, 1.0))
+	if held != null and is_instance_valid(held):
+		held.global_rotation = Vector3(0, global_rotation.y, 0)     # keep it upright

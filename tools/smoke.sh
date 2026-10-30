@@ -72,6 +72,34 @@ PY
     echo "::error::the on-foot story did not play through (park, get out, walk)"
     status=1
   fi
+  # a set on the pavement: the ice-cream cart, its vendor, handing things over
+  run bot-story-spot --fixed-fps 60 --quit-after $(( 75 * 60 )) -- \
+    --bot=chase --duration=60 --seed=7 --story=res://story/screenplays/ep4_icecream.json --story_log="$OUT/story_spot.out"
+  if ! python3 - "$OUT/story_spot.out" <<'PY'
+import json, sys
+log = json.load(open(sys.argv[1]))
+done = {a["do"] for a in log.get("actions", [])}
+print(f"stall story: {len(log['lines'])} lines, actions {sorted(done & {'park', 'give', 'dance'})}, ending {log['ending']}")
+sys.exit(0 if {"park", "give", "dance"} <= done and len(log["lines"]) >= 12 else 1)
+PY
+  then
+    echo "::error::the stall story did not play through (park at the cart, vendor, give)"
+    status=1
+  fi
+  # the music for every mood (needs numpy; the story workflow installs it)
+  if ! python3 -c "import numpy" 2>/dev/null; then
+    echo "numpy is not installed: music check skipped"
+  elif ! python3 -c "
+import sys; sys.path.insert(0, 'tools/story')
+import music
+for m in music.MOODS:
+    x = music.make(m, 8.0, 1)
+    assert len(x) == 8 * music.SR and abs(x).max() > 0.3, m
+print('music: all moods ok')
+"; then
+    echo "::error::the music generator failed"
+    status=1
+  fi
 fi
 python3 tools/report.py "$OUT"/*.json || status=1
 exit $status

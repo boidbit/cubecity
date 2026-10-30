@@ -42,6 +42,12 @@ func point(a: float, off := 0.0) -> Vector3:
 	return Vector3(a, 0, lat) if along_x else Vector3(lat, 0, a)
 
 
+# How far `p` is from the walking lane, toward the buildings (the inverse of point()'s `off`).
+func offset(p: Vector3) -> float:
+	var lat := p.z if along_x else p.x
+	return (lat - road) * side - LANE
+
+
 func clamp_along(a: float) -> float:
 	return clampf(a, lo, hi)
 

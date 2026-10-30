@@ -1,0 +1,246 @@
+{
+  "title": "BABU & SHONA",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    },
+    "vendor": {
+      "name": "BHAIYA",
+      "color": "#f0a020",
+      "voice": {
+        "gemini": "Fenrir",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+12%",
+        "pitch": "-6Hz",
+        "espeak_pitch": 40,
+        "style": "a cheerful, chatty Indian street vendor"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#c98b5e",
+        "hair": "#1d1714",
+        "shirt": "#f3efe4"
+      }
+    }
+  },
+  "id": "ep4_icecream",
+  "episode": "EP 4: ICE CREAM WALA BHAIYA",
+  "end_text": "BABU KA BADLA...",
+  "mood": "funny",
+  "time": "day",
+  "props": [],
+  "upload": {
+    "titles": [
+      "She Didn't Share The Ice Cream 🍦😂",
+      "Babu & Shona: Ice Cream Wala Bhaiya 🍦",
+      "Pyaar Mein Sab Share Hota Hai? 😂 #shorts"
+    ],
+    "description": "Shona's mood is off and only ice cream can fix it. Babu has a plan... and a budget. 🍦",
+    "hashtags": [
+      "#shorts",
+      "#couple",
+      "#icecream",
+      "#funny",
+      "#cringe",
+      "#hindi"
+    ]
+  },
+  "beats": [
+    {
+      "say": "shona",
+      "emotion": "sad",
+      "react": "shock",
+      "sub": "Babu, mera mood off hai.",
+      "tts": "बाबू, मेरा मूड ऑफ है।",
+      "id": "b01"
+    },
+    {
+      "say": "babu",
+      "emotion": "angry",
+      "react": "sad",
+      "sub": "Kya? Kisne kiya? Bas naam batao!",
+      "tts": "क्या? किसने किया? बस नाम बताओ!",
+      "id": "b02"
+    },
+    {
+      "say": "shona",
+      "emotion": "sad",
+      "react": "neutral",
+      "sub": "Ice cream ne... wo mere paas nahi hai.",
+      "tts": "आइसक्रीम ने... वो मेरे पास नहीं है।",
+      "id": "b03"
+    },
+    {
+      "say": "babu",
+      "emotion": "smug",
+      "react": "happy",
+      "sub": "Bas itni si baat? Pakdo seatbelt!",
+      "tts": "बस इतनी सी बात? पकड़ो सीटबेल्ट!",
+      "id": "b04",
+      "gesture": "point"
+    },
+    {
+      "do": "park",
+      "at": "icecream"
+    },
+    {
+      "say": "shona",
+      "emotion": "happy",
+      "react": "smug",
+      "sub": "Arre wah, ice cream wale bhaiya!",
+      "tts": "अरे वाह, आइसक्रीम वाले भैया!",
+      "id": "b05",
+      "on": "parked",
+      "max_wait": 20
+    },
+    {
+      "do": "exit_car",
+      "who": "both"
+    },
+    {
+      "wait_for": "exited",
+      "max_wait": 25
+    },
+    {
+      "say": "babu",
+      "emotion": "smug",
+      "react": "love",
+      "sub": "Bhaiya, sabse badi wali do. Paisa no problem!",
+      "tts": "भैया, सबसे बड़ी वाली दो। पैसा नो प्रॉब्लम!",
+      "id": "b06",
+      "gesture": "up"
+    },
+    {
+      "say": "vendor",
+      "emotion": "happy",
+      "react": "shock",
+      "sub": "Saab, sabse badi wali sau rupaye ki hai.",
+      "tts": "साब, सबसे बड़ी वाली सौ रुपये की है।",
+      "id": "b07"
+    },
+    {
+      "say": "babu",
+      "emotion": "shock",
+      "react": "neutral",
+      "sub": "Sau?! Bhaiya... ek hi de do, share karenge.",
+      "tts": "सौ?! भैया... एक ही दे दो, शेयर करेंगे।",
+      "id": "b08"
+    },
+    {
+      "do": "give",
+      "who": "vendor",
+      "to": "shona",
+      "prop": "icecream"
+    },
+    {
+      "wait": 1.0
+    },
+    {
+      "say": "vendor",
+      "emotion": "laugh",
+      "react": "smug",
+      "sub": "Haha, pyaar mein sab share hota hai saab!",
+      "tts": "हाहा, प्यार में सब शेयर होता है साब!",
+      "id": "b09"
+    },
+    {
+      "say": "shona",
+      "emotion": "love",
+      "react": "happy",
+      "sub": "Mmm... duniya ki sabse tasty ice cream!",
+      "tts": "म्म्म... दुनिया की सबसे टेस्टी आइसक्रीम!",
+      "id": "b10"
+    },
+    {
+      "do": "dance",
+      "who": "shona"
+    },
+    {
+      "wait": 1.5
+    },
+    {
+      "say": "babu",
+      "emotion": "sad",
+      "react": "laugh",
+      "sub": "Aur... mera hissa?",
+      "tts": "और... मेरा हिस्सा?",
+      "id": "b11"
+    },
+    {
+      "say": "shona",
+      "emotion": "laugh",
+      "react": "shock",
+      "sub": "Share karne ko maine kab bola tha?",
+      "tts": "शेयर करने को मैंने कब बोला था?",
+      "id": "b12"
+    },
+    {
+      "do": "fall",
+      "who": "babu"
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "say": "vendor",
+      "emotion": "laugh",
+      "react": "laugh",
+      "sub": "Saab, ek aur lagaun? Udhaar chalega!",
+      "tts": "साब, एक और लगाऊँ? उधार चलेगा!",
+      "id": "b13"
+    }
+  ]
+}
