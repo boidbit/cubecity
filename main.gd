@@ -406,7 +406,7 @@ func _update_police(dt: float) -> void:
 			c.top_speed = 25.0 + level * 2.2
 			if director != null:
 				# video runs: rubber-band the pack so it stays close enough to be filmed
-				var gap := c.global_position.distance_to(player.global_position)
+				var gap: float = c.global_position.distance_to(player.global_position)
 				c.top_speed = maxf(c.top_speed, player.speed + clampf((gap - 18.0) * 0.12, 0.0, 12.0))
 				c.vmax = c.top_speed + 6.0
 	for c in blocks.duplicate():
