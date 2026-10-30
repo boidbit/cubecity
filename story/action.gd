@@ -35,6 +35,7 @@ var looks := {}              # who -> who they look at
 var pops: Array = []         # {"label", "t0"}
 var trace_t := 0.0
 var stop_wait := 0.0
+var corner_next := ""         # cut it off as soon as the car is close enough
 var jump_lip := Vector3.INF   # the chase's ramp: the camera films the flight from beside it
 
 
@@ -199,11 +200,9 @@ func run(a: Dictionary, t: float) -> bool:
 		"corner":
 			if v == null:
 				return true
+			# it is cut off once the car has caught up with it, so they stop close together
 			stop_wait = 0.0
-			v.spin = 0.8
-			v.stop_here()
-			cornered = car_id
-			s.main.play_sfx("screech", v.global_position, -4.0)
+			corner_next = car_id
 			return true
 		"fight":
 			var targets := _names(to)
@@ -342,6 +341,17 @@ func _chase_tick(dt: float, t: float) -> void:
 	for i in range(best, trail.size() - 1):
 		gap += trail[i].distance_to(trail[i + 1])
 	gap += trail.back().distance_to(v.global_position) if not trail.is_empty() else 0.0
+	if corner_next == chase:
+		v.top = minf(v.top, 15.0)
+		if gap < 34.0 or stop_wait > 8.0:
+			corner_next = ""
+			v.spin = 0.8
+			v.stop_here()
+			cornered = chase
+			stop_wait = 0.0
+			s.main.play_sfx("screech", v.global_position, -4.0)
+		else:
+			stop_wait += dt
 	var stopped: bool = cornered == chase and v.stopped()
 	if chase_t <= 0.0 and best + 1 < trail.size():
 		chase_t = 0.5
@@ -407,7 +417,12 @@ func _fight_tick(t: float) -> void:
 				d.y = 0.0
 				if d.length() > 1.4:
 					if a.arrived():
-						a.walk_to([b.global_position - d.normalized() * 1.05], true)
+						# they come at each other and meet in the middle
+						var mid: Vector3 = (a.global_position + b.global_position) * 0.5
+						var far: bool = d.length() > 4.0 and not b.seated and b.visible
+						a.walk_to([(mid if far else b.global_position) - d.normalized() * 0.55], true)
+						if far:
+							b.walk_to([mid + d.normalized() * 0.55], true)
 					continue
 				if not a.arrived():
 					continue

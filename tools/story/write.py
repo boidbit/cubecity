@@ -342,7 +342,7 @@ class Stage:
         elif act == "corner":
             if self.chasing:
                 self.beats.append({"do": "corner", "car": "van"})
-                self.wait("cornered", 22)
+                self.wait("cornered", 30)
                 self.chasing, self.parked = False, True
         elif act in ("fight", "punch"):
             hero = who if who in ("babu", "shona") or who in self.side else "babu"
@@ -361,7 +361,7 @@ class Stage:
                 dd["ko"] = True
             self.beats.append(dd)
             if act == "fight":
-                self.wait("won", 20)
+                self.wait("won", 25)
         elif act == "look":
             self.beats.append({"do": "look", "who": who, "to": to})
         elif act == "appear":

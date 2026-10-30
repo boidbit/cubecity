@@ -1383,7 +1383,10 @@ func _foot_camera(dt: float, t: float) -> void:
 		if not r.arrived():
 			walking = true
 	var s := foot_shot
-	if not cur.is_empty() and extras.has(shot_who):
+	var fighters := _fighters()
+	if not fighters.is_empty() and cur.is_empty():
+		s = "foot_fight"
+	elif not cur.is_empty() and extras.has(shot_who):
 		s = "foot_close"
 	elif not cur.is_empty():
 		s = "foot_close" if (shot_i % 2 == 0 and rigs.has(shot_who) and not (rigs[shot_who] as Rig).seated) else "foot_two"
@@ -1436,6 +1439,25 @@ func _foot_camera(dt: float, t: float) -> void:
 			cands.append(mid + lead * 4.6 - out * 2.4 + Vector3(0, 2.0, 0))
 			cands.append(mid - lead * 4.2 - out * 2.2 + Vector3(0, 2.3, 0))
 			look = mid + lead * 0.8 + Vector3(0, 1.3, 0)
+			fov = 50.0
+		"foot_fight":
+			# side-on to the two fighting, from whichever side is clear
+			var fa: Rig = fighters[0]
+			var fb: Rig = fighters[1]
+			var fm := (fa.global_position + fb.global_position) * 0.5
+			fm.y = 0.0
+			var ax := fb.global_position - fa.global_position
+			ax.y = 0.0
+			ax = ax.normalized() if ax.length() > 0.1 else along
+			var side_v := ax.cross(Vector3.UP)
+			for sg: float in [1.0, -1.0]:
+				cands.append(fm + side_v * sg * 4.6 + Vector3(0, 1.6, 0))
+				cands.append(fm + side_v * sg * 3.4 - ax * 2.5 + Vector3(0, 1.8, 0))
+			# a van or a wall beside them: higher and further, then from above
+			for sg: float in [1.0, -1.0]:
+				cands.append(fm + side_v * sg * 6.5 + Vector3(0, 4.2, 0))
+			cands.append(fm - ax * 5.0 + Vector3(0, 7.0, 0))
+			look = fm + Vector3(0, 1.1, 0)
 			fov = 50.0
 		"foot_orbit":
 			orbit_a += dt * 0.2
@@ -1499,6 +1521,17 @@ func _foot_camera(dt: float, t: float) -> void:
 		cam.look_at(look, Vector3.UP)
 	cam.fov = cam_fov
 	cam_new = false
+
+
+# The two in the fight going on (attacker, opponent), or [] when nobody is fighting.
+func _fighters() -> Array:
+	for f: Dictionary in act.fights:
+		if f["i"] < f["list"].size():
+			var a := _rig_of(f["a"])
+			var b := _rig_of(f["list"][f["i"]])
+			if a != null and b != null and a.visible and not a.seated:
+				return [a, b]
+	return []
 
 
 func _near_car(people: Array, d: float) -> bool:

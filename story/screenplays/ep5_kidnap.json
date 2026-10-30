@@ -304,7 +304,7 @@
     },
     {
       "wait_for": "cornered",
-      "max_wait": 20
+      "max_wait": 30
     },
     {
       "do": "exit_car",
@@ -332,7 +332,7 @@
     },
     {
       "wait_for": "won",
-      "max_wait": 16
+      "max_wait": 25
     },
     {
       "do": "exit_car",
