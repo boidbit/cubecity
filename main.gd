@@ -661,6 +661,12 @@ func _cam_anchor(dt: float) -> void:
 		focus = heli.global_position
 	elif cam_focus_heli and heli.visible:
 		focus = (player.global_position + heli.global_position) * 0.5
+	# never film from inside a building: pull the camera in front of any wall in the way
+	var q := PhysicsRayQueryParameters3D.create(focus, p, 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if not hit.is_empty():
+		p = (hit["position"] as Vector3) + (focus - p).normalized() * 0.8
+		cam.global_position = p
 	cam.look_at(focus, Vector3.UP)
 	cam.fov = lerpf(cam.fov, 52.0 + fov_kick, 6.0 * dt)
 

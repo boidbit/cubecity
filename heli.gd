@@ -183,6 +183,7 @@ func start_intercept(point: Vector3, facing: Vector3, secs: float) -> void:
 	if state == "crash" or state == "wreck":
 		return
 	state = "intercept"
+	main.log_event("heli_intercept")
 	target = point
 	face = Vector3(facing.x, 0, facing.z).normalized()
 	intercept_until = main.clock + secs
@@ -191,6 +192,7 @@ func start_intercept(point: Vector3, facing: Vector3, secs: float) -> void:
 # Aim the waiting helicopter at the point the car will actually reach.
 func retune_intercept(point: Vector3, secs: float) -> void:
 	if state == "intercept":
+		main.log_event("heli_aim")
 		target = point
 		intercept_until = main.clock + secs
 
@@ -265,6 +267,7 @@ func _intercept(dt: float) -> void:
 	if pl.airtime > 0.1 and pl.global_position.distance_to(hit) < 4.6:
 		_shot_down()
 	elif main.clock > intercept_until:
+		main.log_event("heli_miss")
 		state = "chase"      # missed: carry on chasing
 
 

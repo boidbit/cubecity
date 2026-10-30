@@ -35,7 +35,7 @@ set +e
 timeout 18000 xvfb-run -a -s "-screen 0 1920x1920x24" \
   "$GODOT" --path . --rendering-driver opengl3 --write-movie "$OUT/take.avi" \
   --fixed-fps "$FPS" --resolution "${W}x${H}" --quit-after $(( (${DURATION%.*} + 20) * FPS )) -- \
-  --bot="$MODE" --orientation="$ORIENTATION" --duration="$DURATION" --seed="$SEED" \
+  --bot="$MODE" --orientation="$ORIENTATION" --duration="$DURATION" --seed="$SEED" --trace \
   --time="$TIME" --title="$TITLE" --summary="$OUT/summary.json" > "$OUT/godot.log" 2>&1
 rc=$?
 set -e

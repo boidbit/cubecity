@@ -19,22 +19,22 @@ FONTS = [
     "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
 ]
 
-# the biggest moment: first of these kinds present in the run's event log
+# the biggest moment: first of these kinds present in the run's event log, with the
+# seconds to show before and after it. A jump is logged when the car lands, so it needs
+# a long lead-in to include the flight.
 MOMENTS = [
-    ("heli_down", "HELICOPTER DOWN"),
-    ("mega_jump", "THE CAR JUMPED THE WHOLE STREET"),
-    ("trap", "THE COPS NEVER SAW THIS COMING"),
-    ("collapse", "THE WHOLE TOWER CAME DOWN"),
-    ("gas", "ONE GAS STATION. ONE CAR."),
-    ("chain", "CHAIN REACTION"),
-    ("near_miss", "THIS WAS TOO CLOSE"),
-    ("swat_down", "THE SWAT TRUCK GOT WRECKED"),
-    ("big_air", "WAIT FOR THE JUMP"),
-    ("cop_wrecked", "COPS ARE GOING DOWN"),
-    ("smash", "STRAIGHT THROUGH A BUILDING"),
+    ("heli_down", "HELICOPTER DOWN", 1.8, 2.0),
+    ("mega_jump", "THE CAR JUMPED THE WHOLE STREET", 3.0, 0.8),
+    ("trap", "THE COPS NEVER SAW THIS COMING", 0.9, 1.6),
+    ("collapse", "THE WHOLE TOWER CAME DOWN", 0.9, 1.8),
+    ("gas", "ONE GAS STATION. ONE CAR.", 0.9, 1.6),
+    ("chain", "CHAIN REACTION", 0.9, 1.6),
+    ("near_miss", "THIS WAS TOO CLOSE", 1.4, 1.0),
+    ("swat_down", "THE SWAT TRUCK GOT WRECKED", 1.0, 1.4),
+    ("big_air", "WAIT FOR THE JUMP", 2.0, 0.8),
+    ("cop_wrecked", "COPS ARE GOING DOWN", 1.0, 1.4),
+    ("smash", "STRAIGHT THROUGH A BUILDING", 1.0, 1.4),
 ]
-LEAD = 0.9      # seconds before the moment
-TAIL = 1.5      # seconds after it
 CARD = 0.8      # length of the EARLIER card
 
 
@@ -57,13 +57,13 @@ def has_audio(path):
 
 def pick_moment(summary, duration):
     events = summary.get("events", [])
-    for kind, text in MOMENTS:
+    for kind, text, lead, tail in MOMENTS:
         for e in events:
             if e.get("type") == kind:
                 t = float(e["t"])
-                if LEAD < t < duration - 0.5:
-                    return t, text
-    return None, ""
+                if lead < t < duration - 0.5:
+                    return t, text, lead, tail
+    return None, "", 0.0, 0.0
 
 
 def font():
@@ -76,35 +76,41 @@ def font():
 def drawtext(textfile, size, y, color="#ffd633"):
     f = font()
     return (f"drawtext=fontfile={f}:textfile={textfile}:fontsize={size}:fontcolor={color}:"
-            f"borderw={max(4, size // 10)}:bordercolor=black:line_spacing={size // 8}:"
-            f"x=(w-text_w)/2:y={y}")
+            f"borderw={max(4, size // 10)}:bordercolor=black:x=(w-text_w)/2:y={y}")
+
+
+def drawlines(tmp, tag, lines, size, y0, color="#ffd633"):
+    """One drawtext per line: multi-line text files render a stray box with some ffmpeg builds."""
+    out = []
+    for i, line in enumerate(lines):
+        path = os.path.join(tmp, f"{tag}{i}.txt")
+        with open(path, "w") as f:
+            f.write(line)
+        out.append(drawtext(path, size, f"{y0}+{i}*{int(size * 1.2)}", color))
+    return ",".join(out)
 
 
 def main(src, summary_path, out):
     with open(summary_path) as f:
         summary = json.load(f)
     w, h, fps, dur = probe(src)
-    t, text = pick_moment(summary, dur)
+    t, text, lead, tail = pick_moment(summary, dur)
     if t is None or font() is None:
         print("no teaser (no big moment found or no font); copying the video")
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-c", "copy", out], check=True)
         return 0
-    a = max(0.0, t - LEAD)
-    b = min(dur, t + TAIL)
+    a = max(0.0, t - lead)
+    b = min(dur, t + tail)
     size = int(w * 0.085)
     audio = has_audio(src)
     with tempfile.TemporaryDirectory() as tmp:
-        hook = os.path.join(tmp, "hook.txt")
-        card = os.path.join(tmp, "card.txt")
-        with open(hook, "w") as f:
-            f.write("\n".join(textwrap.wrap(text, 16)))
-        with open(card, "w") as f:
-            f.write("EARLIER...")
+        hook = drawlines(tmp, "hook", textwrap.wrap(text, 16), size, "h*0.31")
+        card = drawlines(tmp, "card", ["EARLIER..."], int(size * 0.9), "(h-text_h)/2", "#ffffff")
         fmt = f"fps={fps:.3f},format=yuv420p,setsar=1"
         graph = [
             "[0:v]split=2[v1][v2]",
-            f"[v1]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,{drawtext(hook, size, 'h*0.31')},{fmt}[tv]",
-            f"color=c=black:s={w}x{h}:r={fps:.3f}:d={CARD},{drawtext(card, int(size * 0.9), '(h-text_h)/2', '#ffffff')},{fmt}[cv]",
+            f"[v1]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,{hook},{fmt}[tv]",
+            f"color=c=black:s={w}x{h}:r={fps:.3f}:d={CARD},{card},{fmt}[cv]",
             f"[v2]setpts=PTS-STARTPTS,{fmt}[mv]",
         ]
         if audio:

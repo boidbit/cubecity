@@ -297,7 +297,8 @@ func tick(dt: float) -> void:
 		pl.hp = 15.0
 	if trace and t >= next_trace:
 		next_trace = t + 1.0
-		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)])
+		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)],
+			(" heli=%s d=%.0f jump_stage=%d" % [main.heli.state, main.heli.global_position.distance_to(pl.global_position), jump_stage]) if mode == "heli" else "")
 	_heat(t)
 	if t >= next_try:
 		next_try = t + 0.5
@@ -723,7 +724,17 @@ func _camera(t: float) -> void:
 		var v: Vector3 = main.player.linear_velocity
 		v.y = 0.0
 		v = v.normalized()
-		main.cam_anchor = main.player.global_position + v * 50.0 + v.cross(Vector3.UP) * 7.0 + Vector3(0, 1.1, 0)
+		var base: Vector3 = main.player.global_position + v * 50.0 + Vector3(0, 1.1, 0)
+		var spot := Vector3.ZERO
+		for sgn in [1.0, -1.0]:
+			var cand: Vector3 = base + v.cross(Vector3.UP) * 7.0 * sgn
+			var rq := PhysicsRayQueryParameters3D.create(base, cand, 1)
+			if main.get_world_3d().direct_space_state.intersect_ray(rq).is_empty():
+				spot = cand
+				break
+		if spot == Vector3.ZERO:
+			return
+		main.cam_anchor = spot
 		main.cam_focus_heli = true
 		main.cam_mode = "anchor"
 		main.cam_cut = true
