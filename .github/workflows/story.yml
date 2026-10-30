@@ -1,0 +1,109 @@
+name: Story video (experiment)
+
+# Story lab: two blocky characters talk in the car while the usual police chase goes on.
+# Actions tab -> "Story video (experiment)" -> Run workflow. It makes the voices, records
+# the run, lays the voices over it and attaches the MP4, a thumbnail and the upload text.
+# On every push to story-lab it makes a small, quick preview instead.
+on:
+  workflow_dispatch:
+    inputs:
+      screenplay:
+        description: "Which story (a file in story/screenplays)"
+        type: choice
+        options: [ep1_date_night]
+        default: ep1_date_night
+      voice:
+        description: "auto = free Edge voices (best Hindi), falls back to a robotic voice, then to subtitles only"
+        type: choice
+        options: [auto, espeak, none]
+        default: auto
+      orientation:
+        description: "vertical = Shorts / Reels (1080x1920), horizontal = normal video"
+        type: choice
+        options: [vertical, horizontal]
+        default: vertical
+      fps:
+        type: choice
+        options: ["60", "30"]
+        default: "60"
+      time:
+        description: "Time of day"
+        type: choice
+        options: [dusk, day, night]
+        default: dusk
+      seed:
+        description: "Random seed for the chase (blank = random)"
+        type: string
+        default: ""
+  push:
+    branches: [story-lab]
+    paths: ["story/**", "tools/story/**", ".github/workflows/story.yml"]
+
+concurrency:
+  group: story-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  story:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PREVIEW: ${{ github.event_name == 'push' }}
+      SCREENPLAY: ${{ inputs.screenplay || 'ep1_date_night' }}
+      VOICE: ${{ inputs.voice || 'auto' }}
+      ORIENTATION: ${{ inputs.orientation || 'vertical' }}
+      FPS_IN: ${{ inputs.fps || '30' }}
+      TIME: ${{ inputs.time || 'dusk' }}
+      SEED_IN: ${{ inputs.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg espeak-ng fonts-dejavu-core \
+            libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
+          pip install --quiet edge-tts
+          echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Voices
+        id: voices
+        run: python3 tools/story/voices.py "story/screenplays/$SCREENPLAY.json" story-out --provider "$VOICE"
+      - name: Record
+        env:
+          MODE: chase
+          DURATION: ${{ steps.voices.outputs.duration_hint }}
+        run: |
+          export ORIENTATION FPS="$FPS_IN" TIME
+          export SEED="${SEED_IN//[^0-9]/}"
+          [ -n "$SEED" ] || SEED=$(( RANDOM * 7 + RANDOM ))
+          export SEED
+          if [ "$PREVIEW" = true ]; then export SCALE=0.5 FPS=30; fi
+          export EXTRA_ARGS="--story=$PWD/story-out/timed.json --story_log=$PWD/take/story_log.json"
+          mkdir -p take
+          tools/record.sh "$GODOT" take
+      - name: Mix voices and write the upload text
+        run: |
+          mkdir -p video
+          python3 tools/story/mix.py take/video.mp4 take/story_log.json story-out/timed.json video/story.mp4
+          python3 tools/story/text.py story-out/timed.json video/upload.txt
+          t=$(python3 -c "import json; l=json.load(open('take/story_log.json'))['lines']; print(l[1]['t'] + 1.2 if len(l) > 1 else 6)")
+          ffmpeg -y -loglevel error -ss "$t" -i video/story.mp4 -frames:v 1 -q:v 2 video/thumbnail.jpg
+          cat take/story_log.json
+          echo "voice provider: $(python3 -c "import json; print(json.load(open('story-out/timed.json'))['provider'])")" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: story-video-${{ github.run_number }}
+          path: |
+            video/
+            story-out/
+            take/story_log.json
+            take/loudness.txt
+            take/audio.png
+            take/godot.log
+          retention-days: 14

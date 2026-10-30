@@ -7,6 +7,7 @@
 # Settings come from the environment (all optional):
 #   MODE=chase|destroy|survive  ORIENTATION=vertical|horizontal  DURATION=55  FPS=60
 #   SEED=123  TIME=dusk|day|night  TITLE="..."  SCALE=1 (0.5 for a quick half-size preview)
+#   EXTRA_ARGS="--story=... --story_log=..."  more game arguments (the story lab uses this)
 set -euo pipefail
 GODOT=$1
 OUT=$2
@@ -36,7 +37,7 @@ timeout 18000 xvfb-run -a -s "-screen 0 1920x1920x24" \
   "$GODOT" --path . --rendering-driver opengl3 --write-movie "$OUT/take.avi" \
   --fixed-fps "$FPS" --resolution "${W}x${H}" --quit-after $(( (${DURATION%.*} + 20) * FPS )) -- \
   --bot="$MODE" --orientation="$ORIENTATION" --duration="$DURATION" --seed="$SEED" --trace \
-  --time="$TIME" --title="$TITLE" --summary="$OUT/summary.json" > "$OUT/godot.log" 2>&1
+  --time="$TIME" --title="$TITLE" --summary="$OUT/summary.json" ${EXTRA_ARGS:-} > "$OUT/godot.log" 2>&1
 rc=$?
 set -e
 tail -n 40 "$OUT/godot.log"

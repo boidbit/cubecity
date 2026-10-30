@@ -51,6 +51,23 @@ Locally: `tools/record.sh path/to/godot out` (Linux, needs `xvfb` and `ffmpeg`; 
 
 Every push runs **CI**: the bot plays every mode headless and the job fails on any script error, then a short half-size preview clip is recorded.
 
+## Story lab (experiment)
+
+Two blocky characters sit in the player's car and talk while the usual police chase goes on:
+subtitles, hearts, a pixel-art face that changes with the emotion, Hindi voices. Everything is
+in `story/` and `tools/story/`; the game only reads `--story` (one hook in `main.gd`), so without
+it nothing changes. The folder is left out of the Android build (`exclude_filter` in
+`export_presets.cfg`).
+
+- **Make a video:** Actions -> "Story video (experiment)" -> Run workflow. It makes the voices
+  (free Edge voices; falls back to a robotic voice, then to subtitles only), records the run, lays
+  the voices over it, and attaches the MP4, a thumbnail and the upload text.
+- **Write a story:** copy `story/screenplays/ep1_date_night.json`. `lines` play in order;
+  `reactions` fire when the chase does something (`big_air`, `near_miss`, `cop_wrecked`, ...).
+  `sub` is the subtitle, `tts` is what the voice says (Devanagari reads best), `emotion` is one of
+  neutral, smug, love, shock, angry, sad, happy, laugh.
+- **Try it locally:** `godot -- --bot=chase --duration=50 --story=1`
+
 ## Android build
 
 The project uses the Compatibility (OpenGL ES 3) renderer so it runs on more phones.
@@ -98,4 +115,5 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `audio/` | Sound effects (Ogg Vorbis): siren and rotor loops, crashes, boom, tyre screech |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade, ground, car and debris shaders |
+| `story/` | Story lab: blocky characters, the open-top car, the story scheduler, screenplays |
 | `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |

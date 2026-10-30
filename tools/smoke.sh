@@ -48,5 +48,16 @@ for mode in chase destroy survive stunt heli rush; do
     fi
   done
 done
+# story lab: the characters must play their lines (no recording needed)
+if [ -f story/story.gd ]; then
+  run bot-story --fixed-fps 60 --quit-after $(( (SECS + 15) * 60 )) -- \
+    --bot=chase --duration="$SECS" --seed=11 --story=1 --story_log="$OUT/story_log.out" --summary="$OUT/story-run.out"
+  n=$(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))['lines']))" "$OUT/story_log.out" 2>/dev/null || echo 0)
+  echo "story lines played: $n"
+  if [ "$n" -lt 3 ]; then
+    echo "::error::the story played only $n lines"
+    status=1
+  fi
+fi
 python3 tools/report.py "$OUT"/*.json || status=1
 exit $status
