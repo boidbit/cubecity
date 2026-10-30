@@ -167,7 +167,7 @@ func run(a: Dictionary, t: float) -> bool:
 			if d.length() > 1.0:
 				if g.arrived():
 					g.stand_up()
-					g.walk_to([victim.global_position - d.normalized() * 0.7], true)
+					g.walk_to(_route(g.global_position, _outside(victim.global_position - d.normalized() * 0.7)), true)
 				return false
 			if not g.arrived():
 				return false
@@ -426,9 +426,9 @@ func _fight_tick(t: float) -> void:
 						# they come at each other and meet in the middle
 						var mid: Vector3 = (a.global_position + b.global_position) * 0.5
 						var far: bool = d.length() > 4.0 and not b.seated and b.visible
-						a.walk_to([(mid if far else b.global_position) - d.normalized() * 0.55], true)
+						a.walk_to(_route(a.global_position, _outside((mid if far else b.global_position) - d.normalized() * 0.55)), true)
 						if far:
-							b.walk_to([mid + d.normalized() * 0.55], true)
+							b.walk_to(_route(b.global_position, _outside(mid + d.normalized() * 0.55)), true)
 					continue
 				if not a.arrived():
 					continue
@@ -474,17 +474,61 @@ func _fight_tick(t: float) -> void:
 
 
 func _keep_out(r, v) -> void:
-	var lp: Vector3 = v.to_local(r.global_position)
-	var hx := 1.1 + 0.35
-	var hz := 2.6 + 0.35
+	var p := _out_of(v, r.global_position, 0.35)
+	r.global_position = Vector3(p.x, r.global_position.y, p.z)
+
+
+# The point moved out of a stopped car's box (through its nearest side), with a margin.
+func _out_of(v, at: Vector3, margin: float) -> Vector3:
+	var lp: Vector3 = v.to_local(at)
+	var hx := 1.1 + margin
+	var hz := 2.6 + margin
 	if absf(lp.x) < hx and absf(lp.z) < hz:
-		# out through the nearest side
 		if hx - absf(lp.x) < hz - absf(lp.z):
 			lp.x = hx * signf(lp.x if lp.x != 0.0 else 1.0)
 		else:
 			lp.z = hz * signf(lp.z if lp.z != 0.0 else 1.0)
 		var p: Vector3 = v.to_global(lp)
-		r.global_position = Vector3(p.x, r.global_position.y, p.z)
+		return Vector3(p.x, at.y, p.z)
+	return at
+
+
+# A way from a to b that goes round a parked car instead of through it: via the corner of
+# the car (with room to spare) that makes the shortest detour.
+func _route(a: Vector3, b: Vector3) -> Array:
+	for v in cars.values():
+		if not v.visible or v.speed > 0.5:
+			continue
+		var la: Vector3 = v.to_local(a)
+		var lb: Vector3 = v.to_local(b)
+		var blocked := false
+		for i in range(1, 10):
+			var p := la.lerp(lb, i / 10.0)
+			if absf(p.x) < 1.3 and absf(p.z) < 2.8:
+				blocked = true
+				break
+		if not blocked:
+			continue
+		var best := Vector3.INF
+		var bl := 1e9
+		for cx in [-1.0, 1.0]:
+			for cz in [-1.0, 1.0]:
+				var c := Vector3(cx * 2.0, 0, cz * 3.5)
+				var l := la.distance_to(c) + c.distance_to(lb)
+				if l < bl:
+					bl = l
+					best = c
+		var w: Vector3 = v.to_global(best)
+		return [Vector3(w.x, 0, w.z), b]
+	return [b]
+
+
+# Somewhere to walk to that is not inside a parked car.
+func _outside(at: Vector3) -> Vector3:
+	for v in cars.values():
+		if v.visible and v.speed < 0.5:
+			at = _out_of(v, at, 0.6)
+	return at
 
 
 func _hit(r, ko: bool, t: float) -> void:

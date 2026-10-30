@@ -1502,9 +1502,9 @@ func _foot_camera(dt: float, t: float) -> void:
 	pos = cands[0]
 	var space: PhysicsDirectSpaceState3D = main.get_world_3d().direct_space_state
 	for p: Vector3 in cands:
-		var q2 := PhysicsRayQueryParameters3D.create(look, p, 1 | 4)
-		q2.exclude = [main.player.get_rid()]
-		if not _post_between(look, p) and space.intersect_ray(q2).is_empty():
+		# the couple's own car (layer 2) counts too: no filming through it
+		var q2 := PhysicsRayQueryParameters3D.create(look, p, 1 | 2 | 4)
+		if not _post_between(look, p) and not _cabin_between(look, p) and space.intersect_ray(q2).is_empty():
 			pos = p
 			break
 	var from := mid + Vector3(0, 1.5, 0)
@@ -1540,6 +1540,18 @@ func _near_car(people: Array, d: float) -> bool:
 		if Vector2(r.global_position.x - c.x, r.global_position.z - c.z).length() > d:
 			return false
 	return true
+
+
+# Whether the couple's car (its tall cabin has no collision of its own) is in the way.
+func _cabin_between(a: Vector3, b: Vector3) -> bool:
+	var vis: Node3D = main.player.vis
+	var la := vis.to_local(a)
+	var lb := vis.to_local(b)
+	for i in range(1, 12):
+		var q := la.lerp(lb, i / 12.0)
+		if absf(q.x) < 1.05 and q.y < Roadster.ROOF_Y + 0.15 and q.z > -2.2 and q.z < 2.2:
+			return true
+	return false
 
 
 # Whether a street tree or lamp post stands between the camera and what it films.
