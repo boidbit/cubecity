@@ -37,6 +37,7 @@ var drift_node := -1
 var replan_needed := false
 var trace := false
 var plan_name := ""
+var last_ramp := {}      # lip (top end of the ramp) and heading of the latest ramp plan
 var trail: Array[Vector3] = []
 var stuck_count := 0
 var stuck_times: Array[float] = []
@@ -564,6 +565,7 @@ func plan_ramp() -> bool:
 	var p1: Vector3 = rr2["p1"]
 	var dirv := _flat(p1 - p0).normalized()
 	var extra := [Vector3(p0.x, 0.9, p0.z) - dirv * 18.0, p0, p1, p1 + dirv * 40.0, world.node_pos(best["after"])]
+	last_ramp = {"lip": p1, "dir": dirv}
 	_commit(best["route"], extra, ["road", "ramp", "ramp", "air", "road"], "ramp")
 	return true
 

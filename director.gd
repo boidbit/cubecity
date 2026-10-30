@@ -56,6 +56,7 @@ var ev_seen := 0
 var last_cap := -9.0
 var cap_kinds := {}
 var mega_info := {}
+var cam_jump := {}        # the jump the side-on stunt camera is waiting for: lip and heading
 var mega_cam_t := 0.0
 var pending_tower: Building = null
 var tower_t := 0.0
@@ -359,7 +360,7 @@ func _beats(t: float) -> void:
 		else:
 			bot.plan_smash(3)
 		return
-	if f > 0.12 and f < 0.4 and not done.has("ramp1") and not bot.busy() and bot.plan_ramp():
+	if f > 0.12 and f < 0.4 and not done.has("ramp1") and not bot.busy() and _plan_ramp():
 		done["ramp1"] = t
 	if f > 0.3 and f < 0.62 and not done.has("roadblock"):
 		_try_roadblock(t)
@@ -371,7 +372,7 @@ func _beats(t: float) -> void:
 		done["tower"] = t
 	if f > 0.5 and f < 0.8 and not done.has("mega") and not bot.busy() and _plan_mega():
 		done["mega"] = t
-	if f > 0.62 and t < climax_t - 1.0 and not done.has("ramp2") and not done.has("mega") and not bot.busy() and bot.plan_ramp():
+	if f > 0.62 and t < climax_t - 1.0 and not done.has("ramp2") and not done.has("mega") and not bot.busy() and _plan_ramp():
 		done["ramp2"] = t
 	if t >= climax_t - 3.0 and not done.has("backup"):
 		done["backup"] = t
@@ -389,7 +390,18 @@ func _plan_mega() -> bool:
 		return false
 	mega_info = main.stunts.build_mega(ax["origin"], ax["dir"])
 	mega_cam_t = 0.0
+	cam_jump = {"lip": mega_info["lip"], "dir": mega_info["dir"]}
 	bot.set_plan(mega_info["pts"], mega_info["kinds"], "mega")
+	return true
+
+
+# An ordinary ramp jump; the stunt camera films it too.
+func _plan_ramp() -> bool:
+	if not bot.plan_ramp():
+		return false
+	var lip: Vector3 = bot.last_ramp["lip"]
+	cam_jump = {"lip": Vector3(lip.x, 0.0, lip.z), "dir": bot.last_ramp["dir"]}
+	mega_cam_t = 0.0
 	return true
 
 
@@ -438,11 +450,16 @@ func _heli_show(t: float) -> void:
 	var f := t / duration
 	if bot.busy() or not jump.is_empty():
 		return
-	if f > 0.45 and not done.has("mega") and _plan_mega():
-		done["mega"] = t
-		jump = mega_info.duplicate()
+	if f > 0.45 and not done.has("jump") and _plan_mega():
+		done["jump"] = t
+		jump = {"lip": mega_info["lip"], "dir": mega_info["dir"], "lip_h": Stunts.RAMP_H + Stunts.KICK_H, "hover_d": 30.0, "hover_up": 3.0}
 		jump_stage = 0
-	elif f > 0.1 and f < 0.4 and not done.has("ramp1") and bot.plan_ramp():
+	elif f > 0.6 and not done.has("jump") and _plan_ramp():
+		# no long straight for the tower jump: the helicopter waits above an ordinary ramp
+		done["jump"] = t
+		jump = {"lip": cam_jump["lip"], "dir": cam_jump["dir"], "lip_h": 2.3, "hover_d": 22.0, "hover_up": 2.6}
+		jump_stage = 0
+	elif f > 0.1 and f < 0.4 and not done.has("ramp1") and _plan_ramp():
 		done["ramp1"] = t
 	elif f > 0.2 and f < 0.45 and not done.has("corridor") and _plan_corridor():
 		done["corridor"] = t
@@ -468,7 +485,7 @@ func _heli_tick(t: float) -> void:
 	match jump_stage:
 		0:
 			if along > -110.0 and along < -20.0:
-				var hover := Vector3(lip.x, 0.0, lip.z) + dirv * 30.0 + Vector3(0, Stunts.RAMP_H + Stunts.KICK_H + 3.0, 0)
+				var hover := Vector3(lip.x, 0.0, lip.z) + dirv * float(jump["hover_d"]) + Vector3(0, float(jump["lip_h"]) + float(jump["hover_up"]), 0)
 				heli.start_intercept(hover, -dirv, 9.0)
 				jump_stage = 1
 		1:
@@ -497,7 +514,7 @@ func _stunt_show(t: float) -> void:
 		"tower":
 			ok = _plan_tower(7)
 		"ramp":
-			ok = bot.plan_ramp()
+			ok = _plan_ramp()
 		"gas":
 			ok = bot.plan_gas(240.0)
 	if ok:
@@ -511,11 +528,11 @@ func _stunt_show(t: float) -> void:
 
 # A side-on camera for the mega jump: the car flies across the frame.
 func _mega_camera(t: float) -> bool:
-	if mega_info.is_empty():
+	if cam_jump.is_empty():
 		return false
 	var pl: Car = main.player
-	var lip: Vector3 = mega_info["lip"]
-	var dirv: Vector3 = mega_info["dir"]
+	var lip: Vector3 = cam_jump["lip"]
+	var dirv: Vector3 = cam_jump["dir"]
 	var along := (pl.global_position - lip).dot(dirv)
 	if mega_cam_t == 0.0:
 		if along > -70.0 and along < -15.0:
@@ -528,7 +545,7 @@ func _mega_camera(t: float) -> bool:
 	if along > 78.0 or t - mega_cam_t > 8.0:
 		main.cam_mode = "chase"
 		main.cam_cut = true
-		mega_info = {}
+		cam_jump = {}
 		mega_cam_t = 0.0
 		next_shot = t + 3.0
 		return false
