@@ -58,6 +58,20 @@ if [ -f story/story.gd ]; then
     echo "::error::the story played only $n lines"
     status=1
   fi
+  # on foot: park, get out, kneel, hug, run, fall
+  run bot-story-foot --fixed-fps 60 --quit-after $(( 75 * 60 )) -- \
+    --bot=chase --duration=60 --seed=11 --story=res://story/screenplays/ep3_proposal.json --story_log="$OUT/story_foot.out"
+  if ! python3 - "$OUT/story_foot.out" <<'PY'
+import json, sys
+log = json.load(open(sys.argv[1]))
+seen = {e["type"] for e in log.get("events", [])}
+print(f"on-foot story: {len(log['lines'])} lines, events {sorted(seen & {'parked', 'exited', 'arrived'})}, ending {log['ending']}")
+sys.exit(0 if {"parked", "exited", "arrived"} <= seen and len(log["lines"]) >= 8 else 1)
+PY
+  then
+    echo "::error::the on-foot story did not play through (park, get out, walk)"
+    status=1
+  fi
 fi
 python3 tools/report.py "$OUT"/*.json || status=1
 exit $status

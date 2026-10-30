@@ -1,8 +1,9 @@
 name: Story video (experiment)
 
-# Story lab: Babu and Shona drive through the city and act out an episode. Gemini writes the
-# episode from the story type and your idea, gives the characters their voices, and the game
-# stages it: police, the helicopter or a jump only appear when the story asks for them.
+# Story lab: Babu and Shona drive through the city and act out an episode; when the story needs
+# it they pull over and get out for a scene on the pavement. Gemini writes the episode from the
+# story type and your idea, gives the characters their voices, and the game stages it: police,
+# the helicopter or a jump only appear when the story asks for them.
 # Actions tab -> "Story video (experiment)" -> Run workflow. The run attaches the MP4, a
 # thumbnail, the upload text and the screenplay (which you can save to story/screenplays).
 #
@@ -25,7 +26,7 @@ on:
       script:
         description: "ai = Gemini writes a new episode; otherwise a saved episode from story/screenplays"
         type: choice
-        options: [ai, ep1_date_night, ep2_dangerous_question]
+        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal]
         default: ai
       language:
         type: choice
@@ -79,7 +80,7 @@ jobs:
       GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
       STORY_TYPE: ${{ inputs.story_type || 'funny' }}
       IDEA: ${{ inputs.idea }}
-      SCRIPT: ${{ inputs.script || 'ep1_date_night' }}
+      SCRIPT: ${{ inputs.script || 'ep3_proposal' }}
       LANGUAGE: ${{ inputs.language || 'hinglish' }}
       VOICE: ${{ inputs.voice || 'edge' }}
       ORIENTATION: ${{ inputs.orientation || 'vertical' }}

@@ -264,7 +264,7 @@ def make_voices(sp, out, provider, cache=""):
 
 
 def simulate(sp):
-    """Rough length of the story: lines back to back, waits, the jump and the ending."""
+    """Rough length of the story: lines back to back, waits, parking and walking, the jump and the ending."""
     t = float(sp.get("start", 2.8))
     gap = float(sp.get("gap", 0.3))
     for b in sp.get("beats", []):
@@ -274,6 +274,12 @@ def simulate(sp):
             t += float(b["wait"])
         elif "end" in b:
             t += 3.5
+        elif b.get("do") == "park":
+            t += 7.0      # finding a straight bit of kerb and stopping
+        elif b.get("wait_for") in ("exited", "seated"):
+            t += 5.5      # walking round the car
+        elif b.get("wait_for") == "arrived":
+            t += 4.0
     for l in sp.get("lines", []):
         t += l["dur"] + gap
     slack = min(sum(r["dur"] for r in sp.get("reactions", [])), 6.0) + 3.0

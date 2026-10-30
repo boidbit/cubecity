@@ -1,0 +1,221 @@
+{
+  "title": "BABU & SHONA",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    }
+  },
+  "id": "ep3_proposal",
+  "episode": "EP 3: THE PROPOSAL",
+  "end_text": "SHAADI KAB HAI?",
+  "mood": "romantic",
+  "time": "dusk",
+  "props": [],
+  "beats": [
+    {
+      "say": "babu",
+      "emotion": "smug",
+      "react": "happy",
+      "sub": "Shona, aaj main tumhe ek surprise dene wala hoon.",
+      "tts": "शोना, आज मैं तुम्हें एक सरप्राइज़ देने वाला हूँ।",
+      "id": "b01"
+    },
+    {
+      "say": "shona",
+      "emotion": "happy",
+      "react": "laugh",
+      "sub": "Surprise? Pizza ya phir se police?",
+      "tts": "सरप्राइज़? पिज़्ज़ा या फिर से पुलिस?",
+      "id": "b02"
+    },
+    {
+      "do": "park"
+    },
+    {
+      "say": "babu",
+      "emotion": "love",
+      "react": "shock",
+      "sub": "Bas... yahin rukna hai.",
+      "tts": "बस... यहीं रुकना है।",
+      "on": "parked",
+      "max_wait": 20,
+      "id": "b03"
+    },
+    {
+      "do": "exit_car",
+      "who": "both"
+    },
+    {
+      "wait_for": "exited",
+      "max_wait": 12
+    },
+    {
+      "say": "shona",
+      "emotion": "shock",
+      "react": "smug",
+      "sub": "Babu, beech sadak pe kyun utar gaye?",
+      "tts": "बाबू, बीच सड़क पे क्यों उतर गए?",
+      "id": "b04"
+    },
+    {
+      "do": "kneel",
+      "who": "babu"
+    },
+    {
+      "wait": 1.0
+    },
+    {
+      "say": "babu",
+      "emotion": "love",
+      "react": "shock",
+      "sub": "Shona... kya tum meri hamesha ki co-driver banogi?",
+      "tts": "शोना... क्या तुम मेरी हमेशा की को-ड्राइवर बनोगी?",
+      "id": "b05"
+    },
+    {
+      "say": "shona",
+      "emotion": "shock",
+      "react": "love",
+      "sub": "Ye... ye proposal hai?!",
+      "tts": "ये... ये प्रपोज़ल है?!",
+      "gesture": "up",
+      "id": "b06"
+    },
+    {
+      "say": "shona",
+      "emotion": "love",
+      "react": "happy",
+      "sub": "Haan! Haan! Sau baar haan!",
+      "tts": "हाँ! हाँ! सौ बार हाँ!",
+      "id": "b07"
+    },
+    {
+      "do": "stand",
+      "who": "babu"
+    },
+    {
+      "do": "hug"
+    },
+    {
+      "wait": 2.5
+    },
+    {
+      "say": "shona",
+      "emotion": "laugh",
+      "react": "shock",
+      "sub": "Chalo, ice cream tak race lagao!",
+      "tts": "चलो, आइसक्रीम तक रेस लगाओ!",
+      "id": "b08"
+    },
+    {
+      "do": "run",
+      "who": "shona",
+      "to": "ahead",
+      "dist": 14
+    },
+    {
+      "wait": 0.6
+    },
+    {
+      "do": "run",
+      "who": "babu",
+      "to": "other"
+    },
+    {
+      "wait_for": "arrived",
+      "max_wait": 10
+    },
+    {
+      "say": "babu",
+      "emotion": "sad",
+      "react": "laugh",
+      "sub": "Shona... meri saans... phool gayi.",
+      "tts": "शोना... मेरी साँस... फूल गई।",
+      "id": "b09"
+    },
+    {
+      "do": "fall",
+      "who": "babu"
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "say": "shona",
+      "emotion": "laugh",
+      "react": "sad",
+      "sub": "Co-driver ko pehle stamina chahiye, Babu!",
+      "tts": "को-ड्राइवर को पहले स्टैमिना चाहिए, बाबू!",
+      "id": "b10"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "He Proposed in the Middle of the Road 💍😂",
+      "Babu & Shona: The Proposal 💕",
+      "Will You Be My Co-Driver? 🚗💍 #shorts"
+    ],
+    "description": "Babu stops the car in the middle of the road to ask Shona the big question. 💍",
+    "hashtags": [
+      "#shorts",
+      "#couple",
+      "#proposal",
+      "#cringe",
+      "#lovestory",
+      "#hindi"
+    ]
+  }
+}
