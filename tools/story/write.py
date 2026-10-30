@@ -77,7 +77,7 @@ LANGUAGE:
 - english: "sub" and "tts" are both English.
 
 ANSWER with one JSON object only:
-{"title": "BABU & SHONA", "episode": "EP 2: SHORT TITLE", "end_text": "teaser for next part, max 4 words",
+{"title": "BABU & SHONA", "episode": "the episode's own title, 2-4 words, no number", "end_text": "teaser for next part, max 4 words",
  "names": {"babu": "BABU", "shona": "SHONA"}, "time": "day|dusk|night", "props": ["pizza"],
  "beats": [ ... ],
  "upload": {"titles": ["3 catchy titles, max 60 chars, 1-2 emojis"], "description": "2 short lines",

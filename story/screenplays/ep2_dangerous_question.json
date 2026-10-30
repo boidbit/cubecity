@@ -1,0 +1,205 @@
+{
+  "id": "ep2_dangerous_question",
+  "title": "BABU & SHONA",
+  "episode": "EP 2: DANGEROUS QUESTION",
+  "end_text": "DIET CANCELLED FOREVER",
+  "mood": "funny",
+  "time": "day",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "props": [
+    "pizza"
+  ],
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    }
+  },
+  "beats": [
+    {
+      "say": "shona",
+      "sub": "Babu, sach batana... kya main thodi moti lag rahi hu?",
+      "tts": "बाबू, सच बताना... क्या मैं थोड़ी मोटी लग रही हूँ?",
+      "emotion": "neutral",
+      "react": "shock",
+      "gesture": "talk",
+      "id": "b01"
+    },
+    {
+      "say": "babu",
+      "sub": "Yeh trap hai! Bhagwan mujhe bacha lo!",
+      "tts": "यह ट्रैप है! भगवान मुझे बचा लो!",
+      "emotion": "shock",
+      "react": "smug",
+      "gesture": "up",
+      "id": "b02"
+    },
+    {
+      "say": "shona",
+      "sub": "Jawab do Babu, idhar udhar mat dekho!",
+      "tts": "जवाब दो बाबू, इधर उधर मत देखो!",
+      "emotion": "angry",
+      "react": "shock",
+      "gesture": "point",
+      "id": "b03"
+    },
+    {
+      "do": "police",
+      "stars": 1
+    },
+    {
+      "say": "babu",
+      "sub": "Thank God police aa gayi! Ab main baat nahi kar sakta!",
+      "tts": "थैंक गॉड पुलिस आ गई! अब मैं बात नहीं कर सकता!",
+      "emotion": "laugh",
+      "react": "angry",
+      "gesture": "wave",
+      "id": "b04"
+    },
+    {
+      "say": "police",
+      "sub": "Pink car, turant gadi side me lagao!",
+      "tts": "पिंक कार, तुरंत गाड़ी साइड में लगाओ!",
+      "emotion": "angry",
+      "react": "shock",
+      "gesture": "talk",
+      "id": "b05"
+    },
+    {
+      "do": "jump"
+    },
+    {
+      "do": "prop_show",
+      "prop": "pizza"
+    },
+    {
+      "say": "shona",
+      "sub": "Seat ke niche pizza kyu chhupaya tha?!",
+      "tts": "सीट के नीचे पिज़्ज़ा क्यों छुपाया था?!",
+      "emotion": "shock",
+      "react": "shock",
+      "gesture": "point",
+      "on": "takeoff",
+      "max_wait": 9,
+      "id": "b06"
+    },
+    {
+      "do": "prop_fly",
+      "prop": "pizza"
+    },
+    {
+      "say": "babu",
+      "sub": "Mera cheese burst hawa me udd gaya!",
+      "tts": "मेरा चीज़ बर्स्ट हवा में उड़ गया!",
+      "emotion": "sad",
+      "react": "shock",
+      "gesture": "up",
+      "on": "big_air",
+      "max_wait": 9,
+      "id": "b07"
+    },
+    {
+      "do": "boom"
+    },
+    {
+      "do": "calm"
+    },
+    {
+      "say": "shona",
+      "sub": "Chalo accha hua, tumhari diet bach gayi!",
+      "tts": "चलो अच्छा हुआ, तुम्हारी डाइट बच गई!",
+      "emotion": "laugh",
+      "react": "neutral",
+      "gesture": "talk",
+      "id": "b08"
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "say": "babu",
+      "sub": "Wese tum moti nahi, meri cute rasmalai ho!",
+      "tts": "वैसे तुम मोटी नहीं, मेरी क्यूट रसमलाई हो!",
+      "emotion": "love",
+      "react": "love",
+      "gesture": "talk",
+      "id": "b09"
+    },
+    {
+      "say": "shona",
+      "sub": "Flirt mat karo, ab naya pizza khilao!",
+      "tts": "फ्लर्ट मत करो, अब नया पिज़्ज़ा खिलाओ!",
+      "emotion": "smug",
+      "react": "laugh",
+      "gesture": "point",
+      "id": "b10"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "Dangerous Question Asked! 😱🍕",
+      "When Girlfriend Asks If She Looks Fat 😂",
+      "Babu's Secret Pizza Escape! 🚓🍕"
+    ],
+    "description": "Never answer this question without a police chase ready! Babu saves his life but loses his pizza.",
+    "hashtags": [
+      "#shorts",
+      "#funny",
+      "#couplecomedy",
+      "#relatable",
+      "#hinglish"
+    ]
+  },
+  "writer": "models/gemini-3.8-flash (saved)"
+}

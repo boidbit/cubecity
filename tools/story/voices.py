@@ -34,10 +34,10 @@ SR = 44100
 ENV_HZ = 20
 # how much faster / higher an emotion speaks, added to the character's own rate (%) and pitch (Hz)
 EMO_EDGE = {"shock": (6, 3), "angry": (4, 2), "sad": (-8, -3), "love": (-3, 1), "laugh": (3, 3)}
-# how Gemini is asked to say a line
-EMO_SAY = {"neutral": "naturally", "smug": "smugly, full of confidence", "love": "softly and lovingly, a bit shy",
-           "shock": "in shock, loud and fast", "angry": "angrily", "sad": "sadly and slowly",
-           "happy": "happily", "laugh": "laughing"}
+# how Gemini is asked to say a line. Kept to a few words: a longer direction gets read out
+# as part of the line, which synth_gemini() checks for.
+EMO_SAY = {"smug": "Say smugly", "love": "Say lovingly", "shock": "Say in shock", "angry": "Say angrily",
+           "sad": "Say sadly", "happy": "Say happily", "laugh": "Say laughing"}
 
 
 def sh(cmd):
@@ -88,20 +88,51 @@ def synth_edge(text, voice, rate, pitch, out_mp3, tries=3):
     raise RuntimeError(f"edge-tts failed: {last}")
 
 
-def synth_gemini(line, voice, out_wav):
+def synth_gemini(line, voice, out_wav, state):
+    """Gemini speech, with a short direction for the emotion ("Say angrily:"). A model may read
+    the direction out as part of the line, so the first directed line is also said plainly
+    and the two lengths compared: if the directed one is clearly longer, the whole story is
+    said plainly."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import gemini
     text = line.get("tts") or line.get("sub", "")
-    how = EMO_SAY.get(line.get("emotion", "neutral"), "naturally")
-    lang = "Hindi" if any("\u0900" <= ch <= "\u097f" for ch in text) else "Hinglish"
-    who = voice.get("style", "a young Indian person")
-    prompt = f"Say this in {lang}, {how}, as {who}: {text}"
-    pcm, rate, _ = gemini.speak(prompt, voice.get("gemini", "Kore"))
-    raw = out_wav + ".pcm"
-    with open(raw, "wb") as f:
-        f.write(pcm)
-    to_wav(raw, out_wav, ["-f", "s16le", "-ar", str(rate), "-ac", "1"])
-    os.remove(raw)
+    name = voice.get("gemini", "Kore")
+    how = EMO_SAY.get(line.get("emotion", "neutral"), "")
+    if voice.get("radio") and not how:
+        how = "Say sternly"
+
+    def say(prompt, dst):
+        pcm, rate, _ = gemini.speak(prompt, name)
+        raw = dst + ".pcm"
+        with open(raw, "wb") as f:
+            f.write(pcm)
+        to_wav(raw, dst, ["-f", "s16le", "-ar", str(rate), "-ac", "1"])
+        os.remove(raw)
+        return analyze(dst)[0]
+
+    mode = state.get("mode", "")
+    if not how or mode == "plain":
+        say(text, out_wav)
+        return
+    directed = f'{how}:\n"{text}"'
+    if mode == "directed":
+        dur = say(directed, out_wav)
+        if dur > 1.6 * len(text) / 12.0 + 1.5:
+            print(f"  {line['id']}: too long ({dur:.1f}s), saying it plainly")
+            say(text, out_wav)
+        return
+    # first directed line: compare with the plain reading
+    plain = out_wav + ".plain.wav"
+    dp = say(text, plain)
+    dd = say(directed, out_wav)
+    if dd <= dp * 1.25 + 0.6:
+        state["mode"] = "directed"
+        os.remove(plain)
+        print(f"  emotion directions work ({dd:.1f}s vs {dp:.1f}s plain)")
+    else:
+        state["mode"] = "plain"
+        os.replace(plain, out_wav)
+        print(f"  the direction was read out ({dd:.1f}s vs {dp:.1f}s plain): saying every line plainly")
 
 
 def synth_espeak(text, pitch, out_wav):
@@ -150,6 +181,7 @@ def make_voices(sp, out, provider):
     os.makedirs(vdir, exist_ok=True)
     cast = sp.get("cast", {})
     results = {}
+    state = {}
     for line in spoken(sp):
         lid = line["id"]
         who = cast.get(line.get("say", line.get("who", "")), {})
@@ -158,7 +190,7 @@ def make_voices(sp, out, provider):
         tmp = os.path.join(vdir, lid + ".src")
         text = line.get("tts") or line.get("sub", "")
         if provider == "gemini":
-            synth_gemini(line, v, wav)
+            synth_gemini(line, dict(v, radio=who.get("radio", False)), wav, state)
         elif provider == "edge":
             rate, pitch = edge_prosody(v, line.get("emotion", ""))
             synth_edge(text, v.get("edge", "hi-IN-SwaraNeural"), rate, pitch, tmp + ".mp3")
