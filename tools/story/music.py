@@ -161,7 +161,7 @@ def chord_notes(m, degree, octave=0):
 
 
 def make(mood, seconds, seed=0, intro=2.6):
-    m = MOODS.get(mood, MOODS["romantic"])
+    m = MOODS.get({"drama": "twist"}.get(mood, mood), MOODS["romantic"])
     rng = np.random.default_rng(seed)
     beat = 60.0 / m["bpm"]
     bar = beat * 4
@@ -252,6 +252,38 @@ def make(mood, seconds, seed=0, intro=2.6):
     mix *= env(len(mix), 1.5, 2.0)
     peak = np.max(np.abs(mix)) or 1.0
     return (mix / peak * 0.7).astype(np.float32)
+
+
+def brass(f, dur, tremolo=0.0):
+    """A blocky brass stab: a sawtooth-like stack of harmonics with a soft attack."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    for k in range(1, 10):
+        out += np.sin(2 * np.pi * f * k * t) / k * np.exp(-k * 0.15)
+    if tremolo:
+        out *= 1.0 - 0.25 * (0.5 + 0.5 * np.sin(2 * np.pi * tremolo * t))
+    return out * env(n, 0.025, min(0.25, dur * 0.4)) * np.exp(-t * 0.6)
+
+
+def timpani(f, dur, rng):
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    tone = np.sin(2 * np.pi * np.cumsum(f * (1 + 0.15 * np.exp(-t * 20))) / SR) * np.exp(-t * 3.5)
+    return tone + 0.25 * np.diff(rng.standard_normal(n + 1)) * np.exp(-t * 25)
+
+
+def sting():
+    """The dramatic "dun dun DUNNN" for a shock reveal (about 3 seconds)."""
+    rng = np.random.default_rng(7)
+    out = np.zeros(int(3.2 * SR))
+    for at, root, dur in [(0.0, 38, 0.3), (0.38, 38, 0.3), (0.8, 39, 2.2)]:
+        for m in (root, root + 12, root + 15):
+            add(out, 0.3 * brass(hz(m), dur, tremolo=6.0 if dur > 1 else 0.0), at)
+        add(out, 0.8 * timpani(hz(root - 12), min(dur + 0.4, 1.5), rng), at)
+    out = reverb(out, seconds=1.8, wet=0.35, seed=3)
+    out *= env(len(out), 0.0, 0.6)
+    return (out / (np.max(np.abs(out)) or 1.0) * 0.8).astype(np.float32)
 
 
 def write_wav(path, x):

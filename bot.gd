@@ -42,6 +42,8 @@ var trail: Array[Vector3] = []
 var stuck_count := 0
 var stuck_times: Array[float] = []
 var stuck_spots: Array[Vector3] = []
+var external := false     # the story steers the plan (a chase): nobody else replans
+var halt := false         # the story wants the car stopped right here: brake and hold
 var dist_sum := 0.0
 var time_sum := 0.0
 
@@ -58,6 +60,9 @@ func drive(dt: float) -> void:
 	time_sum += dt
 	dist_sum += car.speed * dt
 	_record_trail()
+	if halt:
+		_apply(clampf(-car.fwd_speed * 0.6, -1.0, 0.0), 0.0, 0.0, false)
+		return
 	if pts.is_empty():
 		_apply(0.0, 0.0, 0.0, false)
 		return

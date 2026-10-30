@@ -86,6 +86,25 @@ PY
     echo "::error::the stall story did not play through (park at the cart, vendor, give)"
     status=1
   fi
+  # the action episode (a van, a kidnap, a chase, a fight) and the on-foot drama with a new character
+  run bot-story-kidnap --fixed-fps 60 --quit-after $(( 95 * 60 )) -- \
+    --bot=chase --duration=80 --seed=7 --story=res://story/screenplays/ep5_kidnap.json --story_log="$OUT/story_kidnap.out"
+  run bot-story-drama --fixed-fps 60 --quit-after $(( 70 * 60 )) -- \
+    --bot=chase --duration=55 --seed=11 --story=res://story/screenplays/ep6_cousin.json --story_log="$OUT/story_drama.out"
+  if ! python3 - "$OUT/story_kidnap.out" "$OUT/story_drama.out" <<'PY'
+import json, sys
+k = json.load(open(sys.argv[1]))
+d = json.load(open(sys.argv[2]))
+seen = {e["type"] for e in k.get("events", [])}
+need = {"car_arrived", "grabbed", "fled", "cornered", "won"}
+print(f"kidnap story: {len(k['lines'])} lines, events {sorted(seen & need)}, ending {k['ending']}")
+print(f"drama story: {len(d['lines'])} lines, ending {d['ending']}")
+sys.exit(0 if need <= seen and len(k["lines"]) >= 10 and len(d["lines"]) >= 10 else 1)
+PY
+  then
+    echo "::error::the action or drama story did not play through"
+    status=1
+  fi
   # the music for every mood (needs numpy; the story workflow installs it)
   if ! python3 -c "import numpy" 2>/dev/null; then
     echo "numpy is not installed: music check skipped"

@@ -195,26 +195,52 @@ def _audio_of(r):
     raise GeminiError("no audio in the answer: " + json.dumps(r)[:400])
 
 
-def _speech(text, speech_config, model):
+def _speech(parts, speech_config, model):
     m = pick("tts", model or os.environ.get("GEMINI_TTS_MODEL", ""))
-    body = {"contents": [{"parts": [{"text": text}]}],
+    body = {"contents": [{"role": "user", "parts": parts}],
             "generationConfig": {"responseModalities": ["AUDIO"], "speechConfig": speech_config}}
     pcm, rate = _audio_of(call(f"/{m}:generateContent", body, tries=6))
     return pcm, rate, m
 
 
-def speak(text, voice, model=""):
-    """Text to speech. Returns (16-bit mono PCM bytes, sample rate, model name)."""
-    return _speech(text, {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}, model)
+def _metadata_refused(err):
+    """An older model that does not know the per-part speech metadata."""
+    return err.status == 400 and re.search(r"speech_metadata|speechMetadata|Unknown name", str(err)) is not None
 
 
-def speak_dialogue(lines, voices, model=""):
+def speak(text, voice, model="", style=""):
+    """Text to speech. style: how to say it (not read out). Returns (16-bit mono PCM bytes,
+    sample rate, model name)."""
+    cfg = {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}
+    if style:
+        try:
+            return _speech([{"text": text, "speech_metadata": {"style": style}}], cfg, model)
+        except GeminiError as e:
+            if not _metadata_refused(e):
+                raise
+    return _speech([{"text": text}], cfg, model)
+
+
+def speak_dialogue(lines, voices, model="", styles=None):
     """A whole conversation between two speakers in one request (one request instead of one
-    per line). lines: [(speaker, text)], voices: {speaker: voice name}. The transcript is
-    "Speaker: text" per line. Returns (PCM bytes, sample rate, model name)."""
+    per line). lines: [(speaker, text)], voices: {speaker: voice name}, styles: how to say
+    each line (not read out). Each turn is its own part with speech_metadata.speaker (the
+    current API); older models get the "Speaker: text" transcript instead.
+    Returns (PCM bytes, sample rate, model name)."""
     if len(voices) != 2:
         raise GeminiError("a dialogue needs exactly two speakers")
     cfg = {"multiSpeakerVoiceConfig": {"speakerVoiceConfigs": [
         {"speaker": who, "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": v}}} for who, v in voices.items()]}}
-    text = "\n".join(f"{who}: {t}" for who, t in lines)
-    return _speech(text, cfg, model)
+    styles = styles or [""] * len(lines)
+    parts = []
+    for (who, t), st in zip(lines, styles):
+        meta = {"speaker": who}
+        if st:
+            meta["style"] = st
+        parts.append({"text": t, "speech_metadata": meta})
+    try:
+        return _speech(parts, cfg, model)
+    except GeminiError as e:
+        if not _metadata_refused(e):
+            raise
+    return _speech([{"text": "\n".join(f"{who}: {t}" for who, t in lines)}], cfg, model)

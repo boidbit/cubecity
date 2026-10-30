@@ -428,7 +428,7 @@ func tick(dt: float) -> void:
 	_break_free(dt)
 	_stunt_jam(dt)
 	_jump_moment()
-	if bot.replan_needed or bot.needs_plan():
+	if (bot.replan_needed or bot.needs_plan()) and not bot.external:
 		bot.plan_flee(_away_point())
 
 

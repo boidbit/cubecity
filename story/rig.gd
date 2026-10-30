@@ -46,8 +46,10 @@ var knee_r: Node3D
 const LEG := 0.93           # hip height when standing
 const WALK_SPEED := 1.7
 const RUN_SPEED := 4.6
+var size := 1.0            # overall scale (kids are smaller); LEG is scaled by it
 var seated := true
-var pose := "seated"        # seated, stand, sit, bench, kneel, fall, dance, cheer
+var pose := "seated"        # seated, stand, sit, bench, kneel, fall, dance, cheer,
+                            # fight (fists up), punch, hit, ko, carried
 var path: Array[Vector3] = []
 var running := false
 var pace := 1.0             # walking speed multiplier (brisk walk to and from the car)
@@ -92,33 +94,50 @@ func _box(parent: Node3D, size: Vector3, pos: Vector3, c: Color) -> MeshInstance
 	return mi
 
 
-# cfg: {"style": "boy"|"girl", "skin", "hair", "shirt"} as html colours.
+# cfg ("look" in the screenplay's cast), colours as html strings:
+#   style: boy | girl | man | woman | oldman | oldwoman | kid
+#   skin, hair, shirt, pants
+#   hair_style: short | long | bald | spiky | bun | ponytail (default from the style)
+#   build: slim | normal | big        height: 0.8 - 1.15
+#   acc: any of cap, hat, glasses, sunglasses, mustache, beard, mask, tie, scarf, bindi
 func build(who_id: String, cfg: Dictionary, is_driver: bool, x: float) -> void:
 	who = who_id
 	driver = is_driver
 	seat_x = x
 	style = str(cfg.get("style", "boy"))
+	var female: bool = style in ["girl", "woman", "oldwoman"]
+	var old: bool = style.begins_with("old")
 	var skin := Color.from_string(str(cfg.get("skin", "#f2b58f")), Color(0.95, 0.72, 0.56))
-	var hair := Color.from_string(str(cfg.get("hair", "#2b1d16")), Color(0.17, 0.11, 0.09))
+	var hair := Color.from_string(str(cfg.get("hair", "#9a9a9a" if old else "#2b1d16")), Color(0.17, 0.11, 0.09))
 	var shirt := Color.from_string(str(cfg.get("shirt", "#3b7ddd")), Color(0.23, 0.49, 0.87))
-	var pants := Color(0.16, 0.18, 0.28)
+	var pants := Color.from_string(str(cfg.get("pants", "#29304a")), Color(0.16, 0.18, 0.28))
+	var build_k: float = {"slim": 0.88, "big": 1.3}.get(str(cfg.get("build", "normal")), 1.0)
+	size = clampf(float(cfg.get("height", 0.8 if style == "kid" else 1.0)), 0.75, 1.2)
+	scale = Vector3.ONE * size
+	# slim, Roblox-like proportions: narrow shoulders, long legs
+	var tw := (0.38 if female else 0.42) * build_k
+	var td := 0.24 * maxf(build_k, 1.0)
 
 	torso = Node3D.new()
 	add_child(torso)
-	_box(torso, Vector3(0.54, 0.5, 0.3), Vector3(0, 0.25, 0), shirt)
+	_box(torso, Vector3(tw, 0.5, td), Vector3(0, 0.25, 0), shirt)
+	if female:
+		# a kurti / dress flaring out over the hips
+		_box(torso, Vector3(tw + 0.08, 0.18, td + 0.06), Vector3(0, 0.04, 0), shirt.darkened(0.08))
 	# legs: hip and knee pivots; rotating about x swings them forward. Seated, the thighs point
 	# forward and the shins down (hidden inside the car body).
 	var legs := []
+	var lw := tw * 0.42
 	for sd in [-1.0, 1.0]:
 		var hip := Node3D.new()
-		hip.position = Vector3(sd * 0.13, 0.02, 0)
+		hip.position = Vector3(sd * tw * 0.25, 0.02, 0)
 		add_child(hip)
-		_box(hip, Vector3(0.22, 0.47, 0.24), Vector3(0, -0.22, 0), pants)
+		_box(hip, Vector3(lw, 0.47, 0.2), Vector3(0, -0.22, 0), pants)
 		var knee := Node3D.new()
 		knee.position = Vector3(0, -0.45, 0)
 		hip.add_child(knee)
-		_box(knee, Vector3(0.2, 0.42, 0.22), Vector3(0, -0.21, 0), pants)
-		_box(knee, Vector3(0.22, 0.09, 0.32), Vector3(0, -0.44, -0.05), Color(0.12, 0.1, 0.1))
+		_box(knee, Vector3(lw * 0.92, 0.42, 0.18), Vector3(0, -0.21, 0), pants)
+		_box(knee, Vector3(lw, 0.09, 0.28), Vector3(0, -0.44, -0.05), Color(0.12, 0.1, 0.1))
 		legs.append([hip, knee])
 	hip_l = legs[0][0]
 	knee_l = legs[0][1]
@@ -131,9 +150,11 @@ func build(who_id: String, cfg: Dictionary, is_driver: bool, x: float) -> void:
 
 	head = Node3D.new()
 	head.position = Vector3(0, 0.5, 0)
+	head.scale = Vector3.ONE * 0.9       # the head is built at 0.5 m and shown a little smaller
 	torso.add_child(head)
 	_box(head, Vector3(0.5, 0.5, 0.5), Vector3(0, 0.27, 0), skin)
-	_build_hair(hair)
+	var hs := str(cfg.get("hair_style", "long" if female else ("bald" if style == "oldman" else "short")))
+	_build_hair(hair, hs, female)
 	var quad := MeshInstance3D.new()
 	var qm := QuadMesh.new()
 	qm.size = Vector2(0.5, 0.5)
@@ -147,10 +168,12 @@ func build(who_id: String, cfg: Dictionary, is_driver: bool, x: float) -> void:
 	quad.rotation = Vector3(0, PI, 0)     # a quad faces +z; the face looks toward -z
 	head.add_child(quad)
 	_set_face("open", "smile", false)
+	var acc: Array = cfg.get("acc", [])
+	_accessories(acc, hair, shirt)
 
 	# arms hang from the shoulders; rotating about x swings them forward
-	arm_l = _make_arm(-1.0, shirt, skin)
-	arm_r = _make_arm(1.0, shirt, skin)
+	arm_l = _make_arm(-1.0, tw, shirt, skin)
+	arm_r = _make_arm(1.0, tw, shirt, skin)
 
 	hearts = CPUParticles3D.new()
 	var hm := QuadMesh.new()
@@ -176,29 +199,86 @@ func build(who_id: String, cfg: Dictionary, is_driver: bool, x: float) -> void:
 	add_child(hearts)
 
 
-func _make_arm(side: float, shirt: Color, skin: Color) -> Node3D:
+func _make_arm(side: float, tw: float, shirt: Color, skin: Color) -> Node3D:
 	var pivot := Node3D.new()
-	pivot.position = Vector3(side * 0.34, 0.44, 0)
+	pivot.position = Vector3(side * (tw * 0.5 + 0.06), 0.44, 0)
 	torso.add_child(pivot)
-	_box(pivot, Vector3(0.14, 0.4, 0.14), Vector3(0, -0.2, 0), shirt)
-	_box(pivot, Vector3(0.15, 0.13, 0.15), Vector3(0, -0.46, 0), skin)
+	_box(pivot, Vector3(0.12, 0.4, 0.12), Vector3(0, -0.2, 0), shirt)
+	_box(pivot, Vector3(0.13, 0.12, 0.13), Vector3(0, -0.46, 0), skin)
 	return pivot
 
 
-func _build_hair(hair: Color) -> void:
+func _build_hair(hair: Color, hs: String, female: bool) -> void:
+	if hs == "bald":
+		_box(head, Vector3(0.52, 0.2, 0.2), Vector3(0, 0.3, 0.2), hair)      # a fringe round the back
+		return
 	_box(head, Vector3(0.56, 0.12, 0.56), Vector3(0, 0.56, 0.0), hair)        # top
 	_box(head, Vector3(0.56, 0.5, 0.12), Vector3(0, 0.3, 0.28), hair)         # back
 	for s in [-1.0, 1.0]:
 		_box(head, Vector3(0.08, 0.34, 0.5), Vector3(s * 0.27, 0.38, 0.0), hair)   # sides
-	if style == "girl":
-		_box(head, Vector3(0.6, 0.12, 0.1), Vector3(0, 0.5, -0.27), hair)     # fringe
-		_box(head, Vector3(0.64, 0.7, 0.12), Vector3(0, 0.0, 0.31), hair)     # long hair down the back
-		for s in [-1.0, 1.0]:
-			_box(head, Vector3(0.1, 0.5, 0.18), Vector3(s * 0.3, 0.12, -0.1), hair)
+	match hs:
+		"long":
+			_box(head, Vector3(0.6, 0.12, 0.1), Vector3(0, 0.5, -0.27), hair)     # fringe
+			_box(head, Vector3(0.64, 0.7, 0.12), Vector3(0, 0.0, 0.31), hair)     # long hair down the back
+			for s in [-1.0, 1.0]:
+				_box(head, Vector3(0.1, 0.5, 0.18), Vector3(s * 0.3, 0.12, -0.1), hair)
+		"bun":
+			_box(head, Vector3(0.6, 0.1, 0.1), Vector3(0, 0.52, -0.27), hair)
+			_box(head, Vector3(0.24, 0.2, 0.24), Vector3(0, 0.7, 0.12), hair)
+		"ponytail":
+			_box(head, Vector3(0.6, 0.1, 0.1), Vector3(0, 0.52, -0.27), hair)
+			_box(head, Vector3(0.14, 0.5, 0.14), Vector3(0, 0.25, 0.4), hair)
+		"spiky":
+			for i in 4:
+				_box(head, Vector3(0.12, 0.16, 0.12), Vector3(-0.18 + i * 0.12, 0.66, -0.1 + (i % 2) * 0.14), hair)
+		_:
+			_box(head, Vector3(0.34, 0.14, 0.16), Vector3(0.05, 0.64, -0.2), hair)  # quiff
+	if female:
 		_box(head, Vector3(0.18, 0.14, 0.12), Vector3(0.22, 0.62, -0.1), PINK)   # bow
 		_box(head, Vector3(0.06, 0.06, 0.1), Vector3(0.22, 0.62, -0.1), Color(1, 0.8, 0.9))
-	else:
-		_box(head, Vector3(0.34, 0.14, 0.16), Vector3(0.05, 0.64, -0.2), hair)  # quiff
+
+
+# Caps, glasses, moustaches ... built on the head (in its 0.5 m space) and the torso.
+func _accessories(acc: Array, hair: Color, shirt: Color) -> void:
+	var dark := Color(0.08, 0.08, 0.1)
+	for a in acc:
+		match str(a):
+			"cap":
+				var c := shirt.lerp(Color(0.85, 0.15, 0.15), 0.6)
+				_box(head, Vector3(0.58, 0.14, 0.58), Vector3(0, 0.6, 0.0), c)
+				_box(head, Vector3(0.44, 0.04, 0.24), Vector3(0, 0.55, -0.38), c)
+			"hat":
+				_box(head, Vector3(0.78, 0.04, 0.78), Vector3(0, 0.6, 0.0), dark)
+				_box(head, Vector3(0.5, 0.22, 0.5), Vector3(0, 0.73, 0.0), dark)
+				_box(head, Vector3(0.51, 0.05, 0.51), Vector3(0, 0.64, 0.0), Color(0.6, 0.1, 0.1))
+			"glasses", "sunglasses":
+				for s in [-1.0, 1.0]:
+					if str(a) == "sunglasses":
+						_box(head, Vector3(0.17, 0.11, 0.03), Vector3(s * 0.11, 0.3, -0.27), dark)
+					else:
+						# just the frame, the eyes show through
+						for e in [-1.0, 1.0]:
+							_box(head, Vector3(0.17, 0.02, 0.02), Vector3(s * 0.11, 0.3 + e * 0.06, -0.27), dark)
+							_box(head, Vector3(0.02, 0.12, 0.02), Vector3(s * 0.11 + e * 0.085, 0.3, -0.27), dark)
+				_box(head, Vector3(0.06, 0.03, 0.03), Vector3(0, 0.32, -0.27), dark)
+				for s in [-1.0, 1.0]:
+					_box(head, Vector3(0.03, 0.03, 0.3), Vector3(s * 0.25, 0.32, -0.12), dark)
+			"mustache":
+				_box(head, Vector3(0.24, 0.05, 0.03), Vector3(0, 0.2, -0.27), hair.darkened(0.3))
+			"beard":
+				_box(head, Vector3(0.5, 0.14, 0.06), Vector3(0, 0.07, -0.26), hair.darkened(0.2))
+				for s in [-1.0, 1.0]:
+					_box(head, Vector3(0.06, 0.22, 0.3), Vector3(s * 0.25, 0.13, -0.12), hair.darkened(0.2))
+			"mask":
+				# a bandit's bandana over nose and mouth
+				_box(head, Vector3(0.54, 0.22, 0.04), Vector3(0, 0.13, -0.27), Color(0.12, 0.12, 0.14))
+				_box(head, Vector3(0.54, 0.22, 0.04), Vector3(0, 0.13, 0.27), Color(0.12, 0.12, 0.14))
+			"tie":
+				_box(torso, Vector3(0.07, 0.32, 0.02), Vector3(0, 0.28, -0.13), Color(0.7, 0.1, 0.12))
+			"scarf":
+				_box(torso, Vector3(0.48, 0.1, 0.3), Vector3(0, 0.46, 0), shirt.lerp(Color(1, 0.8, 0.2), 0.7))
+			"bindi":
+				_box(head, Vector3(0.04, 0.04, 0.01), Vector3(0, 0.39, -0.258), Color(0.85, 0.05, 0.1))
 
 
 # ------------------------------------------------------------ face
@@ -328,7 +408,7 @@ func set_state(emo: String, gest: String, talk: bool) -> void:
 func stand_at(at: Vector3, yaw: float) -> void:
 	seated = false
 	pose = "stand"
-	global_position = Vector3(at.x, at.y + LEG, at.z)
+	global_position = Vector3(at.x, at.y + LEG * size, at.z)
 	rotation = Vector3(0, yaw, 0)
 	path.clear()
 
@@ -389,6 +469,26 @@ func cheer() -> void:
 	pose_t = 0.0
 
 
+# Fighting: a stance, a punch, being hit (back to the stance), knocked out (stays down).
+func set_pose(p: String) -> void:
+	if p != "fight":
+		path.clear()
+	pose = p
+	pose_t = 0.0
+	rotation.x = 0.0 if p in ["fight", "punch"] else rotation.x
+
+
+# Carried off over somebody's shoulder (the story makes the carrier the parent).
+func be_carried() -> void:
+	path.clear()
+	seated = false
+	pose = "carried"
+	pose_t = 0.0
+	position = Vector3(-0.3, 0.68, 0.0)
+	rotation = Vector3(0, 0, -PI * 0.5)
+	set_state("shock", "idle", speaking)
+
+
 func hold(prop: Node3D) -> void:
 	if held != null and is_instance_valid(held):
 		held.queue_free()
@@ -431,6 +531,15 @@ func _yaw_to(p: Vector3) -> float:
 
 
 func _locomotion(dt: float) -> void:
+	if pose == "carried":
+		pose_t += dt
+		# kicking and waving
+		var k := sin(pose_t * 11.0)
+		hip_l.rotation.x = 0.5 + 0.5 * k
+		hip_r.rotation.x = 0.5 - 0.5 * k
+		knee_l.rotation.x = -0.6
+		knee_r.rotation.x = -0.6
+		return
 	var ground := 0.0
 	var want_speed := 0.0
 	if not path.is_empty():
@@ -448,7 +557,7 @@ func _locomotion(dt: float) -> void:
 			rotation.y = lerp_angle(rotation.y, atan2(-d.x, -d.z), minf(10.0 * dt, 1.0))
 			var step := minf(speed_now * dt, d.length())
 			global_position += d.normalized() * step
-	elif face_point != Vector3.INF and pose in ["stand", "dance", "cheer"]:
+	elif face_point != Vector3.INF and pose in ["stand", "dance", "cheer", "fight"]:
 		rotation.y = lerp_angle(rotation.y, _yaw_to(face_point), minf(5.0 * dt, 1.0))
 	speed_now = move_toward(speed_now, want_speed, 9.0 * dt)
 	stride += dt * speed_now * (2.3 if running else 3.4)
@@ -491,6 +600,35 @@ func _locomotion(dt: float) -> void:
 			kr = -0.35
 			if pose_t > 2.2:
 				pose = "stand"
+		"fight", "punch":
+			# knees bent, weight forward, a little bounce
+			var b := absf(sin(pose_t * 7.0))
+			hl = 0.35
+			hr = -0.1
+			kl = -0.55
+			kr = -0.3
+			lift = LEG - 0.07 + b * 0.03
+			if pose == "punch" and pose_t > 0.45:
+				pose = "fight"
+		"hit":
+			# knocked back a step, then back into the stance
+			tilt = 0.45 * maxf(0.0, 1.0 - pose_t / 0.6)
+			hl = 0.2
+			hr = -0.2
+			kl = -0.3
+			kr = -0.3
+			if pose_t < 0.25:
+				global_position -= -global_transform.basis.z * 2.2 * dt
+			if pose_t > 0.7:
+				pose = "fight"
+		"ko":
+			# flat on the back
+			tilt = minf(pose_t / 0.4, 1.0) * 1.45
+			lift = lerpf(LEG, 0.3, minf(pose_t / 0.4, 1.0))
+			hl = 0.25
+			hr = 0.1
+			if pose_t < 0.35:
+				global_position -= -global_transform.basis.z * 3.0 * dt
 		"kneel":
 			# one knee down (proposal style)
 			hl = 1.5
@@ -508,10 +646,15 @@ func _locomotion(dt: float) -> void:
 	hip_r.rotation.x = lerpf(hip_r.rotation.x, hr, minf(14.0 * dt, 1.0))
 	knee_l.rotation.x = lerpf(knee_l.rotation.x, kl, minf(14.0 * dt, 1.0))
 	knee_r.rotation.x = lerpf(knee_r.rotation.x, kr, minf(14.0 * dt, 1.0))
-	global_position.y = lerpf(global_position.y, ground + lift + absf(sw) * 0.05 * amp, minf(12.0 * dt, 1.0))
+	global_position.y = lerpf(global_position.y, ground + (lift + absf(sw) * 0.05 * amp) * size, minf(12.0 * dt, 1.0))
 	rotation.x = lerpf(rotation.x, tilt, minf(10.0 * dt, 1.0))
 	torso.rotation.x = lerpf(torso.rotation.x, -0.22 if running and speed_now > 1.0 else 0.0, minf(6.0 * dt, 1.0))
-	torso.rotation.y = 0.35 * sin(pose_t * 3.5) if pose == "dance" else lerpf(torso.rotation.y, 0.0, minf(8.0 * dt, 1.0))
+	var twist := 0.0
+	if pose == "dance":
+		twist = 0.35 * sin(pose_t * 3.5)
+	elif pose == "punch":
+		twist = 0.45 if pose_t > 0.13 and pose_t < 0.35 else -0.2
+	torso.rotation.y = twist if pose == "dance" else lerpf(torso.rotation.y, twist, minf(14.0 * dt, 1.0))
 
 
 func update(dt: float, partner: Node3D) -> void:
@@ -582,6 +725,26 @@ func _arms(dt: float, toward: float) -> void:
 		elif pose == "cheer":
 			lx = 3.0 + 0.2 * sin(pose_t * 16.0)
 			rx = 3.0 + 0.2 * sin(pose_t * 16.0 + 1.0)
+		elif pose in ["fight", "punch", "hit"]:
+			# fists up in front of the face
+			lx = 1.7
+			rx = 1.55
+			ly = 0.35
+			ry = -0.35
+			if pose == "punch":
+				# wind up, then a straight right
+				var k := pose_t / 0.45
+				rx = 1.2 if k < 0.3 else 1.62
+				ry = 0.25 if k < 0.3 else 0.0
+			elif pose == "hit":
+				lx = 2.3
+				rx = 2.4
+		elif pose == "ko":
+			lx = 2.9
+			rx = 2.9
+		elif pose == "carried":
+			lx = 2.4 + 0.6 * sin(t * 12.0)
+			rx = 2.4 + 0.6 * sin(t * 12.0 + 2.0)
 	elif not driver:
 		lx = 0.95
 		rx = 0.95

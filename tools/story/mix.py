@@ -98,8 +98,23 @@ def main(video, log_path, timed_path, out, music="auto"):
         end = end if end > 0 else secs - 3.0
         # louder for the end card, then the music's own fade-out
         parts.append(f"[{n + 1}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
-                     f"volume='{MUSIC_GAIN}+{MUSIC_END_GAIN - MUSIC_GAIN}*min(max((t-{end:.2f})/1.2,0),1)':eval=frame[m]")
+                     f"volume='{MUSIC_GAIN}+{MUSIC_END_GAIN - MUSIC_GAIN}*min(max((t-{end:.2f})/1.2,0),1)':eval=frame[m0]")
         print(f"music: {mood} ({secs:.1f}s, seed {seed})")
+        # the dramatic sting on every shock zoom
+        stings = [float(a["t"]) for a in log.get("actions", []) if a.get("do") == "shot" and a.get("type") == "zoom"]
+        if stings:
+            spath = os.path.join(tmp, "sting.wav")
+            music_mod.write_wav(spath, music_mod.sting())
+            for j, st in enumerate(stings):
+                cmd += ["-i", spath]
+                ms = int(st * 1000)
+                parts.append(f"[{n + 2 + j}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                             f"volume=0.9,adelay={ms}|{ms}[s{j}]")
+            ins = "".join(f"[s{j}]" for j in range(len(stings)))
+            parts.append(f"[m0]{ins}amix=inputs={len(stings) + 1}:normalize=0:duration=first[m]")
+            print(f"stings at {', '.join(f'{x:.1f}s' for x in stings)}")
+        else:
+            parts.append("[m0]anull[m]")
     parts += [
         # padded with silence: a sidechain stops when its key input does, and the voices end
         # before the end card
