@@ -26,20 +26,26 @@ PC controls: W/S or Up/Down to accelerate and brake, A/D or Left/Right to steer,
 
 Steering feel is tuned by the `STEER_*` constants at the top of `car.gd`.
 
-## Bot videos (GitHub Actions)
+## Videos for YouTube (GitHub Actions)
 
-A bot can play the game while Godot's Movie Maker records it, for YouTube Shorts or normal videos.
+An automatic driver can play the game while Godot's Movie Maker records it, for YouTube Shorts or normal videos.
 
 1. Open the repository's **Actions** tab, choose **Record video**, then **Run workflow**.
 2. Pick the options:
-   - **mode**: `chase` (1 car vs a growing pack of police, finale is a police trap), `destroy` (smash as much city as possible), `survive` (5 stars from the start).
+   - **mode**:
+     - `chase`: 1 car vs a growing pack of police that come from behind, side streets and head-on; finale is a barrel trap for them.
+     - `heli`: a police helicopter chases at street level; the finale is the car jumping off a tower top into it.
+     - `rush`: dense traffic and cross traffic timed to pass just ahead of and behind the car; counts near misses.
+     - `stunt`: tower-top to tower-top jumps, barrel corridors, a tower brought down as the car passes, ramps and gas stations.
+     - `destroy`: smash as much of the city as possible, with a "% of the city destroyed" counter.
+     - `survive`: 5 stars from the first second.
    - **orientation**: `vertical` (1080x1920, Shorts) or `horizontal` (1920x1080).
-   - **duration**, **fps**, **takes** (records several runs and keeps the most exciting), **time** of day, the on-screen **title**, and an optional **seed**.
+   - **duration**, **fps**, **takes** (records several runs and keeps the most exciting), **teaser** (opens with a flash-forward of the biggest moment, then "EARLIER..."), **time** of day, the on-screen **title**, and an optional **seed**.
 3. When the run finishes, download the `video-...` artifact from the run page: the MP4, a thumbnail, the run's stats and `...-upload.txt` with ready-to-paste YouTube title options, description, tags, hashtags and a pinned comment, filled in with that run's numbers. The same text is shown on the run's summary page. Replace the Play Store link placeholder before posting.
 
 GitHub's machines have no graphics card, so frames are drawn on the CPU. The video is still smooth, but a 55 second clip takes a while to record.
 
-How it works: the bot (`bot.gd`) presses the same controls a player does and plans its route on the road grid. The director (`director.gd`) stages the run: it picks the start, raises the wanted level on a schedule, sets up ramp jumps, a roadblock, a smash through a building and the finale, and cuts between cameras. Until the last 12 seconds the run cannot end early, so a clip is never cut short.
+How it works: the driver (`bot.gd`) presses the same controls a player does and plans its route on the road grid. The director (`director.gd`) stages the run: it picks the start, raises the wanted level on a schedule, builds stunt set pieces just ahead (`stunts.gd`), brings in the helicopter (`heli.gd`) or the cross traffic, shows story captions, and cuts between cameras. The run cannot end early, and when the car is boxed in by a pile of cars it shoves them away, so a clip never stalls. Some moments (the helicopter takedown, the timed cross traffic) are staged by the director, so call these videos gameplay, not a lucky accident.
 
 Locally: `tools/record.sh path/to/godot out` (Linux, needs `xvfb` and `ffmpeg`; settings come from environment variables, see the script), or run the game with `-- --bot=chase --orientation=vertical --duration=55` to watch the bot live.
 
@@ -80,7 +86,9 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `main.gd` | Game loop, cameras, wanted level, BUSTED meter, police, SWAT, traffic, slow motion, events |
 | `car.gd` | Player and police vehicles, steering feel, handling assists, damage, police AI, sirens |
 | `bot.gd` | Bot driver for recorded videos: route planning, ramps, smashes, dodging |
-| `director.gd` | Stages bot runs: modes, beats, camera cuts, overlay text, run summary |
+| `director.gd` | Stages video runs: modes, beats, story captions, camera cuts, overlay text, run summary |
+| `stunts.gd` | Stunt set pieces: tower-top jump, barrel corridor, tower fall |
+| `heli.gd` | The police helicopter: model, low chase, rotor wash, crash |
 | `carmesh.gd` | Procedural car body meshes |
 | `civcar.gd` | Parked cars and traffic |
 | `world.gd` | City generation, chunk streaming, ramps, flyovers, debris, routing |
@@ -89,4 +97,4 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `fx.gd` | Particles, skid marks, synthesized sounds |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade, ground, car and debris shaders |
-| `tools/` | Scripts used by the workflows: install Godot, smoke test, record, pick the best take, write the upload text |
+| `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |

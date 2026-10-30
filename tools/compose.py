@@ -22,10 +22,10 @@ FONTS = [
 # the biggest moment: first of these kinds present in the run's event log
 MOMENTS = [
     ("heli_down", "HELICOPTER DOWN"),
-    ("mega_jump", "THE BOT JUMPED THE WHOLE STREET"),
+    ("mega_jump", "THE CAR JUMPED THE WHOLE STREET"),
     ("trap", "THE COPS NEVER SAW THIS COMING"),
     ("collapse", "THE WHOLE TOWER CAME DOWN"),
-    ("gas", "ONE GAS STATION. ONE BOT."),
+    ("gas", "ONE GAS STATION. ONE CAR."),
     ("chain", "CHAIN REACTION"),
     ("near_miss", "THIS WAS TOO CLOSE"),
     ("swat_down", "THE SWAT TRUCK GOT WRECKED"),

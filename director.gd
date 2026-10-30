@@ -12,8 +12,8 @@ extends Node
 #   destroy  smash as much of the city as possible; finale is a tall tower
 #   survive  5 stars from the first second; just stay alive
 
-const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "BOT vs THE CITY", "survive": "SURVIVE 5 STARS",
-	"stunt": "THE STUNT SHOW", "heli": "BOT vs HELICOPTER", "rush": "RUSH HOUR vs 1 BOT"}
+const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "ONE CAR vs THE CITY", "survive": "SURVIVE 5 STARS",
+	"stunt": "THE STUNT SHOW", "heli": "ONE CAR vs A HELICOPTER", "rush": "RUSH HOUR vs ONE CAR"}
 # The stunt show runs these in order, moving on as soon as one is done (or cannot be placed).
 const STUNT_ORDER := ["corridor", "mega", "tower", "ramp", "mega", "gas", "tower", "corridor"]
 # Story lines shown in the middle of the screen when these events happen (once each).
@@ -24,7 +24,7 @@ const EVENT_CAPTIONS := {
 	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!",
 }
 const START_CAPTIONS := {
-	"chase": "ONE BOT. NO BRAKES.", "survive": "5 STARS. NO ESCAPE.", "destroy": "HOW MUCH CAN IT BREAK?",
+	"chase": "ONE CAR. NO BRAKES.", "survive": "5 STARS. NO ESCAPE.", "destroy": "HOW MUCH CAN IT BREAK?",
 	"heli": "THEY SENT A HELICOPTER.", "rush": "RUSH HOUR. NO RULES.", "stunt": "NO RAMP IS TOO BIG.",
 }
 const PRIORITY := ["trap", "heli_down", "mega_jump", "collapse", "gas"]
@@ -47,6 +47,7 @@ var next_try := 0.0
 var shot_end := 3.0
 var next_shot := 9.0
 var break_t := 0.0
+var last_free := -9.0
 var jump_slowmo := false
 var end_card := false
 var finished := false
@@ -166,7 +167,7 @@ func start() -> void:
 		"rush":
 			main.cap_bonus = 1
 			main.spawn_gap = Vector2(2.0, 3.5)
-			main.traffic_cap = 36
+			main.traffic_cap = 30
 			main.traffic_ahead = true
 			_opening_police(2)
 		_:
@@ -484,7 +485,7 @@ func _spawn_crossers() -> bool:
 		var cd := perp * (1.0 if k == 0 else -1.0)
 		var left := Vector3.UP.cross(cd)
 		var off := left.dot(hv) * 3.5              # where this car's lane crosses the bot's path
-		var delta := -0.6 if k == 0 else 0.6       # just ahead of the bot / just behind it
+		var delta := -0.65 if k == 0 else 0.65     # just ahead of the car / just behind it
 		var cc := CivCar.new()
 		main.add_child(cc)
 		cc.build(main, CivCar.palette(randi()), true)
@@ -521,14 +522,14 @@ func _near_miss(t: float) -> void:
 			if c is CivCar and c.moving:
 				cv = c.dir * c.cruise
 			# touching cars are about 1.9 m apart centre to centre
-			if m > 2.05 and m < 3.6 and (cv - pv).length() > 12.0 and t - last_nm > 0.8:
+			if m > 2.05 and m < 5.5 and (cv - pv).length() > 14.0 and t - last_nm > 0.8:
 				last_nm = t
 				nm_count += 1
 				main.stats["near_miss"] += 1
 				main.bonus += 100
 				main.log_event("near_miss")
 				main.hud.banner("NEAR MISS x%d" % nm_count)
-				if m < 2.8:
+				if m < 3.2:
 					main.slowmo(0.8, 0.45)
 
 
@@ -770,21 +771,38 @@ func _jump_moment() -> void:
 
 # Before the finale the run cannot be busted: when the meter gets close, the car
 # shoves the police off and gets a full nitro. Good drama, and the clip goes on.
+# Boxed in by a pile of cars (police, roadblocks, traffic): after a moment the car shoves
+# them all away and gets a full nitro, so a clip never stalls in a jam. Only video runs
+# do this; in the real game, getting out of a pile-up is up to the player.
 func _break_free(dt: float) -> void:
-	if not main.protect or main.busted < 0.85:
-		break_t = 0.0
-		return
-	break_t += dt
-	if break_t < 1.0:
+	var pl: Car = main.player
+	var crowd := 0
+	for c in main.cars_near(pl.global_position, 9.0):
+		if not c.is_player:
+			crowd += 1
+	for c in main.civs:
+		if is_instance_valid(c) and not c.dead and c.global_position.distance_to(pl.global_position) < 9.0:
+			crowd += 1
+	if pl.speed < 2.5 and crowd >= 2:
+		break_t += dt
+	else:
+		break_t = maxf(0.0, break_t - dt * 2.0)
+	if (break_t < 1.3 and main.busted < 0.85) or main.clock - last_free < 3.0:
 		return
 	break_t = 0.0
-	var pl: Car = main.player
-	for c in main.cars_near(pl.global_position, 10.0):
+	last_free = main.clock
+	for c in main.cars_near(pl.global_position, 12.0):
 		if c.is_player:
 			continue
 		var dirv: Vector3 = c.global_position - pl.global_position
 		dirv.y = 0.0
-		c.apply_central_impulse((dirv.normalized() * 6.0 + Vector3(0, 2.5, 0)) * c.mass)
+		c.apply_central_impulse((dirv.normalized() * 9.0 + Vector3(0, 3.0, 0)) * c.mass)
+	for c in main.civs:
+		if is_instance_valid(c) and not c.dead and c.global_position.distance_to(pl.global_position) < 12.0:
+			var dv: Vector3 = c.global_position - pl.global_position
+			dv.y = 0.0
+			c.knock(Vector3.ZERO)
+			c.apply_central_impulse((dv.normalized() * 8.0 + Vector3(0, 3.0, 0)) * c.mass)
 	pl.nitro = 100.0
 	main.busted = 0.35
 	main.hud.banner("BROKE FREE!")

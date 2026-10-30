@@ -9,10 +9,13 @@ import sys
 
 # what each logged event looks like in a description, in the order they are listed
 MOMENTS = [
+    ("heli_down", "a helicopter takedown"),
+    ("mega_jump", "a tower-top to tower-top jump"),
     ("trap", "the barrel trap that blows up the police"),
     ("collapse", "buildings coming down"),
     ("gas", "a gas station explosion"),
     ("chain", "chain explosions"),
+    ("near_miss", "near misses"),
     ("big_air", "ramp jumps"),
     ("roadblock", "a police roadblock"),
     ("swat", "the SWAT truck"),
@@ -20,9 +23,24 @@ MOMENTS = [
     ("broke_free", "a close call with the BUSTED meter"),
 ]
 
-TAGS = ["police chase", "car chase", "bot gameplay", "destruction game", "indie game",
+TAGS = ["police chase", "car chase", "ai gameplay", "destruction game", "indie game",
         "mobile game", "godot", "godot engine", "voxel destruction", "satisfying destruction",
-        "wanted level", "game bot", "cube city chase"]
+        "wanted level", "cube city chase"]
+MODE_TAGS = {
+    "destroy": ["city destruction"],
+    "heli": ["helicopter", "police helicopter"],
+    "rush": ["traffic", "near miss", "rush hour"],
+    "stunt": ["car stunts", "ramp jump", "jump"],
+}
+
+HOOKS = {
+    "chase": "One car, a growing pack of police, and no way out. Can it escape?",
+    "destroy": "One car tries to smash the whole city. How much can it destroy before the police shut it down?",
+    "survive": "Five stars from the first second. Can one car stay ahead of the whole police force?",
+    "heli": "A police helicopter is chasing one car through the city. Can the car get away, or take it down?",
+    "rush": "Rush hour. Cars from every direction, police closing in, and one car threading through. How close can it get?",
+    "stunt": "Ramps, jumps, explosions and falling towers: the stunt show.",
+}
 
 
 def titles(s):
@@ -31,19 +49,34 @@ def titles(s):
     cops = max(int(s.get("max_cops", 0)), int(s.get("cops_wrecked", 0)))
     wrecked = int(s.get("cops_wrecked", 0))
     falls = int(s.get("collapses", 0))
-    trapped = any(e.get("type") == "trap" for e in s.get("events", []))
+    misses = int(s.get("near_miss", 0))
+    jumps = int(s.get("big_air", 0))
+    events = {e.get("type") for e in s.get("events", [])}
     if mode == "destroy":
-        out = ["Can a Bot Destroy the Whole City? 🏙️💥",
-               f"Bot vs The City: {falls} Buildings Down 💥" if falls >= 2 else "Bot vs The City: Smashing Everything 💥",
-               "This Bot Drives Straight Through Buildings 😳"]
+        out = ["Can One Car Destroy the Whole City? 🏙️💥",
+               f"One Car vs The City: {falls} Buildings Down 💥" if falls >= 2 else "One Car vs The City: Smashing Everything 💥",
+               "This Car Drives Straight Through Buildings 😳"]
     elif mode == "survive":
-        out = [f"Can a Bot Survive 5 Stars for {dur} Seconds? 🚨",
+        out = [f"Can One Car Survive 5 Stars for {dur} Seconds? 🚨",
                f"{cops} Cops vs 1 Car: Max Wanted Level 🚓",
                f"5 Star Police Chase: {wrecked} Cops Wrecked 💥" if wrecked >= 3 else "5 Star Police Chase, No Escape? 🚨"]
+    elif mode == "heli":
+        down = "heli_down" in events
+        out = ["Can a Car Take Down a Police Helicopter? 🚁💥" if down else "Police Helicopter vs One Car 🚁",
+               "The Car Jumped Right Into the Helicopter 😳" if down else "Police Helicopter Chase Through the City 🚨",
+               f"1 Car vs {cops} Cops and a Helicopter 🚓🚁"]
+    elif mode == "rush":
+        out = [f"{misses} Near Misses in {dur} Seconds 😳🚗" if misses >= 3 else "Rush Hour Chaos: Cars From Every Direction 🚗💥",
+               "Can One Car Escape Rush Hour and the Cops? 🚨",
+               "Cars From Every Direction. One Narrow Escape 😳"]
+    elif mode == "stunt":
+        out = ["Craziest Car Stunts in a City of Cubes 🚗💥",
+               "Jumping From Tower to Tower 😳" if "mega_jump" in events else "Ramps, Jumps and Explosions 💥",
+               f"{jumps} Insane Jumps in {dur} Seconds 🚗" if jumps >= 3 else "One Car. One Stunt Show. 🚗"]
     else:
         out = [f"1 Car vs {cops} Cops 🚓 Can It Escape?",
                f"{wrecked} Cops Wrecked in {dur} Seconds 💥" if wrecked >= 3 else "Police Chase Through a City of Cubes 🚨",
-               "The Bot Led the Police Into a Trap 😳" if trapped else "Can a Bot Outrun the Whole Police Force? 🚨"]
+               "This Car Led the Cops Into a Trap 😳" if "trap" in events else "Can One Car Outrun the Whole Police Force? 🚨"]
     return [t[:100] for t in out]
 
 
@@ -51,15 +84,13 @@ def description(s):
     mode = s.get("mode", "chase")
     events = {e.get("type") for e in s.get("events", [])}
     seen = [text for kind, text in MOMENTS if kind in events]
-    hook = {
-        "destroy": "A bot tries to smash the whole city. How much can it destroy before the police shut it down?",
-        "survive": "Five stars from the first second. Can the bot stay ahead of the whole police force?",
-    }.get(mode, "One car, a growing pack of police, and no way out. Can the bot escape?")
-    lines = [hook, ""]
+    lines = [HOOKS.get(mode, HOOKS["chase"]), ""]
     lines.append(f"🚓 Police in the chase: {s.get('max_cops', 0)}")
     lines.append(f"💥 Police cars wrecked: {s.get('cops_wrecked', 0)}")
     if s.get("collapses"):
         lines.append(f"🏢 Buildings brought down: {s['collapses']}")
+    if s.get("near_miss"):
+        lines.append(f"😳 Near misses: {s['near_miss']}")
     if mode == "destroy":
         lines.append(f"🏙️ City destroyed: {float(s.get('destroyed_pct', 0)):.2f}%")
     if seen:
@@ -69,11 +100,11 @@ def description(s):
             lines.append("👀 Watch for " + seen[0] + ".")
     lines += [
         "",
-        "This run is played by a bot in Cube City Chase, a car chase and destruction game I'm making "
+        "AI-driven gameplay from Cube City Chase, a car chase and destruction game I'm making "
         "with the Godot engine. Everything in it (the city, cars, explosions and sounds) is generated in code.",
         "",
         "🎮 Play the game: [add your Play Store link here]",
-        "🔔 Subscribe for more bot runs. Which mode next: chase, destroy or survive? Tell me in the comments!",
+        "🔔 Subscribe for more runs. Which mode next: chase, destroy, survive, helicopter, rush hour or stunts? Tell me in the comments!",
         "",
         " ".join(hashtags(s)),
     ]
@@ -82,23 +113,26 @@ def description(s):
 
 def hashtags(s):
     first = "#Shorts" if s.get("orientation", "vertical") == "vertical" else "#Gaming"
-    second = "#CityDestruction" if s.get("mode") == "destroy" else "#PoliceChase"
+    second = {"destroy": "#CityDestruction", "heli": "#Helicopter", "rush": "#CarChase", "stunt": "#Stunts"}.get(
+        s.get("mode"), "#PoliceChase")
     return [first, second, "#IndieGame"]
 
 
 def tags(s):
     out = list(TAGS)
-    if s.get("mode") == "destroy":
-        out.insert(0, "city destruction")
+    out[0:0] = MODE_TAGS.get(s.get("mode"), [])
     if s.get("orientation", "vertical") == "vertical":
         out.append("shorts")
     return ", ".join(out)
 
 
 def pinned_comment(s):
-    if s.get("mode") == "destroy":
-        return "How many runs until the bot destroys 100% of the city? Guess below 👇"
-    return "Would you have escaped? What should the bot try next? 👇"
+    return {
+        "destroy": "How many runs until it destroys 100% of the city? Guess below 👇",
+        "heli": "Would you try that jump? 👇",
+        "rush": "How many near misses did you count? 👇",
+        "stunt": "Which stunt was the craziest? 👇",
+    }.get(s.get("mode"), "Would you have escaped? What should happen next? 👇")
 
 
 def build(s):

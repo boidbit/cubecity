@@ -1,14 +1,14 @@
 name: Record video
 
-# Actions tab -> "Record video" -> Run workflow. Records one or more takes of a bot
-# run, keeps the most exciting one and attaches it (MP4 + thumbnail) to the run.
+# Actions tab -> "Record video" -> Run workflow. Records one or more takes of an automatic
+# run, keeps the most exciting one and attaches it (MP4 + thumbnail + upload text) to the run.
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "What the bot does"
+        description: "chase = 1 car vs a growing pack of police | heli = low police helicopter, ends with the car jumping into it | rush = cars from every direction, near misses | stunt = tower jumps, barrel corridors, falling towers | destroy = smash as much city as possible | survive = 5 stars from the start"
         type: choice
-        options: [chase, destroy, survive]
+        options: [chase, heli, rush, stunt, destroy, survive]
         default: chase
       orientation:
         description: "vertical = YouTube Shorts (1080x1920), horizontal = normal video (1920x1080)"

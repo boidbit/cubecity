@@ -362,7 +362,9 @@ func _update_traffic(dt: float) -> void:
 		var d := Vector3(roundf(-sin(yaw)), 0, roundf(-cos(yaw)))
 		var c := CivCar.new()
 		add_child(c)
-		c.build(self, CivCar.palette(randi()), true)
+		var kinds := ["sedan", "sedan", "suv", "van", "taxi"]
+		var ck: String = kinds[randi() % kinds.size()]
+		c.build(self, CivCar.TAXI if ck == "taxi" else CivCar.palette(randi()), true, ck)
 		c.cruise = randf_range(9.0, 13.0)
 		c.start_route(r["pos"], d)
 		civs.append(c)

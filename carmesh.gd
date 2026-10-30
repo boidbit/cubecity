@@ -127,6 +127,29 @@ static func body(kind: String) -> ArrayMesh:
 				box(st, Vector3(0, 0.5, -2.16), Vector3(1.0, 0.18, 0.04), TRIM)
 				box(st, Vector3(0, 0.32, 0), Vector3(1.75, 0.08, 4.0), TRIM)
 				box(st, Vector3(0, 1.08, 0.24), Vector3(1.5, 0.3, 0.08), PAINT))
+	elif kind == "suv":
+		m = _body([
+			Vector3(-2.15, 0.4, 0.95), Vector3(-2.2, 0.72, 0.96), Vector3(-2.05, 0.95, 0.95), Vector3(-0.95, 1.05, 0.94),
+			Vector3(-0.45, 1.62, 0.8), Vector3(1.7, 1.66, 0.8), Vector3(2.1, 1.1, 0.93), Vector3(2.2, 0.98, 0.94),
+			Vector3(2.22, 0.62, 0.96), Vector3(2.12, 0.4, 0.95)],
+			[3, 5],
+			[Vector2(-0.95, 1.08), Vector2(-0.5, 1.56), Vector2(1.6, 1.6), Vector2(1.95, 1.1)],
+			[-1.4, 1.45], 0.94, 0.8, 1.0, 1.66,
+			func(st: SurfaceTool):
+				box(st, Vector3(0, 0.58, -2.23), Vector3(1.15, 0.22, 0.04), TRIM)
+				box(st, Vector3(0, 0.38, 0), Vector3(1.85, 0.08, 4.3), TRIM)
+				box(st, Vector3(0.62, 1.69, 0.5), Vector3(0.06, 0.05, 2.2), TRIM)
+				box(st, Vector3(-0.62, 1.69, 0.5), Vector3(0.06, 0.05, 2.2), TRIM))
+	elif kind == "van":
+		m = _body([
+			Vector3(-2.3, 0.42, 0.98), Vector3(-2.36, 0.85, 0.99), Vector3(-2.2, 1.1, 0.98), Vector3(-1.55, 1.3, 0.97),
+			Vector3(-1.05, 2.0, 0.95), Vector3(2.25, 2.05, 0.95), Vector3(2.4, 1.1, 0.97), Vector3(2.38, 0.42, 0.98)],
+			[3],
+			[Vector2(-1.5, 1.34), Vector2(-1.1, 1.95), Vector2(0.3, 1.97), Vector2(0.3, 1.34)],
+			[-1.55, 1.6], 0.98, 0.95, 1.3, 2.05,
+			func(st: SurfaceTool):
+				box(st, Vector3(0, 0.6, -2.38), Vector3(1.3, 0.24, 0.04), TRIM)
+				box(st, Vector3(0, 0.4, 0), Vector3(1.9, 0.08, 4.6), TRIM))
 	else:
 		# armoured SWAT truck: boxy on purpose
 		var st := SurfaceTool.new()
