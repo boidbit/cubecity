@@ -17,9 +17,8 @@ var sun: DirectionalLight3D
 var env: Environment
 var sky_mat: ProceduralSkyMaterial
 var rain: CPUParticles3D
-var heli: Node3D
-var heli_rotor: Node3D
-var heli_spot: SpotLight3D
+var heli: Heli
+var heli_forced := false   # director: the helicopter is out from the start
 var police: Array[Car] = []
 var blocks: Array[Car] = []
 var bot: Bot = null
@@ -76,6 +75,7 @@ var events: Array = []
 var stats := {"collapses": 0, "chains": 0, "gas": 0, "big_air": 0, "drifts": 0, "smash": 0,
 	"cops_spawned": 0, "max_cops": 0, "mega_jump": 0, "near_miss": 0, "heli_down": 0}
 var cam_anchor := Vector3.ZERO
+var cam_focus_heli := false   # the anchor camera looks between the car and the helicopter
 
 
 func _ready() -> void:
@@ -173,41 +173,9 @@ func _make_player() -> void:
 
 
 func _make_heli() -> void:
-	heli = Node3D.new()
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.12, 0.14, 0.2)
-	var parts := [
-		[Vector3(2.2, 1.7, 5.0), Vector3(0, 0, 0)],
-		[Vector3(0.5, 0.5, 5.0), Vector3(0, 0.2, 4.6)],
-		[Vector3(1.6, 0.1, 0.9), Vector3(0, 0.5, 6.8)],
-	]
-	for p in parts:
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = p[0]
-		mi.mesh = bm
-		mi.material_override = mat
-		mi.position = p[1]
-		heli.add_child(mi)
-	heli_rotor = Node3D.new()
-	heli_rotor.position = Vector3(0, 1.1, 0)
-	for a in [0.0, PI * 0.5]:
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(11.0, 0.06, 0.4)
-		mi.mesh = bm
-		mi.material_override = mat
-		mi.rotation.y = a
-		heli_rotor.add_child(mi)
-	heli.add_child(heli_rotor)
-	heli_spot = SpotLight3D.new()
-	heli_spot.spot_range = 90.0
-	heli_spot.spot_angle = 14.0
-	heli_spot.light_energy = 6.0
-	heli_spot.position = Vector3(0, -0.8, -1.5)
-	heli.add_child(heli_spot)
-	heli.visible = false
+	heli = Heli.new()
 	add_child(heli)
+	heli.setup(self)
 
 
 func _make_rain() -> void:
@@ -551,24 +519,15 @@ func _update_busted(dt: float) -> void:
 
 
 func _update_heli(dt: float) -> void:
-	var on := level >= 4 and not game_over
+	var on := (level >= 4 or heli_forced) and not game_over and not heli.down
 	if on and not heli.visible:
-		heli.visible = true
-		heli.global_position = player.global_position + Vector3(120, 40, 120)
+		heli.summon()
 		log_event("heli")
-	elif not on and heli.visible:
+	elif not on and heli.visible and heli.state in ["chase", "intercept"]:
 		heli.visible = false
-	if not heli.visible:
-		return
-	heli_t += dt
-	heli_rotor.rotate_y(dt * 38.0)
-	var tgt := player.global_position + player.linear_velocity * 0.9 + Vector3(sin(heli_t * 0.4) * 14.0, 26.0, cos(heli_t * 0.4) * 14.0)
-	heli.global_position = heli.global_position.lerp(tgt, 1.0 - exp(-0.9 * dt))
-	var look := player.global_position - heli.global_position
-	look.y = 0.0
-	if look.length() > 0.5:
-		heli.rotation.y = lerp_angle(heli.rotation.y, atan2(-look.x, -look.z), 2.0 * dt)
-	heli_spot.look_at(player.global_position, Vector3.UP)
+		heli.chop.stop()
+	if heli.visible:
+		heli.tick(dt)
 
 
 # ------------------------------------------------------------ camera and environment
@@ -681,7 +640,12 @@ func _cam_front(dt: float) -> void:
 func _cam_anchor(dt: float) -> void:
 	var p := cam_anchor + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake
 	cam.global_position = p
-	cam.look_at(player.global_position + Vector3(0, 1.5, 0), Vector3.UP)
+	var focus := player.global_position + Vector3(0, 1.5, 0)
+	if heli.visible and heli.state in ["crash", "wreck"]:
+		focus = heli.global_position
+	elif cam_focus_heli and heli.visible:
+		focus = (player.global_position + heli.global_position) * 0.5
+	cam.look_at(focus, Vector3.UP)
 	cam.fov = lerpf(cam.fov, 52.0 + fov_kick, 6.0 * dt)
 
 

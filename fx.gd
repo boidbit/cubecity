@@ -344,6 +344,29 @@ func _make_sounds() -> void:
 	sounds["thud"] = _noise_burst(0.5, 8.0, 0.1, 70.0)
 	sounds["rumble"] = _noise_burst(0.9, 3.0, 0.05, 0.0)
 	sounds["siren"] = _siren(2.0)
+	sounds["chop"] = _chop(1.0)
+
+
+# Helicopter rotor: 11 thumps a second, a low rumble under each. The loop is a whole
+# number of beats, so it repeats without a click.
+func _chop(period: float) -> AudioStreamWAV:
+	var n := int(period * MIX)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	var y := 0.0
+	for i in n:
+		var t := float(i) / MIX
+		var beat := 0.5 + 0.5 * sin(TAU * 11.0 * t)
+		var env := pow(beat, 5.0)
+		y += 0.12 * (rng.randf_range(-1.0, 1.0) - y)
+		s[i] = (y * 1.6 + sin(TAU * 55.0 * t) * 0.5) * env * 0.8
+	var w := _wav(s)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_begin = 0
+	w.loop_end = n
+	return w
 
 
 # Police wail: pitch sweeps 530-1370 Hz and back over one period. The sweep

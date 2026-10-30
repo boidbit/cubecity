@@ -61,6 +61,10 @@ var pending_tower: Building = null
 var tower_t := 0.0
 var stunt_i := 0
 var stunt_wait := 2.0
+var jump := {}            # heli mode: the mega jump the helicopter waits above
+var jump_stage := 0
+var pass_until := 0.0
+var next_pass := 6.0
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -88,6 +92,9 @@ func setup(main_node, cfg: Dictionary) -> void:
 		"stunt":
 			bot.cruise = 30.0
 			start_heat = 14.0
+		"heli":
+			bot.cruise = 31.0
+			start_heat = 32.0
 		_:
 			bot.cruise = 31.0
 			start_heat = 14.0
@@ -142,6 +149,12 @@ func start() -> void:
 		"stunt":
 			main.spawn_gap = Vector2(3.5, 5.5)
 			_opening_police(2)
+		"heli":
+			main.cap_bonus = 1
+			main.spawn_gap = Vector2(2.0, 3.5)
+			main.heli_forced = true
+			main.heli.low = true
+			_opening_police(3)
 		_:
 			main.spawn_gap = Vector2(2.5, 4.0)
 	bot.plan_flee(_away_point())
@@ -255,7 +268,7 @@ func tick(dt: float) -> void:
 		return
 	if t >= duration - 2.5 and not end_card and not main.game_over:
 		end_card = true
-		main.hud.show_over(end_text("SURVIVED"))
+		main.hud.show_over(end_text("HELICOPTER DOWN" if main.stats["heli_down"] > 0 else "SURVIVED"))
 		main.log_event("survived")
 	if main.game_over:
 		return
@@ -273,6 +286,7 @@ func tick(dt: float) -> void:
 		next_try = t + 0.5
 		_beats(t)
 	_update_traps(t)
+	_heli_tick(t)
 	_tower_tick(t)
 	_story(t)
 	_camera(t)
@@ -320,6 +334,8 @@ func _heat(t: float) -> void:
 			heat_floor = 2.0 if f < 0.3 else (14.0 if f < 0.6 else 32.0)
 		"stunt":
 			heat_floor = 14.0 if f < 0.5 else 32.0
+		"heli":
+			heat_floor = 32.0 if f < 0.5 else 45.0
 		_:
 			heat_floor = 90.0
 
@@ -328,6 +344,9 @@ func _beats(t: float) -> void:
 	var f := t / duration
 	if mode == "stunt":
 		_stunt_show(t)
+		return
+	if mode == "heli":
+		_heli_show(t)
 		return
 	if mode == "destroy":
 		# a smash whenever the road ahead allows one; the tallest towers for the finale
@@ -411,6 +430,57 @@ func _tower_tick(t: float) -> void:
 	if along < 40.0:
 		main.stunts.demolish(b)
 		pending_tower = null
+
+
+# Helicopter mode: the chase, some ramps and barrels on the way, and as the finale a jump
+# off the tower top into the helicopter that has been following the car at street level.
+func _heli_show(t: float) -> void:
+	var f := t / duration
+	if bot.busy() or not jump.is_empty():
+		return
+	if f > 0.45 and not done.has("mega") and _plan_mega():
+		done["mega"] = t
+		jump = mega_info.duplicate()
+		jump_stage = 0
+	elif f > 0.1 and f < 0.4 and not done.has("ramp1") and bot.plan_ramp():
+		done["ramp1"] = t
+	elif f > 0.2 and f < 0.45 and not done.has("corridor") and _plan_corridor():
+		done["corridor"] = t
+	elif f > 0.28 and f < 0.45 and not done.has("roadblock"):
+		_try_roadblock(t)
+
+
+# Waits for the bot to near the ramp, parks the helicopter where the jump will pass, then
+# aims it at the point the car will really reach once it has left the roof.
+func _heli_tick(t: float) -> void:
+	if mode != "heli" or jump.is_empty():
+		return
+	var heli: Heli = main.heli
+	if heli.down or heli.state in ["crash", "wreck"]:
+		if heli.state == "wreck" or heli.down:
+			jump = {}
+		return
+	var pl: Car = main.player
+	var lip: Vector3 = jump["lip"]
+	var dirv: Vector3 = jump["dir"]
+	var flat := Vector3(pl.global_position.x, 0.0, pl.global_position.z)
+	var along := (flat - Vector3(lip.x, 0.0, lip.z)).dot(dirv)
+	match jump_stage:
+		0:
+			if along > -110.0 and along < -20.0:
+				var hover := Vector3(lip.x, 0.0, lip.z) + dirv * 30.0 + Vector3(0, Stunts.RAMP_H + Stunts.KICK_H + 3.0, 0)
+				heli.start_intercept(hover, -dirv, 9.0)
+				jump_stage = 1
+		1:
+			if pl.airtime > 0.15 and along > -14.0:
+				var th := 0.62
+				var pt := pl.global_position + pl.linear_velocity * th + Vector3(0, -0.5 * 9.8 * th * th, 0)
+				heli.retune_intercept(pt + Vector3(0, 1.1, 0), th + 1.0)
+				jump_stage = 2
+		2:
+			if heli.state == "chase" and not heli.down:
+				jump = {}      # it missed: back to the chase
+				jump_stage = 0
 
 
 # The stunt show: one set piece after another, so every second has something in it.
@@ -533,6 +603,26 @@ func _camera(t: float) -> void:
 		return
 	if _mega_camera(t):
 		return
+	if main.cam_mode == "anchor":
+		if t < pass_until:
+			return
+		main.cam_mode = "chase"
+		main.cam_cut = true
+		main.cam_focus_heli = false
+		next_shot = t + 3.0
+		return
+	# helicopter mode: from the road ahead, looking up as the helicopter chases overhead
+	if mode == "heli" and jump.is_empty() and main.heli.visible and main.heli.state == "chase" and t >= next_pass and bot.straight_ahead() > 90.0 and not bot.busy():
+		next_pass = t + randf_range(7.0, 10.0)
+		var v: Vector3 = main.player.linear_velocity
+		v.y = 0.0
+		v = v.normalized()
+		main.cam_anchor = main.player.global_position + v * 50.0 + v.cross(Vector3.UP) * 7.0 + Vector3(0, 1.1, 0)
+		main.cam_focus_heli = true
+		main.cam_mode = "anchor"
+		main.cam_cut = true
+		pass_until = t + 2.8
+		return
 	if main.cam_mode != "chase":
 		main.cam_mode = "chase"
 		main.cam_cut = true
@@ -612,13 +702,15 @@ func overlay_line() -> String:
 			return "CITY DESTROYED %.2f%%   COPS %d" % [_destroyed_pct(), cops]
 		"survive":
 			return "SURVIVED %s   COPS %d" % [clock_s, cops]
+		"heli":
+			return "HELICOPTER CHASE %s   COPS %d" % [clock_s, cops]
 		"stunt":
 			return "JUMPS %d   BOOMS %d   COPS %d" % [main.stats["big_air"], main.stats["chains"] + main.stats["gas"] + main.stats["collapses"], cops]
 	return "COPS %d   %s   %d KM/H" % [cops, clock_s, int(absf(main.player.fwd_speed) * 3.6)]
 
 
 func end_text(kind: String) -> String:
-	var lines := PackedStringArray([kind + ("!" if kind == "SURVIVED" else ""), ""])
+	var lines := PackedStringArray([kind + ("!" if kind in ["SURVIVED", "HELICOPTER DOWN"] else ""), ""])
 	lines.append("COPS WRECKED  %d" % main.wrecked)
 	if mode == "destroy":
 		lines.append("CITY DESTROYED  %.2f%%" % _destroyed_pct())
