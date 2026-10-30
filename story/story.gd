@@ -73,6 +73,7 @@ var cam_new := true
 var cam_pos := Vector3.ZERO
 var cam_fov := 50.0
 var orbit_a := 0.0
+var max_duration := 90.0         # the clip may run this long if the story needs it
 
 var ui_name: Label
 var ui_sub: Label
@@ -111,6 +112,9 @@ func setup(main_node, cfg: Dictionary) -> void:
 	for k: String in data.get("props", []):
 		_prop_show(k)
 	main.hud.visible = false
+	if main.director != null:
+		# tools/record.sh stops recording 20 s after --duration, so stay inside that
+		max_duration = main.director.duration + 16.0
 	print("STORY ", data.get("title", ""), " beats=", beats.size(), " reactions=", reactions.size())
 
 
@@ -214,6 +218,20 @@ func _process(dt: float) -> void:
 	_animate(dt, t)
 	_camera(dt, t)
 	_ui(t)
+	_supporting_cast(t)
+
+
+# The police are side characters: they follow the car (it reads as a chase) but keep their
+# distance, unless the ending is the one where they catch it. And the clip runs on until
+# the story is told, up to max_duration.
+func _supporting_cast(t: float) -> void:
+	if ending != "caught":
+		for c in main.police:
+			if is_instance_valid(c):
+				c.hold = true
+	var dir = main.director
+	if dir != null and not done and dir.duration - t < 2.5 and dir.duration < max_duration:
+		dir.duration = minf(dir.duration + 1.0, max_duration)
 
 
 func _est_dur(line: Dictionary) -> float:

@@ -132,7 +132,7 @@ def clean(ai, base, mood):
                 line["gesture"] = b["gesture"]
             if b.get("on") in EVENTS:
                 line["on"] = b["on"]
-                line["max_wait"] = 12
+                line["max_wait"] = 9
             if len(sub.split()) > 16:
                 problems.append(f"line too long: {sub!r}")
             says += 1

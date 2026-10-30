@@ -543,12 +543,21 @@ func _plan_mega() -> bool:
 # Story lab: a kicker ramp built on the road just ahead.
 func _plan_kicker() -> bool:
 	var ahead := clampf(main.player.speed * 1.7, 38.0, 60.0)
-	if bot.straight_ahead() < ahead + 75.0:
-		return false
-	var pa: Dictionary = bot.point_ahead(ahead)
-	var origin: Vector3 = pa["pos"]
+	var origin := Vector3.ZERO
+	var dirv := Vector3.ZERO
+	if bot.straight_ahead() >= ahead + 75.0:
+		var pa: Dictionary = bot.point_ahead(ahead)
+		origin = pa["pos"]
+		dirv = pa["dir"]
+	else:
+		# the route turns soon: go straight on instead, if the road ahead allows it
+		var ax: Dictionary = bot.stunt_axis(105.0, 38.0)
+		if ax.is_empty():
+			return false
+		origin = ax["origin"]
+		dirv = ax["dir"]
 	origin.y = 0.0
-	var info: Dictionary = main.stunts.build_kicker(origin, pa["dir"])
+	var info: Dictionary = main.stunts.build_kicker(origin, dirv)
 	cam_jump = {"lip": info["lip"], "dir": info["dir"]}
 	mega_cam_t = 0.0
 	bot.set_plan(info["pts"], info["kinds"], "kicker")

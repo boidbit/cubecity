@@ -67,7 +67,11 @@ jobs:
     timeout-minutes: 180
     env:
       PREVIEW: ${{ github.event_name == 'push' }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY || secrets.GEMINI_KEY || secrets.GEMINI }}
+      # the usual names for the key; GEMINI_API_KEY is the one to use
+      GEMINI_API_KEY: >-
+        ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY || secrets.GEMINI_KEY || secrets.GEMINI
+        || secrets.GEMINI_AI_KEY || secrets.GEMINI_API || secrets.GOOGLE_GEMINI_API_KEY || secrets.GEMINI_TOKEN
+        || secrets.API_KEY || vars.GEMINI_API_KEY }}
       STORY_TYPE: ${{ inputs.story_type || 'funny' }}
       IDEA: ${{ inputs.idea }}
       SCRIPT: ${{ inputs.script || 'ep1_date_night' }}
