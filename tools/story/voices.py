@@ -17,11 +17,16 @@ A provider that fails part way is dropped for the whole story, so one episode ne
 two sets of voices.
 Set CUBE_CA_BUNDLE to a CA file if edge-tts must go through a TLS-inspecting proxy.
 
-Usage: tools/story/voices.py screenplay.json out_dir [--provider auto]
+Voice clips are kept in a cache (--cache DIR, by provider, voice and text), so a line that was
+already spoken costs no quota the next time, and the clips made before a provider ran out of
+quota are not lost: the next run only has to make the rest.
+
+Usage: tools/story/voices.py screenplay.json out_dir [--provider auto] [--cache DIR]
 """
 import argparse
 import array
 import asyncio
+import hashlib
 import json
 import math
 import os
@@ -140,9 +145,22 @@ def spoken(sp):
     return out
 
 
-def make_voices(sp, out, provider):
+def cache_name(provider, voice, line):
+    text = line.get("tts") or line.get("sub", "")
+    if provider == "gemini":
+        who = voice.get("gemini", "")
+    elif provider == "edge":
+        who = "|".join([voice.get("edge", ""), *edge_prosody(voice, line.get("emotion", ""))])
+    else:
+        who = str(voice.get("espeak_pitch", ""))
+    return hashlib.sha1(f"{provider}|{who}|{text}".encode()).hexdigest()[:20] + ".wav"
+
+
+def make_voices(sp, out, provider, cache=""):
     vdir = os.path.join(out, "voices")
     os.makedirs(vdir, exist_ok=True)
+    if cache:
+        os.makedirs(cache, exist_ok=True)
     cast = sp.get("cast", {})
     results = {}
     for line in spoken(sp):
@@ -152,6 +170,13 @@ def make_voices(sp, out, provider):
         wav = os.path.join(vdir, lid + ".wav")
         tmp = os.path.join(vdir, lid + ".src")
         text = line.get("tts") or line.get("sub", "")
+        cached = os.path.join(cache, cache_name(provider, v, line)) if cache and provider != "none" else ""
+        if cached and os.path.exists(cached):
+            shutil.copyfile(cached, wav)
+            dur, env = analyze(wav)
+            results[lid] = (dur, env)
+            print(f"  {lid}: {dur:.2f}s (cached)")
+            continue
         if provider == "gemini":
             synth_gemini(line, v, wav)
         elif provider == "edge":
@@ -167,6 +192,8 @@ def make_voices(sp, out, provider):
         dur, env = analyze(wav)
         if dur < 0.3:
             raise RuntimeError(f"voice clip for {lid} is empty")
+        if cached:
+            shutil.copyfile(wav, cached)
         results[lid] = (dur, env)
         print(f"  {lid}: {dur:.2f}s")
     for f in os.listdir(vdir):
@@ -197,6 +224,7 @@ def main():
     ap.add_argument("screenplay")
     ap.add_argument("out")
     ap.add_argument("--provider", default="auto", choices=["auto", "gemini", "edge", "espeak", "none"])
+    ap.add_argument("--cache", default="")
     a = ap.parse_args()
     with open(a.screenplay, encoding="utf-8") as f:
         sp = json.load(f)
@@ -226,7 +254,7 @@ def main():
             continue
         print("voice provider:", prov)
         try:
-            results = make_voices(sp, a.out, prov)
+            results = make_voices(sp, a.out, prov, a.cache)
             used = prov
             break
         except Exception as e:

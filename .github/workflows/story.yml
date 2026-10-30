@@ -114,9 +114,15 @@ jobs:
             cp "story/screenplays/$SCRIPT.json" story-out/screenplay.json
             python3 -c "import json; print('time=' + json.load(open('story-out/screenplay.json')).get('time', 'dusk'))" >> "$GITHUB_OUTPUT"
           fi
+      # voice clips made before (same line, same voice) are reused: no quota spent on them
+      - uses: actions/cache@v4
+        with:
+          path: story-cache
+          key: story-voices-${{ github.run_id }}
+          restore-keys: story-voices-
       - name: Voices
         id: voices
-        run: python3 tools/story/voices.py story-out/screenplay.json story-out --provider "$VOICE"
+        run: python3 tools/story/voices.py story-out/screenplay.json story-out --provider "$VOICE" --cache story-cache
       - name: Record
         env:
           MODE: chase
