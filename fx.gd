@@ -26,11 +26,21 @@ const SKID_MAX := 700
 var sounds := {}
 var sfx_pool: Array[AudioStreamPlayer3D] = []
 var sfx_i := 0
+# Recorded sounds from res://audio. A missing file is simply absent here and the
+# synthesized version in `sounds` plays instead.
+const BANK_FILES := ["siren_loop", "heli_loop", "crash_a", "crash_b", "crash_heavy", "boom", "screech"]
+var bank := {}
+var big_pool: Array[AudioStreamPlayer3D] = []   # long recordings; kept apart so a crash tail is not cut by small sounds
+var big_i := 0
+var big_last := {}                              # cooldown key -> main.clock of the last play
 var engine_player: AudioStreamPlayer
 var engine_pb: AudioStreamGeneratorPlayback
 var engine_phase := 0.0
 var engine_noise := 0.0
 const MIX := 22050.0
+const SCREECH_ON := false   # tyre squeal switched off: it sounded bad. true brings it back
+const MEDIUM_HIT := 6.0     # impact sizes (see Car._apply_impact) that get a recorded crash
+const HEAVY_HIT := 16.0
 
 
 func setup(main_node) -> void:
@@ -160,12 +170,19 @@ func setup(main_node) -> void:
 	add_child(smi)
 
 	_make_sounds()
+	_load_bank()
 	for i in 10:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 30.0
 		p.max_distance = 260.0
 		add_child(p)
 		sfx_pool.append(p)
+	for i in 6:
+		var p := AudioStreamPlayer3D.new()
+		p.unit_size = 34.0
+		p.max_distance = 300.0
+		add_child(p)
+		big_pool.append(p)
 	engine_player = AudioStreamPlayer.new()
 	var gen := AudioStreamGenerator.new()
 	gen.mix_rate = MIX
@@ -386,6 +403,81 @@ func _siren(period: float) -> AudioStreamWAV:
 	w.loop_begin = 0
 	w.loop_end = n
 	return w
+
+
+func _load_bank() -> void:
+	for n: String in BANK_FILES:
+		var path := "res://audio/%s.ogg" % n
+		if not ResourceLoader.exists(path):
+			continue
+		var res: Resource = load(path)
+		if res is AudioStreamOggVorbis:
+			(res as AudioStreamOggVorbis).loop = n.ends_with("_loop")
+			bank[n] = res
+
+
+func has_bank(name: String) -> bool:
+	return bank.has(name)
+
+
+# The recorded loop `name`, or the synthesized sound `fallback` if the file is missing.
+func stream_for(name: String, fallback: String) -> AudioStream:
+	if bank.has(name):
+		return bank[name]
+	return sounds[fallback]
+
+
+# Stops every sound. Headless test runs use it just before quitting: Godot reports loaded
+# sounds that are still playing at exit as leaked resources.
+func silence() -> void:
+	for n in get_tree().root.find_children("*", "AudioStreamPlayer3D", true, false):
+		(n as AudioStreamPlayer3D).stop()
+	engine_player.stop()
+
+
+# Plays one of the recorded sounds in `names` (at random). `key` and `cooldown` stop a
+# pile-up from stacking the same kind of sound. False if nothing played, so the caller
+# can fall back to a synthesized sound.
+func play_big(names: Array, pos: Vector3, vol_db: float, key: String, cooldown: float) -> bool:
+	var avail: Array[String] = []
+	for n: String in names:
+		if bank.has(n):
+			avail.append(n)
+	if avail.is_empty():
+		return false
+	var now: float = main.clock
+	if now - float(big_last.get(key, -99.0)) < cooldown:
+		return false
+	big_last[key] = now
+	var p := big_pool[big_i]
+	big_i = (big_i + 1) % big_pool.size()
+	p.stream = bank[avail[randi() % avail.size()]]
+	p.global_position = pos
+	p.volume_db = vol_db
+	p.pitch_scale = randf_range(0.95, 1.05)
+	p.play()
+	return true
+
+
+# Car-on-car / car-on-wall hit. `total` is the speed change of the impact (m/s).
+func crash(pos: Vector3, total: float) -> void:
+	var vol := clampf(total * 0.5 - 6.0, -8.0, 2.0)
+	if total >= HEAVY_HIT and play_big(["crash_heavy"], pos, vol - 2.0, "heavy", 1.4):
+		return
+	if total >= MEDIUM_HIT and play_big(["crash_a", "crash_b"], pos, vol - 4.0, "crash", 0.45):
+		return
+	play("crash", pos, vol)
+
+
+# Deep boom layered over the synthesized blast of anything big enough to be a real explosion.
+func boom(pos: Vector3, radius: float) -> void:
+	if radius >= 6.0:
+		play_big(["boom"], pos, clampf(radius * 0.5 - 6.0, -4.0, 2.0), "boom", 0.4)
+
+
+func screech(pos: Vector3, vol_db: float) -> void:
+	if SCREECH_ON:
+		play_big(["screech"], pos, vol_db, "screech", 1.4)
 
 
 func play(name: String, pos: Vector3, vol_db: float = 0.0) -> void:

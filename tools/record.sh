@@ -47,9 +47,16 @@ fi
 [ -s "$OUT/take.avi" ] || { echo "::error::no video was written"; exit 1; }
 [ -s "$OUT/summary.json" ] || { echo "::error::the bot run did not finish (no summary.json), see godot.log"; exit 1; }
 
-ffmpeg -y -loglevel error -i "$OUT/take.avi" -c:v libx264 -preset medium -crf 24 -maxrate 10M -bufsize 20M \
+# one steady gain so every clip has the same loudness (sirens and crashes vary a lot)
+AF=$(python3 tools/loudnorm.py "$OUT/take.avi" || true)
+echo "audio filter: ${AF:-none}"
+ffmpeg -y -loglevel error -i "$OUT/take.avi" ${AF:+-af "$AF"} -c:v libx264 -preset medium -crf 24 -maxrate 10M -bufsize 20M \
   -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "$OUT/video.mp4"
 rm -f "$OUT/take.avi"
+# loudness numbers and a spectrogram of the soundtrack, to check the sounds are there
+ffmpeg -hide_banner -nostats -i "$OUT/video.mp4" -vn -af ebur128=peak=true -f null - 2>&1 | sed -n '/Summary:/,$p' > "$OUT/loudness.txt" || true
+cat "$OUT/loudness.txt"
+ffmpeg -y -loglevel error -i "$OUT/video.mp4" -lavfi "showspectrumpic=s=1400x480:legend=0:stop=6000" "$OUT/audio.png" || true
 mkdir -p "$OUT/frames"
 ffmpeg -y -loglevel error -i "$OUT/video.mp4" -vf "fps=1/3,scale=360:-2" "$OUT/frames/f_%02d.jpg"
 echo "$SEED" > "$OUT/seed.txt"

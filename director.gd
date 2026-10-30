@@ -952,7 +952,14 @@ func _finish() -> void:
 	finished = true
 	# quit first: it takes effect after this frame, so the clip ends on time even
 	# if something below goes wrong
-	get_tree().quit()
+	if DisplayServer.get_name() == "headless":
+		# test runs: stop all sound and give the audio thread a moment to let go of it,
+		# or Godot reports the loaded sound files as leaked at exit
+		main.process_mode = Node.PROCESS_MODE_DISABLED
+		main.fx.silence()
+		get_tree().create_timer(0.5, true, false, true).timeout.connect(get_tree().quit)
+	else:
+		get_tree().quit()
 	var js := JSON.stringify(summary())
 	print("SUMMARY ", js)
 	if summary_path != "":
