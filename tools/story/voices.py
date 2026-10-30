@@ -214,9 +214,12 @@ def main():
              "edge": ["edge", "none"], "espeak": ["espeak", "none"], "none": ["none"]}[a.provider]
     used, results = "none", {}
     for prov in order:
-        if prov == "gemini" and not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
-            print("no Gemini key (GEMINI_API_KEY)")
-            continue
+        if prov == "gemini":
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import gemini
+            if not gemini.keys():
+                print("no Gemini key (GEMINI_API_KEY)")
+                continue
         if prov == "edge":
             try:
                 import edge_tts  # noqa: F401

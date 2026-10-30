@@ -1,8 +1,9 @@
 """Story lab: a small Gemini API client (Python standard library only).
 
-The key comes from the environment: GEMINI_API_KEY (or GOOGLE_API_KEY). Models are picked
-from the ones this key can use, so a renamed or retired model does not break the
-workflow; GEMINI_TEXT_MODEL / GEMINI_TTS_MODEL force a specific one.
+Keys come from the environment: GEMINI_API_KEY and GEMINI_API_KEY_1 ... _9 (or GOOGLE_API_KEY).
+When a key is out of quota, refused or invalid, the next one is used. Models are picked from
+the ones the key can use, so a renamed or retired model does not break the workflow;
+GEMINI_TEXT_MODEL / GEMINI_TTS_MODEL force a specific one.
 """
 import base64
 import json
@@ -22,11 +23,48 @@ class GeminiError(Exception):
         self.retry_after = retry_after
 
 
+KEY_NAMES = ["GEMINI_API_KEY"] + [f"GEMINI_API_KEY_{i}" for i in range(1, 10)] + ["GOOGLE_API_KEY"]
+_keys = None
+_ki = 0
+
+
+def keys():
+    global _keys
+    if _keys is None:
+        _keys = []
+        for name in KEY_NAMES:
+            v = os.environ.get(name, "").strip()
+            if v and v not in _keys:
+                _keys.append(v)
+    return _keys
+
+
 def key():
-    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
-        v = os.environ.get(name, "").strip()
-        if v:
-            return v
+    k = keys()
+    return k[_ki] if _ki < len(k) else ""
+
+
+def next_key(reason):
+    """Moves on to the next key. False if this was the last one."""
+    global _ki
+    if _ki + 1 >= len(keys()):
+        return False
+    _ki += 1
+    print(f"  switching to Gemini key {_ki + 1} of {len(keys())} ({reason})")
+    return True
+
+
+def key_problem(err):
+    """Why this key cannot be used (out of quota, refused, invalid), or "" if it is something else."""
+    text = str(err)
+    if err.status in (401, 403):
+        return "refused"
+    if err.status == 400 and re.search(r"API_KEY_INVALID|API key not valid|API key expired", text):
+        return "invalid"
+    if daily_quota_gone(err):
+        return "daily quota used up"
+    if err.status == 429 and re.search(r"limit: 0\b|RESOURCE_EXHAUSTED.*free_tier.*limit: 0", text, re.S):
+        return "no quota for this model"
     return ""
 
 
@@ -49,16 +87,26 @@ def daily_quota_gone(err):
     return err.status == 429 and re.search(r"per ?day|PerDay|daily", str(err), re.I) is not None
 
 
-def call(path, body, tries=5, max_wait=75):
-    """POST with retries on busy / rate-limit answers (honours the server's retryDelay)."""
-    for i in range(tries):
+def call(path, body, tries=5, max_wait=75, method="POST"):
+    """A request with retries: busy or rate-limited answers wait (honouring the server's
+    retryDelay); a key that is out of quota or refused is swapped for the next key."""
+    i = 0
+    while True:
         try:
-            return _request("POST", path, body)
+            return _request(method, path, body)
         except GeminiError as e:
-            busy = e.status in (429, 500, 502, 503, 504) or e.status == 0
-            if not busy or i == tries - 1 or daily_quota_gone(e):
+            why = key_problem(e)
+            if why:
+                if next_key(why):
+                    continue
                 raise
-            wait = min(max(e.retry_after, 5.0 * (i + 1)), max_wait)
+            busy = e.status in (429, 500, 502, 503, 504) or e.status == 0
+            if e.status == 429 and next_key("rate limit"):
+                continue
+            i += 1
+            if not busy or i >= tries:
+                raise
+            wait = min(max(e.retry_after, 5.0 * i), max_wait)
             print(f"  gemini busy ({e.status or 'network'}), trying again in {wait:.0f}s")
             time.sleep(wait)
 
@@ -71,7 +119,7 @@ def models():
     if _models is None:
         out, token = [], ""
         while True:
-            r = _request("GET", "/models?pageSize=1000" + (f"&pageToken={token}" if token else ""))
+            r = call("/models?pageSize=1000" + (f"&pageToken={token}" if token else ""), None, method="GET")
             out += r.get("models", [])
             token = r.get("nextPageToken", "")
             if not token:

@@ -6,8 +6,9 @@ name: Story video (experiment)
 # Actions tab -> "Story video (experiment)" -> Run workflow. The run attaches the MP4, a
 # thumbnail, the upload text and the screenplay (which you can save to story/screenplays).
 #
-# Needs a repository secret GEMINI_API_KEY for the AI writer and the Gemini voices. Without it
-# the saved episode and the free Edge voices are used.
+# Needs repository secrets GEMINI_API_KEY (or GEMINI_API_KEY_1, _2, ... ; the next is used when one
+# runs out) for the AI writer and the Gemini voices. Without them the saved episode and the
+# free Edge voices are used.
 # On every push to story-lab it makes a small, quick preview of the saved episode instead.
 on:
   workflow_dispatch:
@@ -67,11 +68,15 @@ jobs:
     timeout-minutes: 180
     env:
       PREVIEW: ${{ github.event_name == 'push' }}
-      # the usual names for the key; GEMINI_API_KEY is the one to use
+      # Gemini keys: when one runs out of quota the next one is used
       GEMINI_API_KEY: >-
         ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY || secrets.GEMINI_KEY || secrets.GEMINI
-        || secrets.GEMINI_AI_KEY || secrets.GEMINI_API || secrets.GOOGLE_GEMINI_API_KEY || secrets.GEMINI_TOKEN
-        || secrets.API_KEY || vars.GEMINI_API_KEY }}
+        || secrets.GEMINI_AI_KEY || secrets.GEMINI_API || secrets.GOOGLE_GEMINI_API_KEY || vars.GEMINI_API_KEY }}
+      GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+      GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+      GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
+      GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
       STORY_TYPE: ${{ inputs.story_type || 'funny' }}
       IDEA: ${{ inputs.idea }}
       SCRIPT: ${{ inputs.script || 'ep1_date_night' }}
@@ -97,7 +102,8 @@ jobs:
             libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
           pip install --quiet edge-tts
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
-          if [ -n "$GEMINI_API_KEY" ]; then echo "Gemini key: found"; else echo "::warning::No GEMINI_API_KEY secret: using the saved episode and the free voices"; fi
+          n=$(python3 -c "import sys; sys.path.insert(0, 'tools/story'); import gemini; print(len(gemini.keys()))")
+          if [ "$n" -gt 0 ]; then echo "Gemini keys found: $n"; else echo "::warning::No GEMINI_API_KEY secret: using the saved episode and the free voices"; fi
       - name: Write the episode
         id: write
         run: |
