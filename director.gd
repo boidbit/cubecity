@@ -136,9 +136,57 @@ func _opening_police(n: int) -> void:
 # Called by main when a police car is due. Spawning on the road the car just drove
 # down puts the pack behind it, where the camera can see the chase.
 func spawn_police() -> bool:
-	if mode == "destroy" or main.cam_mode == "front" or randf() < 0.35:
+	if mode == "destroy" or main.cam_mode == "front":
+		return false
+	# a mix of directions: out of side streets, head-on from ahead, from behind.
+	# Returning false lets the game pick its own spot.
+	var r := randf()
+	if r < 0.35:
+		return _spawn_side()
+	if r < 0.5:
+		return _spawn_ahead()
+	if r < 0.65:
 		return false
 	return _spawn_behind(randf_range(55.0, 80.0))
+
+
+# Out of the next side street, timed to reach the road just behind the bot.
+func _spawn_side() -> bool:
+	var n := bot.node_ahead()
+	if bot._blocked(n):
+		return false
+	var pl: Car = main.player
+	var np: Vector3 = main.world.node_pos(n)
+	var along := Vector3(np.x - pl.global_position.x, 0, np.z - pl.global_position.z).length()
+	if along < 70.0 or along > 160.0:
+		return false
+	var h: Vector2i = bot._grid_dir()
+	var sgn := 1.0 if randf() < 0.5 else -1.0
+	var away := Vector3(h.y, 0, h.x) * sgn          # along the cross street, away from the crossing
+	var eta := along / maxf(pl.speed, 15.0) + 0.9
+	var pos := np + away * clampf(eta * 22.0, 35.0, 130.0)
+	var f := -away
+	pos += Vector3.UP.cross(f) * 3.5
+	pos.y = 0.9
+	var lim: float = World.HALF - 8.0
+	if absf(pos.x) > lim or absf(pos.z) > lim or pos.distance_to(pl.global_position) < 50.0:
+		return false
+	main.spawn_police_at(pos, atan2(-f.x, -f.z), 20.0)
+	return true
+
+
+# Head-on down the road the bot is driving: it has to thread past.
+func _spawn_ahead() -> bool:
+	var dist := bot.straight_ahead()
+	if dist < 170.0 or bot.busy():
+		return false
+	var pa: Dictionary = bot.point_ahead(minf(dist - 30.0, 190.0))
+	var dirv: Vector3 = pa["dir"]
+	var f := -dirv
+	var pos: Vector3 = pa["pos"] + Vector3.UP.cross(f) * 3.5
+	pos.y = 0.9
+	main.spawn_police_at(pos, atan2(-f.x, -f.z), 22.0)
+	return true
 
 
 func _spawn_behind(back: float) -> bool:
@@ -312,7 +360,7 @@ func _camera(t: float) -> void:
 	if main.cam_mode != "chase":
 		main.cam_mode = "chase"
 		main.cam_cut = true
-		next_shot = t + randf_range(5.0, 8.0)
+		next_shot = t + randf_range(3.5, 5.5)
 		return
 	if t < next_shot or bot.busy() or main.player.airtime > 0.0:
 		return
@@ -320,7 +368,7 @@ func _camera(t: float) -> void:
 	if _police_behind(50.0) >= 1 and bot.straight_ahead() > 80.0:
 		main.cam_mode = "front"
 		main.cam_cut = true
-		shot_end = t + 2.4
+		shot_end = t + 3.2
 	elif main.alive_police() >= 4:
 		main.cam_mode = "heli"
 		main.cam_cut = true

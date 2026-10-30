@@ -51,6 +51,7 @@ var cam_dir := Vector3(0, 0, -1)
 var cam_mode := "chase"
 var cam_cut := false
 var cam_steer := 0.0
+var cam_cop_back := 0.0
 var tod := 0.22
 var tod_rate := 1.0 / 480.0
 var rain_amt := 0.0
@@ -419,6 +420,7 @@ func _update_police(dt: float) -> void:
 	if spawn_t <= 0.0 and police.size() < cap:
 		spawn_t = randf_range(spawn_gap.x, spawn_gap.y)
 		_spawn_police()
+	_assign_attackers()
 	for c in police.duplicate():
 		if not is_instance_valid(c):
 			police.erase(c)
@@ -443,6 +445,19 @@ func _update_police(dt: float) -> void:
 		if block_t <= 0.0 and blocks.size() < 4:
 			block_t = maxf(10.0, 30.0 - level * 3.0)
 			_spawn_roadblock()
+
+
+# At most two police cars press the player at once. The rest shadow at a distance and
+# take over when one is wrecked or backs off: this stops a pack boxing the player in.
+func _assign_attackers() -> void:
+	var live: Array[Car] = []
+	for c in police:
+		if is_instance_valid(c) and not c.dead and not c.is_swat:
+			live.append(c)
+	var pp := player.global_position
+	live.sort_custom(func(a: Car, b: Car) -> bool: return a.global_position.distance_squared_to(pp) < b.global_position.distance_squared_to(pp))
+	for i in live.size():
+		live[i].hold = i >= 2
 
 
 # Every crime adds heat. The first one puts you on the police radar.
@@ -603,11 +618,27 @@ func _cam_chase(dt: float) -> void:
 	var back := 8.2 + spd * 0.05
 	var up := 3.5 + spd * 0.02
 	var ahead := 6.0
+	var cop_back := 0.0
+	if director != null:
+		# keep the nearest police behind the player in the frame: the camera backs up
+		# to stay behind them (the longer the gap, the further back and higher)
+		var sideways := fwd.cross(Vector3.UP)
+		for c in police:
+			if not is_instance_valid(c) or c.dead:
+				continue
+			var rel := c.global_position - player.global_position
+			rel.y = 0.0
+			var behind := -rel.dot(fwd)
+			if behind > 0.0 and behind < 38.0 and absf(rel.dot(sideways)) < 14.0:
+				cop_back = maxf(cop_back, behind)
+		cam_cop_back = lerpf(cam_cop_back, minf(cop_back, 24.0), 1.0 - exp(-2.5 * dt))
 	if vertical:
 		# higher and steeper, so the police behind the car stay in the frame
 		back = 6.5 + spd * 0.05
 		up = 4.8 + spd * 0.03
 		ahead = 5.0
+	back += cam_cop_back * 0.75
+	up += cam_cop_back * 0.3
 	var target := _cam_clear(player.global_position - cam_dir * back + Vector3(0, up, 0))
 	var p := target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-9.0 * dt))
 	p += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake

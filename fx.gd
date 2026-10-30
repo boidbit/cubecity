@@ -7,15 +7,16 @@ var fire_mesh: SphereMesh
 var smoke_mesh: SphereMesh
 var dust_mesh: SphereMesh
 var spark_mesh: BoxMesh
-var fireball_mesh: SphereMesh
 var grow_fade: Curve
 var shrink: Curve
 var dust_pool: Array[CPUParticles3D] = []
 var fire_pool: Array[CPUParticles3D] = []
+var core_pool: Array[CPUParticles3D] = []
+var fire_ramp: Gradient
 var smoke_pool: Array[CPUParticles3D] = []
 var spark_pool: Array[CPUParticles3D] = []
 var tire_pool: Array[CPUParticles3D] = []
-var idx := {"dust": 0, "fire": 0, "smoke": 0, "spark": 0, "tire": 0}
+var idx := {"dust": 0, "fire": 0, "core": 0, "smoke": 0, "spark": 0, "tire": 0}
 var flash: OmniLight3D
 var skid_mm: MultiMesh
 var skid_i := 0
@@ -38,6 +39,7 @@ func setup(main_node) -> void:
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fm.vertex_color_use_as_albedo = true
 	fm.albedo_color = Color(1, 0.55, 0.12)
+	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fire_mesh = SphereMesh.new()
 	fire_mesh.radius = 0.3
 	fire_mesh.height = 0.6
@@ -76,15 +78,14 @@ func setup(main_node) -> void:
 	spark_mesh.size = Vector3(0.1, 0.1, 0.3)
 	spark_mesh.material = pm
 
-	fireball_mesh = SphereMesh.new()
-	fireball_mesh.radius = 1.0
-	fireball_mesh.height = 2.0
-	fireball_mesh.radial_segments = 14
-	fireball_mesh.rings = 8
-
 	fade = Gradient.new()
 	fade.set_color(0, Color(1, 1, 1, 0.85))
 	fade.set_color(1, Color(1, 1, 1, 0.0))
+	# white-hot core, then orange, then dark red and gone
+	fire_ramp = Gradient.new()
+	fire_ramp.set_color(0, Color(1.0, 0.96, 0.65, 1.0))
+	fire_ramp.set_color(1, Color(0.3, 0.08, 0.03, 0.0))
+	fire_ramp.add_point(0.35, Color(1.0, 0.52, 0.1, 0.95))
 	grow_fade = Curve.new()
 	grow_fade.add_point(Vector2(0.0, 0.35))
 	grow_fade.add_point(Vector2(0.35, 1.0))
@@ -96,8 +97,21 @@ func setup(main_node) -> void:
 	for i in 8:
 		dust_pool.append(_pool_node(dust_mesh, 24, 2.6, Vector3(0, 0.6, 0), 1.5, 5.0, 180.0, grow_fade, Color(0.8, 0.77, 0.72, 0.8)))
 	for i in 4:
-		fire_pool.append(_pool_node(fire_mesh, 40, 0.9, Vector3(0, -12, 0), 4.0, 12.0, 180.0, shrink, Color.WHITE))
-		smoke_pool.append(_pool_node(smoke_mesh, 16, 2.2, Vector3(0, 2.2, 0), 1.0, 4.0, 180.0, grow_fade, Color(0.5, 0.5, 0.5, 0.85)))
+		var fp := _pool_node(fire_mesh, 40, 0.85, Vector3(0, -4, 0), 4.0, 13.0, 180.0, shrink, Color.WHITE)
+		fp.color_ramp = fire_ramp
+		fp.scale_amount_min = 1.6
+		fp.scale_amount_max = 3.4
+		fire_pool.append(fp)
+		# flame column rising out of the middle of the blast
+		var cp := _pool_node(fire_mesh, 20, 0.8, Vector3(0, 5.0, 0), 2.0, 7.0, 32.0, shrink, Color.WHITE)
+		cp.color_ramp = fire_ramp
+		cp.scale_amount_min = 2.0
+		cp.scale_amount_max = 4.2
+		core_pool.append(cp)
+		var sp := _pool_node(smoke_mesh, 16, 2.6, Vector3(0, 2.2, 0), 1.0, 4.5, 180.0, grow_fade, Color(0.22, 0.21, 0.2, 0.9))
+		sp.scale_amount_min = 1.5
+		sp.scale_amount_max = 2.8
+		smoke_pool.append(sp)
 	for i in 8:
 		spark_pool.append(_pool_node(spark_mesh, 14, 0.6, Vector3(0, -14, 0), 4.0, 11.0, 60.0, shrink, Color.WHITE))
 	for i in 12:
@@ -199,26 +213,15 @@ func tire_smoke(pos: Vector3) -> void:
 
 
 func explosion(pos: Vector3, power: float) -> void:
-	_fire_at(_next(fire_pool, "fire"), pos, clampi(int(24 + power * 3.0), 24, 60))
-	_fire_at(_next(smoke_pool, "smoke"), pos + Vector3(0, 1, 0), clampi(int(8 + power), 8, 24))
-	var fb := MeshInstance3D.new()
-	fb.mesh = fireball_mesh
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.albedo_color = Color(1.0, 0.62, 0.2, 0.9)
-	fb.material_override = m
-	fb.scale = Vector3.ONE * 0.6
-	add_child(fb)
-	fb.global_position = pos + Vector3(0, 0.8, 0)
-	var tw := create_tween()
-	tw.tween_property(fb, "scale", Vector3.ONE * (2.2 + power * 0.4), 0.38)
-	tw.parallel().tween_property(m, "albedo_color:a", 0.0, 0.38)
-	tw.tween_callback(fb.queue_free)
+	_fire_at(_next(fire_pool, "fire"), pos + Vector3(0, 0.6, 0), clampi(int(26 + power * 3.0), 26, 64))
+	_fire_at(_next(core_pool, "core"), pos + Vector3(0, 0.4, 0), clampi(int(12 + power * 1.5), 12, 30))
+	_fire_at(_next(smoke_pool, "smoke"), pos + Vector3(0, 1.2, 0), clampi(int(10 + power), 10, 26))
+	_fire_at(_next(spark_pool, "spark"), pos + Vector3(0, 0.8, 0), clampi(int(14 + power * 2.0), 14, 40))
+	dust(pos, int(power * 6.0))
 	flash.global_position = pos + Vector3(0, 3, 0)
-	flash.light_energy = 7.0
+	flash.light_energy = 9.0
 	var t2 := create_tween()
-	t2.tween_property(flash, "light_energy", 0.0, 0.5)
+	t2.tween_property(flash, "light_energy", 0.0, 0.45)
 
 
 func make_smoke() -> CPUParticles3D:

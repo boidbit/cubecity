@@ -72,6 +72,7 @@ var path_t := 0.0
 var backoff_t := 0.0
 var backoff_steer := 0.0
 var ram_cd := 0.0
+var hold := false          # set by main: too many police are on the player, so shadow instead of ramming
 
 
 func build(color: Color, player: bool, k: String = "") -> void:
@@ -542,6 +543,13 @@ func _assists(delta: float, grounded: int, fwd: Vector3) -> void:
 	if nitro_active:
 		nitro = maxf(0.0, nitro - 28.0 * delta)
 		apply_central_force(fwd * mass * 9.0)
+		# a nitro-boosted car is hard to pin: it shoves police cars out of the way
+		for b in get_colliding_bodies():
+			var other := b as Car
+			if other != null and not other.is_player and not other.is_block:
+				var away := other.global_position - global_position
+				away.y = 0.0
+				other.apply_central_impulse(away.normalized() * other.mass * 0.3)
 	flame.emitting = nitro_active
 
 
@@ -677,6 +685,10 @@ func _ai(delta: float) -> void:
 			path.remove_at(0)
 		if not path.is_empty():
 			aim = path[0]
+	elif hold and dist < 22.0:
+		var hf: Vector3 = -target.global_transform.basis.z
+		var hr: Vector3 = target.global_transform.basis.x
+		aim = tpos - hf * 12.0 + hr * pit_side * 5.0
 	elif dist < 22.0 and target.speed > 6.0 and not is_swat:
 		var tf: Vector3 = -target.global_transform.basis.z
 		var tr: Vector3 = target.global_transform.basis.x
@@ -721,7 +733,10 @@ func _ai(delta: float) -> void:
 	if blocked:
 		want = minf(want, 8.0)
 	input_gas = clampf((want - fwd_speed) * 0.35, -1.0, 1.0)
-	if dist < 6.0 and absf(diff) < 0.6 and ram_cd <= 0.0:
+	if hold and dist < 26.0:
+		want = minf(want, maxf(target.speed, 5.0) + 2.0)
+		input_gas = clampf((want - fwd_speed) * 0.35, -1.0, 1.0)
+	elif dist < 6.0 and absf(diff) < 0.6 and ram_cd <= 0.0:
 		input_gas = 1.0
 	input_hb = 0.0
 
