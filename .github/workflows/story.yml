@@ -40,7 +40,7 @@ on:
     paths: ["story/**", "tools/story/**", ".github/workflows/story.yml"]
 
 concurrency:
-  group: story-${{ github.ref }}
+  group: story-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
