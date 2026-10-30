@@ -15,6 +15,11 @@ Voice providers (--provider):
   auto    gemini (if there is a key), then edge, then espeak, then none (the default)
 A provider that fails part way is dropped for the whole story, so one episode never mixes
 two sets of voices.
+
+With Gemini the two main characters are spoken as one conversation in a single request (the
+free plan allows only a few requests a day) and the recording is cut into lines by
+tools/story/dialogue.py; if the cuts do not look right it falls back to one request per line.
+GEMINI_TTS_MODE=line always uses one request per line.
 Set CUBE_CA_BUNDLE to a CA file if edge-tts must go through a TLS-inspecting proxy.
 
 Voice clips are kept in a cache (--cache DIR, by provider, voice and text), so a line that was
@@ -156,6 +161,58 @@ def cache_name(provider, voice, line):
     return hashlib.sha1(f"{provider}|{who}|{text}".encode()).hexdigest()[:20] + ".wav"
 
 
+def dialogue_voices(sp, vdir, cache, results):
+    """Gemini: the main characters' lines in one request, cut into clips. Fills results."""
+    if os.environ.get("GEMINI_TTS_MODE", "dialogue") == "line":
+        return
+    cast = sp.get("cast", {})
+    leads = [k for k, c in cast.items() if c.get("seat")]
+    lines = [l for l in spoken(sp) if l.get("say", l.get("who")) in leads]
+    if len(leads) != 2 or len(lines) < 2:
+        return
+    todo = [l for l in lines if not (cache and os.path.exists(os.path.join(cache, cache_name("gemini", cast[l.get("say", l.get("who"))].get("voice", {}), l))))]
+    if not todo:
+        return            # all in the cache already
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import dialogue
+        import gemini
+    except ImportError as e:
+        print(f"  dialogue mode not available ({e}): one request per line")
+        return
+    name = {k: k.title() for k in leads}
+    voices = {name[k]: cast[k].get("voice", {}).get("gemini", "Kore") for k in leads}
+    turns = [(name[l.get("say", l.get("who"))], l.get("tts") or l.get("sub", "")) for l in lines]
+    print(f"  dialogue: {len(lines)} lines of {' and '.join(voices)} in one request")
+    pcm, rate, _ = gemini.speak_dialogue(turns, voices)
+    raw = os.path.join(vdir, "dialogue.pcm")
+    full = os.path.join(os.path.dirname(vdir), "dialogue.wav")
+    with open(raw, "wb") as f:
+        f.write(pcm)
+    r = sh(["ffmpeg", "-y", "-v", "error", "-f", "s16le", "-ar", str(rate), "-ac", "1", "-i", raw, full])
+    os.remove(raw)
+    if r.returncode != 0:
+        print("  could not read the dialogue audio: one request per line")
+        return
+    spans, ok, report = dialogue.split(full, turns)
+    print(f"  dialogue cut: {'ok' if ok else 'NOT ok'} ({report})")
+    if not ok:
+        print("  one request per line instead")
+        return
+    parts = [os.path.join(vdir, l["id"] + ".part.wav") for l in lines]
+    dialogue.cut(full, spans, parts)
+    for l, part in zip(lines, parts):
+        wav = os.path.join(vdir, l["id"] + ".wav")
+        to_wav(part, wav)
+        os.remove(part)
+        dur, env = analyze(wav)
+        results[l["id"]] = (dur, env)
+        if cache:
+            v = cast[l.get("say", l.get("who"))].get("voice", {})
+            shutil.copyfile(wav, os.path.join(cache, cache_name("gemini", v, l)))
+        print(f"  {l['id']}: {dur:.2f}s (from the dialogue)")
+
+
 def make_voices(sp, out, provider, cache=""):
     vdir = os.path.join(out, "voices")
     os.makedirs(vdir, exist_ok=True)
@@ -163,8 +220,12 @@ def make_voices(sp, out, provider, cache=""):
         os.makedirs(cache, exist_ok=True)
     cast = sp.get("cast", {})
     results = {}
+    if provider == "gemini":
+        dialogue_voices(sp, vdir, cache, results)
     for line in spoken(sp):
         lid = line["id"]
+        if lid in results:
+            continue
         who = cast.get(line.get("say", line.get("who", "")), {})
         v = who.get("voice", {})
         wav = os.path.join(vdir, lid + ".wav")

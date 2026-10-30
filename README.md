@@ -64,8 +64,13 @@ out of the Android build (`exclude_filter` in `export_presets.cfg`).
   (funny, romantic, cringe, happy, sad, action, twist), type an idea if you have one, and Gemini
   writes the episode, the characters get Gemini voices, the game stages it, and the run attaches
   the MP4, a thumbnail, the upload text and the screenplay. The run page shows the script.
-- **Gemini key:** add it as a repository secret named `GEMINI_API_KEY` (Settings -> Secrets and
-  variables -> Actions). Without it the saved episode and the free Edge voices are used.
+- **Gemini keys:** add them as repository secrets `GEMINI_API_KEY` or `GEMINI_API_KEY_1` ... `_5`
+  (Settings -> Secrets and variables -> Actions); when one runs out of quota the next is used.
+  Without a key the saved episode and the free Edge voices are used.
+- **Gemini voices and quota:** the free plan allows about 10 speech requests a day per key. The
+  two main characters are spoken as one conversation in a single request and cut into lines
+  (`tools/story/dialogue.py`), police lines are one request each, and every clip is cached, so an
+  episode costs about 2-4 requests. The raw conversation is in the run's `story-out/dialogue.wav`.
 - **Keep an episode:** copy `screenplay.json` from the run into `story/screenplays/` and add its
   name to the `script` choice in `.github/workflows/story.yml`.
 - **Screenplay format:** see the top of `story/story.gd` (lines, actions, endings, props).
