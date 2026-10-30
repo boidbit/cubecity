@@ -7,6 +7,8 @@ const HEAT_MAX := 100.0
 const LEVEL_HEAT := [1.0, 12.0, 30.0, 55.0, 85.0]   # heat needed for 1..5 stars
 const POLICE_CAP := [0, 3, 5, 6, 8, 10]              # by wanted level
 const BUSTED_TIME := 7.0                             # seconds boxed in before you are busted
+const SIRENS_AUDIBLE := 2                            # police cars that sound their siren at once
+const SIREN_RANGE := 110.0                           # ...and only if this close to the player
 
 var world: World
 var fx: Fx
@@ -412,6 +414,7 @@ func _update_police(dt: float) -> void:
 		spawn_t = randf_range(spawn_gap.x, spawn_gap.y)
 		_spawn_police()
 	_assign_attackers()
+	_assign_sirens()
 	for c in police.duplicate():
 		if not is_instance_valid(c):
 			police.erase(c)
@@ -454,6 +457,21 @@ func _assign_attackers() -> void:
 	live.sort_custom(func(a: Car, b: Car) -> bool: return a.global_position.distance_squared_to(pp) < b.global_position.distance_squared_to(pp))
 	for i in live.size():
 		live[i].hold = i >= 2
+
+
+# Only the two police cars nearest the player (within SIREN_RANGE) sound their siren; the
+# rest are silent, so a big pack is a couple of wails rather than a constant drone.
+func _assign_sirens() -> void:
+	var pp := player.global_position
+	var live: Array[Car] = []
+	for c in police:
+		if is_instance_valid(c) and not c.dead and c.siren_snd != null:
+			c.siren_want = false
+			live.append(c)
+	live.sort_custom(func(a: Car, b: Car) -> bool: return a.global_position.distance_squared_to(pp) < b.global_position.distance_squared_to(pp))
+	for i in mini(live.size(), SIRENS_AUDIBLE):
+		if live[i].global_position.distance_squared_to(pp) < SIREN_RANGE * SIREN_RANGE:
+			live[i].siren_want = true
 
 
 # Every crime adds heat. The first one puts you on the police radar.
@@ -771,6 +789,7 @@ func explode_at(pos: Vector3, radius: float, force: float, dmg: float, hurt_play
 				n.hurt(dmg * fl * 1.3)
 	fx.explosion(pos, radius)
 	fx.play("explosion", pos, 3.0)
+	fx.boom(pos, radius)
 	shake_cam(0.5 + radius * 0.06)
 	fov_kick = maxf(fov_kick, 4.0 + radius * 0.5)
 	if radius >= 6.5 and director != null and player.global_position.distance_to(pos) < 60.0:
@@ -916,7 +935,7 @@ func on_player_hurt(amount: float) -> void:
 
 func on_car_impact(car: Car, point: Vector3, total: float) -> void:
 	fx.sparks(point, clampi(int(total), 6, 22))
-	fx.play("crash", point, clampf(total * 0.5 - 6.0, -8.0, 2.0))
+	fx.crash(point, total)
 	if car.is_player:
 		shake_cam(0.2 + total * 0.03)
 

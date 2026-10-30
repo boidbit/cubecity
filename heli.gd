@@ -8,6 +8,9 @@ extends Node3D
 # States: chase (follow the car), intercept (fly to a point and wait for the car),
 # crash (falling), wreck (burning on the ground).
 
+const CHOP_DB_REC := 6.0       # the recorded rotor loop is mastered quieter than the synthesized one
+const CHOP_DB_SYNTH := -3.0
+
 var main
 var low := false              # recorded runs: chase at street level instead of high above
 var down := false             # shot down: it does not come back
@@ -129,10 +132,10 @@ func _build() -> void:
 	_part(_sphere(0.14), Vector3(0, 1.3, 6.6), nav_a)
 	_part(_sphere(0.16), Vector3(0, -1.0, 1.4), nav_b)
 	chop = AudioStreamPlayer3D.new()
-	chop.stream = main.fx.sounds["chop"]
+	chop.stream = main.fx.stream_for("heli_loop", "chop")
 	chop.unit_size = 22.0
 	chop.max_distance = 260.0
-	chop.volume_db = -3.0
+	chop.volume_db = CHOP_DB_REC if main.fx.has_bank("heli_loop") else CHOP_DB_SYNTH
 	chop.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_PHYSICS_STEP
 	add_child(chop)
 	fire = main.fx.make_fire()
@@ -218,6 +221,9 @@ func tick(dt: float) -> void:
 				down = true
 				fire.emitting = false
 				smoke.emitting = false
+	# the rotor note rises a little when it flies hard
+	var spd := (global_position - last_pos).length() / maxf(dt, 0.001)
+	chop.pitch_scale = lerpf(chop.pitch_scale, 0.95 + clampf(spd / 45.0, 0.0, 0.2), minf(4.0 * dt, 1.0))
 	last_pos = global_position
 
 
@@ -289,6 +295,7 @@ func _shot_down() -> void:
 	chop.stop()
 	main.fx.explosion(global_position, 5.0)
 	main.fx.play("explosion", global_position, 4.0)
+	main.fx.boom(global_position, 10.0)
 	main.shake_cam(1.0)
 	main.bonus += 1000
 	main.stats["heli_down"] += 1

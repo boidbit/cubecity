@@ -9,6 +9,8 @@ const STEER_OUT := 9.0       # how fast it returns to centre when released
 const STEER_LOW := 3.0       # speed (m/s) from which full turning is available
 const STEER_GAIN_LO := 2.2   # max turn rate when slow (rad/s)
 const STEER_GAIN_HI := 1.0   # max turn rate at 40 m/s (rad/s)
+const SIREN_DB_REC := -1.0   # siren volume with the recorded loop (it is mastered ~10 dB below the synthesized one)
+const SIREN_DB_SYNTH := -7.0
 
 var main
 var kind := "sport"
@@ -56,6 +58,9 @@ var siren_b: StandardMaterial3D
 var siren_light: OmniLight3D
 var siren_t := 0.0
 var siren_snd: AudioStreamPlayer3D
+var siren_want := false     # set by main: only the police nearest the player are heard
+var siren_gain := 0.0       # 0..1, eased so a siren fades in and out instead of cutting
+var siren_db := -2.0
 var head_lights: Array[SpotLight3D] = []
 var smoke: CPUParticles3D
 var fire: CPUParticles3D
@@ -308,19 +313,31 @@ func set_headlights(night: float) -> void:
 		l.light_energy = night * 6.0
 
 
-# Looping wail for chasing police. Slightly different pitch per car so a pack of
-# them drifts out of phase instead of droning in unison.
+# Looping wail for police. It only plays while main marks this car as one of the nearest
+# (`siren_want`); the rest stay silent so a pack does not become a constant drone. Each
+# car gets a slightly different pitch and start point so two together do not phase-lock.
 func add_siren() -> void:
 	siren_snd = AudioStreamPlayer3D.new()
-	siren_snd.stream = main.fx.sounds["siren"]
-	siren_snd.unit_size = 14.0
-	siren_snd.max_distance = 200.0
-	siren_snd.volume_db = -7.0
-	siren_snd.pitch_scale = randf_range(0.94, 1.06)
+	var recorded: bool = main.fx.has_bank("siren_loop")
+	siren_snd.stream = main.fx.stream_for("siren_loop", "siren")
+	siren_snd.unit_size = 12.0 if recorded else 14.0
+	siren_snd.max_distance = 140.0
+	siren_snd.pitch_scale = randf_range(0.95, 1.05)
 	siren_snd.doppler_tracking = AudioStreamPlayer3D.DOPPLER_TRACKING_PHYSICS_STEP
 	siren_snd.position = Vector3(0, 1.4, 0)
-	siren_snd.autoplay = true
+	siren_db = SIREN_DB_REC if recorded else SIREN_DB_SYNTH
+	siren_snd.volume_db = -80.0
 	add_child(siren_snd)
+
+
+func _siren_sound(delta: float) -> void:
+	siren_gain = move_toward(siren_gain, 1.0 if siren_want else 0.0, delta / 0.7)
+	if siren_gain > 0.01:
+		if not siren_snd.playing:
+			siren_snd.play(randf() * 2.0)
+		siren_snd.volume_db = siren_db + linear_to_db(siren_gain)
+	elif siren_snd.playing:
+		siren_snd.stop()
 
 
 # Max yaw rate the steering assist asks for at full lock. The bot uses it to turn
@@ -431,6 +448,8 @@ func _physics_process(delta: float) -> void:
 	_handle_impacts(delta)
 	if siren_a != null:
 		_siren(delta)
+	if siren_snd != null:
+		_siren_sound(delta)
 	if is_player:
 		if main.game_over:
 			input_gas = 0.0
@@ -593,11 +612,20 @@ func _skid_and_smoke() -> void:
 			var prev = skid_prev[i]
 			if prev != null:
 				main.fx.skid(prev, p)
+			elif speed > 9.0 and w.position.z > 0.0:
+				_screech(wp)
 			skid_prev[i] = p
 			if randf() < 0.35:
 				main.fx.tire_smoke(p)
 		else:
 			skid_prev[i] = null
+
+
+# A rear wheel just broke loose: squeal, but only for cars close enough to matter.
+func _screech(wp: Vector3) -> void:
+	var d: float = main.player.global_position.distance_to(wp)
+	if is_player or d < 40.0:
+		main.fx.screech(wp, -3.0 if is_player else -9.0)
 
 
 func _handle_impacts(delta: float) -> void:

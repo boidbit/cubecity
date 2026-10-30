@@ -1,6 +1,6 @@
 # Cube City Chase
 
-A mobile car-chase and destruction game made in Godot 4. Everything (city, cars, buildings, sounds, effects) is generated in code. There are no external models, textures or plugins.
+A mobile car-chase and destruction game made in Godot 4. The city, cars, buildings and effects are generated in code; there are no external models, textures or plugins. The only recorded assets are a few sound effects in `audio/` (credits in `audio/CREDITS.md`); if a file is missing, the game plays a synthesized sound instead.
 
 ## Features
 
@@ -94,7 +94,8 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `world.gd` | City generation, chunk streaming, ramps, flyovers, debris, routing |
 | `building.gd` | Destructible building data, meshes and collapse |
 | `props.gd` | Trees, lamps, barrels, gas stations, pickups, rooftop props |
-| `fx.gd` | Particles, skid marks, synthesized sounds |
+| `fx.gd` | Particles, skid marks, sound (recorded files from `audio/` with synthesized fallbacks) |
+| `audio/` | Sound effects (Ogg Vorbis): siren and rotor loops, crashes, boom, tyre screech |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade, ground, car and debris shaders |
 | `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |
