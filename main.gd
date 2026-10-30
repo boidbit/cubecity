@@ -718,6 +718,11 @@ func _update_env(dt: float) -> void:
 	sky_mat.ground_bottom_color = hor.darkened(0.3)
 	env.ambient_light_color = Color(0.18, 0.2, 0.32).lerp(Color(0.66, 0.7, 0.8), day)
 	env.ambient_light_energy = lerpf(1.1, 0.8, day)
+	if director != null:
+		# video runs: night must stay readable on a phone, so lift the ambient light and exposure
+		env.ambient_light_color = Color(0.34, 0.4, 0.6).lerp(Color(0.66, 0.7, 0.8), day)
+		env.ambient_light_energy = lerpf(2.0, 0.8, day)
+		env.tonemap_exposure = lerpf(1.5, 1.0, day)
 	env.fog_light_color = hor
 	env.fog_density = lerpf(0.0018, 0.0035, rain_amt)
 	sun.light_energy = lerpf(0.0, 1.2, day) * (1.0 - 0.55 * rain_amt)
