@@ -23,10 +23,23 @@ import gemini  # noqa: E402
 EMOTIONS = ["neutral", "smug", "love", "shock", "angry", "sad", "happy", "laugh"]
 GESTURES = ["talk", "up", "point", "wave", "idle"]
 ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers", "boom",
-           "prop_show", "prop_fly", "prop_hide", "slowmo", "stop", "go"]
-EVENTS = ["takeoff", "big_air", "prop_fly", "near_miss", "cop_wrecked", "roadblock"]
+           "prop_show", "prop_fly", "prop_hide", "slowmo", "stop", "go",
+           "park", "exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug",
+           "dance", "cheer", "hold", "give"]
+FOOT = ["walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer"]
+SPOTS = ["bench", "icecream", "chai"]       # sets put up where the car parks (park "at")
+STALLS = ["icecream", "chai"]               # these come with a vendor who can speak
+CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "prop_fly"]   # need the car to be driving
+EVENTS = ["takeoff", "big_air", "prop_fly", "near_miss", "cop_wrecked", "roadblock",
+          "parked", "exited", "arrived", "seated"]
+WAIT_FOR = ["parked", "exited", "arrived", "seated"]
+PLACES = ["ahead", "back", "car", "other", "spot"]
 ENDINGS = ["happy", "caught", "crash", "cliffhanger"]
-PROPS = ["pizza", "flowers", "gift", "ring", "teddy"]
+PROPS = ["pizza", "flowers", "gift", "ring", "teddy", "icecream", "chai"]
+VENDOR = {"name": "BHAIYA", "color": "#f0a020",
+          "voice": {"gemini": "Fenrir", "edge": "hi-IN-MadhurNeural", "rate": "+12%", "pitch": "-6Hz",
+                    "espeak_pitch": 40, "style": "a cheerful, chatty Indian street vendor"},
+          "look": {"style": "boy", "skin": "#c98b5e", "hair": "#1d1714", "shirt": "#f3efe4"}}
 TIMES = ["day", "dusk", "night"]
 MOOD_ENDING = {"happy": "happy", "romantic": "happy", "funny": "happy", "cringe": "happy",
                "sad": "crash", "action": "caught", "twist": "cliffhanger"}
@@ -36,14 +49,17 @@ SYSTEM = """You write episodes of a short animated comedy-drama series for YouTu
 The show is made in a blocky 3D city game (everything is cubes, like Minecraft or Roblox).
 
 THE SET-UP (fixed, the game cannot do anything else):
-- Two main characters sit in a pink open-top car the whole time: "babu" (boy) drives, "shona" (girl) sits next to him.
-- The car drives through the city while they talk. Everything you write happens in or around this car.
+- Two main characters start in a pink open-top car: "babu" (boy) drives, "shona" (girl) sits next to him.
+- The car drives through the city while they talk. They can also pull over and get out for a scene on the
+  pavement (a proposal, a fight, a sulk, a race on foot), then get back in and drive on, or end the episode there.
 - Police cars, a police helicopter, roadblocks and traffic exist, but they are SIDE characters: bring them in only
   when your story needs them. A quiet story with no police at all is fine.
 - "police" can also speak (over a megaphone), at most 2 short lines.
+- When they stop at an ice-cream cart or a chai stall, its "vendor" (a street vendor, "Bhaiya") can speak too,
+  at most 3 short lines: funny, chatty, he comments on the couple.
 
 WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
-1. A line: {"say": "babu"|"shona"|"police", "emotion": E, "react": E, "gesture": G, "sub": "...", "tts": "..."}
+1. A line: {"say": "babu"|"shona"|"police"|"vendor", "emotion": E, "react": E, "gesture": G, "sub": "...", "tts": "..."}
    - emotion = how the speaker looks, react = how the other one looks while listening.
    - E is one of: neutral, smug, love, shock, angry, sad, happy, laugh.  G is one of: talk, up, point, wave, idle.
    - Optional "on": wait for a moment in the action before saying the line: takeoff (the car leaves a ramp,
@@ -55,12 +71,30 @@ WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
    boom (barrels explode behind the car and knock out the police), slowmo (2 seconds of slow motion),
    prop_show / prop_fly / prop_hide (add "prop": P; prop_fly throws it out of the car, best right after a jump),
    stop / go (the car stops / drives on).
-3. {"wait": seconds} (at most 3).
+   OUT OF THE CAR (W = "babu", "shona" or "both"):
+   park (the car pulls over at the kerb; the street goes quiet and the police leave). Add "at": S to stop at a place:
+     "bench" (a park bench: sit puts them on it), "icecream" (an ice-cream cart with its vendor),
+     "chai" (a roadside chai stall with its vendor). Out of the car they walk straight to it.
+   exit_car (add "who": W; they get out and stand on the pavement facing each other),
+   walk / run (add "who": W, "to": "ahead" | "back" | "car" | "other" (to the other character) | "spot" (back to
+   the bench or stall), "dist": 3-15 metres),
+   sit (on the bench if there is one, else on the pavement), stand (get up again), kneel (one knee down,
+   proposal style), fall (falls flat on the ground: comedy), hug (the two hug), dance, cheer (jumps for joy),
+   each with "who": W,
+   enter_car (add "who": W; back into their seats), then go to drive on.
+   The order is: park, exit_car, the scene on foot, then either enter_car + go or the ending.
+   Car actions (police, jump, roadblock, crossers, boom, prop_fly) only work while they are driving.
+   IN THE HAND (in the car or on foot): hold (add "who": "babu" | "shona", "prop": P: they hold it in their hand;
+   food gets eaten), give (add "who": the giver, "to": "babu" | "shona" | "both", optional "prop": P: hands it
+   over; the vendor gives what he sells, e.g. {"do": "give", "who": "vendor", "to": "both"}).
+3. {"wait": seconds} (at most 3), or {"wait_for": "exited" | "arrived" | "seated"}: wait until they are out of the
+   car / have reached where they walked or ran to / are back in their seats. A line can wait with "on": "parked".
 4. Exactly one ending: {"end": "happy" | "caught" | "crash" | "cliffhanger"}
    happy = the police leave, the car stops, sunset and hearts; caught = police surround the stopped car;
    crash = the car spins out and stops with smoke (sad); cliffhanger = everything freezes in slow motion.
+   If they are out of the car at the end, use happy (a slow closing shot of the two of them) or cliffhanger.
    Put 1-3 lines AFTER the ending: they are the last words.
-Props (P) the car can have: pizza, flowers, gift, ring, teddy. List the ones in the car at the start in "props".
+Props (P): pizza, flowers, gift, ring, teddy, icecream, chai. List the ones in the car at the start in "props".
 
 WRITING RULES:
 - 9 to 14 lines in total, each line at most 12 words. The whole episode is spoken in about 40 seconds.
@@ -68,6 +102,8 @@ WRITING RULES:
   a twist, a payoff that fits the mood, and a last line that is a punchline or an emotional moment.
 - Show, do not explain the game: never talk about "the game", "bots", "ramps appearing" or "levels".
 - Every action you use must matter to the story, and the lines around it must react to it.
+- At most one scene out of the car, and only when the story is better for it (getting out takes a few seconds).
+  A scene out of the car works best at a place (bench, icecream, chai).
 - Keep it PG: cute, cringe, funny or emotional. No real people, brands or places, no hate, no real violence.
 - The voice actor only gets the words, so put the feeling into them: exclamations, "arre", "uff", "haha",
   "hmm...", question marks and pauses ("...") where they belong.
@@ -92,6 +128,99 @@ def clip(text, n):
     return text[:n].rstrip()
 
 
+class Stage:
+    """Keeps the actions in an order the game can play: the car parks before anyone gets out,
+    everyone gets back in before it drives on, and car actions are dropped while it is parked.
+    The waits for getting out and back in are added here, so the writer does not have to."""
+
+    def __init__(self, beats, problems):
+        self.beats, self.problems = beats, problems
+        self.parked = False     # parked (the car stays put until "go")
+        self.stop_at = -1       # a plain "stop" that becomes a park if they get out
+        self.out = set()        # who is on foot
+        self.walking = False    # a walk or run that a wait_for "arrived" can wait for
+        self.spot = ""          # the place they parked at
+
+    def wait(self, ev, max_wait):
+        if not (self.beats and self.beats[-1].get("wait_for") == ev):
+            self.beats.append({"wait_for": ev, "max_wait": max_wait})
+
+    def park(self, at=""):
+        if self.parked:
+            return
+        d = {"do": "park"}
+        if at in SPOTS:
+            d["at"] = at
+            self.spot = at
+        if self.stop_at >= 0:
+            self.beats[self.stop_at] = d
+        else:
+            self.beats.append(d)
+        self.parked = True
+
+    def get_out(self, names):
+        need = names - self.out
+        if need:
+            self.park()
+            self.beats.append({"do": "exit_car", "who": "both" if len(need) == 2 else min(need)})
+            self.wait("exited", 25)
+            self.out |= need
+
+    def get_in(self, names):
+        names = names & self.out
+        if names:
+            self.beats.append({"do": "enter_car", "who": "both" if len(names) == 2 else min(names)})
+            self.wait("seated", 20)
+            self.out -= names
+
+    def do(self, d):
+        act = d["do"]
+        names = {"babu", "shona"} if d.get("who", "both") == "both" or act == "hug" else {d["who"]}
+        if self.parked and act in CAR_ONLY:
+            self.problems.append(f"{act} while the car is parked")
+            return
+        if d.get("who") == "vendor" and self.spot not in STALLS:
+            self.problems.append(f"{act} by the vendor without a stall")
+            return
+        if act == "park":
+            self.park(d.get("at", ""))
+        elif act == "stop":
+            if not self.parked and self.stop_at < 0:
+                self.stop_at = len(self.beats)
+                self.beats.append(d)
+        elif act == "exit_car":
+            self.get_out(names)
+        elif act == "enter_car":
+            self.get_in(names)
+        elif act == "go":
+            self.get_in(set(self.out))
+            self.parked, self.stop_at = False, -1
+            self.beats.append(d)
+        else:
+            if act in FOOT:
+                self.get_out(names)
+                self.walking = self.walking or act in ("walk", "run")
+            if act == "walk" or act == "run":
+                if d.get("to") == "spot" and not self.spot:
+                    d["to"] = "ahead"
+            self.beats.append(d)
+
+    def wait_for(self, ev):
+        # getting out and back in already wait; "arrived" only after a walk or run
+        if ev == "parked" and self.parked and not self.out:
+            self.wait("parked", 22)
+        elif ev == "arrived" and self.walking:
+            self.wait("arrived", 12)
+            self.walking = False
+
+
+def ending_for(kind, stage):
+    """A parked car does not spin out or get chased down: those endings become a quiet one or a freeze."""
+    if stage.parked and kind in ("crash", "caught"):
+        return "happy" if kind == "crash" else "cliffhanger"
+    return kind
+
+
 def clean(ai, base, mood):
     """A screenplay the game can play, built from the model's answer. Returns (screenplay, problems)."""
     sp = copy.deepcopy(base)
@@ -111,15 +240,22 @@ def clean(ai, base, mood):
     else:
         sp.pop("upload", None)
 
-    beats, says, police_says, endings, after_end = [], 0, 0, 0, 0
+    beats, says, police_says, vendor_says, endings, after_end = [], 0, 0, 0, 0, 0
+    stage = Stage(beats, problems)
     for b in ai.get("beats") or []:
         if not isinstance(b, dict):
             continue
         if "say" in b:
             who = str(b.get("say", "")).lower()
-            if who not in ("babu", "shona", "police"):
+            if who not in ("babu", "shona", "police", "vendor"):
                 problems.append(f"unknown speaker {who!r}")
                 continue
+            if who == "vendor":
+                vendor_says += 1
+                if stage.spot not in STALLS or vendor_says > 3:
+                    problems.append("the vendor speaks without a stall" if stage.spot not in STALLS else "too many vendor lines")
+                    continue
+                sp["cast"].setdefault("vendor", copy.deepcopy(VENDOR))
             if who == "police":
                 police_says += 1
                 if police_says > 3:
@@ -134,7 +270,7 @@ def clean(ai, base, mood):
                 line["gesture"] = b["gesture"]
             if b.get("on") in EVENTS:
                 line["on"] = b["on"]
-                line["max_wait"] = 9
+                line["max_wait"] = 20 if b["on"] in ("parked", "exited", "seated") else 9
             if len(sub.split()) > 16:
                 problems.append(f"line too long: {sub!r}")
             says += 1
@@ -155,8 +291,37 @@ def clean(ai, base, mood):
                 if b.get("prop") not in PROPS:
                     continue
                 d["prop"] = b["prop"]
+            if act == "park" and b.get("at") in SPOTS:
+                d["at"] = b["at"]
+            if act in FOOT or act in ("exit_car", "enter_car"):
+                who = str(b.get("who", "")).lower()
+                d["who"] = who if who in ("babu", "shona", "both") else ("babu" if act in ("kneel", "fall") else "both")
+            if act == "hold":
+                if b.get("prop") not in PROPS:
+                    continue
+                d["prop"] = b["prop"]
+                who = str(b.get("who", "")).lower()
+                d["who"] = who if who in ("babu", "shona") else "babu"
+            if act == "give":
+                who = str(b.get("who", "")).lower()
+                d["who"] = who if who in ("babu", "shona", "vendor") else "babu"
+                to = str(b.get("to", "")).lower()
+                if to in ("babu", "shona", "both") and to != d["who"]:
+                    d["to"] = to
+                if b.get("prop") in PROPS:
+                    d["prop"] = b["prop"]
+            if act in ("walk", "run"):
+                d["to"] = b.get("to") if b.get("to") in PLACES else "ahead"
+                if d["to"] in ("ahead", "back"):
+                    try:
+                        d["dist"] = max(3.0, min(15.0, float(b.get("dist", 8))))
+                    except (TypeError, ValueError):
+                        d["dist"] = 8.0
             if not endings:
-                beats.append(d)
+                stage.do(d)
+        elif "wait_for" in b:
+            if b["wait_for"] in WAIT_FOR and not endings:
+                stage.wait_for(b["wait_for"])
         elif "wait" in b:
             try:
                 beats.append({"wait": max(0.5, min(3.0, float(b["wait"])))})
@@ -166,12 +331,12 @@ def clean(ai, base, mood):
             if endings:
                 continue
             endings += 1
-            beats.append({"end": b["end"] if b["end"] in ENDINGS else MOOD_ENDING.get(mood, "happy")})
+            beats.append({"end": ending_for(b["end"] if b["end"] in ENDINGS else MOOD_ENDING.get(mood, "happy"), stage)})
     if endings == 0:
         problems.append("no ending")
         # put an ending before the last line so there is still a closing line
         at = len(beats) - 1 if beats else 0
-        beats.insert(max(at, 0), {"end": MOOD_ENDING.get(mood, "happy")})
+        beats.insert(max(at, 0), {"end": ending_for(MOOD_ENDING.get(mood, "happy"), stage)})
     lines = sum(1 for b in beats if "say" in b)
     if lines < 6:
         problems.append(f"only {lines} lines (need 9 to 14)")

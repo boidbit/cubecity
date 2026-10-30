@@ -55,7 +55,14 @@ Every push runs **CI**: the bot plays every mode headless and the job fails on a
 
 Babu and Shona drive through the city in a pink convertible and act out an episode: pixel-art
 faces that change with the emotion, voices, subtitles, props (a pizza that flies off on a jump),
-and a real ending. The director runs in a scripted mode for this: nothing happens by itself;
+and a real ending. When the story needs it they pull over and get out: they walk or run along the
+pavement, sit, kneel (a proposal), fall over, hug, dance, and get back in to drive on, with their
+own cameras for the scene on foot (`story/street.gd` is the stretch of pavement next to the car).
+They can stop at a place: a park bench, an ice-cream cart or a chai stall, put up where the car
+parks (`story/spots.gd`); the stalls have a vendor who talks, and things change hands (an ice
+cream, a glass of chai, flowers, a ring ...). Each episode gets background music for its mood,
+made from scratch by `tools/story/music.py` (no samples, so nothing to license), which dips under
+the voices and comes up for the end card. The director runs in a scripted mode for this: nothing happens by itself;
 the police, the helicopter, a jump or a roadblock only appear when the episode asks for them.
 Everything is in `story/` and `tools/story/`; the game only reads `--story`, and `story/` is left
 out of the Android build (`exclude_filter` in `export_presets.cfg`).

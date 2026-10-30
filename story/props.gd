@@ -3,7 +3,7 @@ extends RefCounted
 # Built from boxes like everything else. A prop sits on the dashboard; fly() throws it out
 # of the car as a little physics body (the pizza flying off on a jump).
 
-const KINDS := ["pizza", "flowers", "gift", "ring", "teddy"]
+const KINDS := ["pizza", "flowers", "gift", "ring", "teddy", "icecream", "chai"]
 # where props sit in car space (first on the passenger side of the dashboard, then the
 # driver side, then the rear deck)
 const SLOTS := [Vector3(-0.42, 1.36, -0.46), Vector3(0.05, 1.36, -0.46), Vector3(0.0, 1.06, 1.42)]
@@ -59,6 +59,16 @@ static func build(kind: String) -> Node3D:
 			for s in [-1.0, 1.0]:
 				_box(n, Vector3(0.07, 0.07, 0.05), Vector3(s * 0.09, 0.48, 0), fur)
 			_box(n, Vector3(0.08, 0.05, 0.03), Vector3(0, 0.33, -0.11), Color(0.9, 0.8, 0.65))
+		"icecream":
+			# a cone with two scoops and a cherry
+			_box(n, Vector3(0.08, 0.18, 0.08), Vector3(0, 0.09, 0), Color(0.85, 0.62, 0.35))
+			_box(n, Vector3(0.13, 0.1, 0.13), Vector3(0, 0.22, 0), Color(1.0, 0.62, 0.78))
+			_box(n, Vector3(0.11, 0.09, 0.11), Vector3(0, 0.31, 0), Color(0.98, 0.94, 0.8))
+			_box(n, Vector3(0.04, 0.04, 0.04), Vector3(0, 0.38, 0), Color(0.85, 0.08, 0.12))
+		"chai":
+			# a small glass of cutting chai
+			_box(n, Vector3(0.09, 0.1, 0.09), Vector3(0, 0.05, 0), Color(0.72, 0.45, 0.22))
+			_box(n, Vector3(0.1, 0.03, 0.1), Vector3(0, 0.11, 0), Color(0.9, 0.94, 0.97))
 	return n
 
 

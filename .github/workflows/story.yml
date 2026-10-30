@@ -1,8 +1,10 @@
 name: Story video (experiment)
 
-# Story lab: Babu and Shona drive through the city and act out an episode. Gemini writes the
-# episode from the story type and your idea, gives the characters their voices, and the game
-# stages it: police, the helicopter or a jump only appear when the story asks for them.
+# Story lab: Babu and Shona drive through the city and act out an episode; when the story needs
+# it they pull over and get out for a scene on the pavement, at a bench, an ice-cream cart or a
+# chai stall. Gemini writes the episode from the story type and your idea and gives the
+# characters their voices, the game stages it (police, the helicopter or a jump only appear when
+# the story asks for them), and background music to suit the mood is made from scratch.
 # Actions tab -> "Story video (experiment)" -> Run workflow. The run attaches the MP4, a
 # thumbnail, the upload text and the screenplay (which you can save to story/screenplays).
 #
@@ -25,7 +27,7 @@ on:
       script:
         description: "ai = Gemini writes a new episode; otherwise a saved episode from story/screenplays"
         type: choice
-        options: [ai, ep1_date_night, ep2_dangerous_question]
+        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream]
         default: ai
       language:
         type: choice
@@ -35,6 +37,11 @@ on:
         description: "auto = Gemini voices if there is a key, else the free Edge voices"
         type: choice
         options: [auto, gemini, edge, none]
+        default: auto
+      music:
+        description: "Background music (made from scratch, free to use). auto = to suit the episode's mood"
+        type: choice
+        options: [auto, none, romantic, happy, funny, cringe, sad, action, twist]
         default: auto
       orientation:
         description: "vertical = Shorts / Reels (1080x1920), horizontal = normal video"
@@ -79,7 +86,8 @@ jobs:
       GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
       STORY_TYPE: ${{ inputs.story_type || 'funny' }}
       IDEA: ${{ inputs.idea }}
-      SCRIPT: ${{ inputs.script || 'ep1_date_night' }}
+      SCRIPT: ${{ inputs.script || 'ep4_icecream' }}
+      MUSIC: ${{ inputs.music || 'auto' }}
       LANGUAGE: ${{ inputs.language || 'hinglish' }}
       VOICE: ${{ inputs.voice || 'edge' }}
       ORIENTATION: ${{ inputs.orientation || 'vertical' }}
@@ -142,7 +150,7 @@ jobs:
       - name: Mix voices and write the upload text
         run: |
           mkdir -p video
-          python3 tools/story/mix.py take/video.mp4 take/story_log.json story-out/timed.json video/story.mp4
+          python3 tools/story/mix.py take/video.mp4 take/story_log.json story-out/timed.json video/story.mp4 --music "$MUSIC"
           python3 tools/story/text.py story-out/timed.json video/upload.txt
           t=$(python3 -c "import json; l=json.load(open('take/story_log.json'))['lines']; print(l[1]['t'] + 1.2 if len(l) > 1 else 6)")
           ffmpeg -y -loglevel error -ss "$t" -i video/story.mp4 -frames:v 1 -q:v 2 video/thumbnail.jpg
