@@ -72,6 +72,11 @@ var path_t := 0.0
 var backoff_t := 0.0
 var backoff_steer := 0.0
 var ram_cd := 0.0
+var vis: Node3D            # body, panels and lights: leans and pitches without touching the physics
+var vis_roll := 0.0
+var vis_pitch := 0.0
+var tail_mats: Array[StandardMaterial3D] = []
+var hold := false          # set by main: too many police are on the player, so shadow instead of ramming
 
 
 func build(color: Color, player: bool, k: String = "") -> void:
@@ -98,6 +103,8 @@ func build(color: Color, player: bool, k: String = "") -> void:
 		_shape(Vector3(1.82, 0.62, 4.1), Vector3(0, 0.6, 0))
 		_shape(Vector3(1.42, 0.45, 1.9), Vector3(0, 1.08, 0.25))
 
+	vis = Node3D.new()
+	add_child(vis)
 	mat_body = ShaderMaterial.new()
 	mat_body.shader = Shaders.get_shader(Shaders.CAR)
 	mat_body.set_shader_parameter("color", color)
@@ -106,7 +113,7 @@ func build(color: Color, player: bool, k: String = "") -> void:
 	var bmi := MeshInstance3D.new()
 	bmi.mesh = CarMesh.body(kind)
 	bmi.material_override = mat_body
-	add_child(bmi)
+	vis.add_child(bmi)
 
 	var pcol := StandardMaterial3D.new()
 	pcol.albedo_color = color
@@ -131,7 +138,7 @@ func build(color: Color, player: bool, k: String = "") -> void:
 	var hy := 0.66 if not swat else 1.0
 	for x in [-hw, hw]:
 		_glow(Vector3(0.42, 0.12, 0.05), Vector3(x, hy, fz + 0.03), Color(1, 0.95, 0.8), 2.5)
-		_glow(Vector3(0.4, 0.12, 0.05), Vector3(x, hy + 0.08, rz - 0.06), Color(1, 0.08, 0.08), 1.6)
+		tail_mats.append(_glow(Vector3(0.4, 0.12, 0.05), Vector3(x, hy + 0.08, rz - 0.06), Color(1, 0.08, 0.08), 1.6))
 
 	var wr := 0.4 if not swat else 0.56
 	var wx := 0.86 if not swat else 1.06
@@ -181,7 +188,7 @@ func build(color: Color, player: bool, k: String = "") -> void:
 		add_child(siren_light)
 		if not swat:
 			for s in [-1.0, 1.0]:
-				_deco(Vector3(0.02, 0.26, 1.7), Vector3(s * 0.925, 0.62, 0.0), trim)
+				_deco(Vector3(0.03, 0.4, 1.7), Vector3(s * 0.93, 0.64, 0.0), trim)   # black door panels
 
 	smoke = main.fx.make_smoke()
 	smoke.position = Vector3(0, 1.0, -1.3)
@@ -250,7 +257,7 @@ func _deco(size: Vector3, pos: Vector3, mat: Material) -> void:
 	mi.mesh = bm
 	mi.material_override = mat
 	mi.position = pos
-	add_child(mi)
+	vis.add_child(mi)
 
 
 func _part(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
@@ -260,7 +267,7 @@ func _part(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
 	mi.mesh = bm
 	mi.material_override = mat
 	mi.position = pos
-	add_child(mi)
+	vis.add_child(mi)
 	parts.append(mi)
 	return mi
 
@@ -277,8 +284,23 @@ func _glow(size: Vector3, pos: Vector3, color: Color, energy: float) -> Standard
 	bm.material = m
 	mi.mesh = bm
 	mi.position = pos
-	add_child(mi)
+	vis.add_child(mi)
 	return m
+
+
+# The body leans out of corners and dips under braking (visual only), and the brake
+# lights come on when braking.
+func _body_motion(delta: float) -> void:
+	var acc := (linear_velocity - last_vel) / maxf(delta, 0.001)
+	var lat_a := acc.dot(global_transform.basis.x)
+	var lon_a := acc.dot(-global_transform.basis.z)
+	var k := 1.0 - exp(-9.0 * delta)
+	vis_roll = lerpf(vis_roll, clampf(lat_a * 0.0035, -0.06, 0.06), k)
+	vis_pitch = lerpf(vis_pitch, clampf(lon_a * 0.003, -0.045, 0.045), k)
+	vis.rotation = Vector3(vis_pitch, 0.0, vis_roll)
+	var braking := (input_gas < -0.1 and fwd_speed > 1.5) or hb_smooth > 0.3 or is_block
+	for m in tail_mats:
+		m.emission_energy_multiplier = 5.0 if braking else 1.6
 
 
 func set_headlights(night: float) -> void:
@@ -320,6 +342,8 @@ func hurt(amount: float) -> void:
 	if dead or amount <= 0.0:
 		return
 	hp -= amount * dmg_scale
+	if is_player and main.protect:
+		hp = maxf(hp, 4.0)      # video runs: a clip never ends on a wreck
 	last_hurt = main.clock
 	if is_player:
 		main.on_player_hurt(amount)
@@ -497,6 +521,7 @@ func _physics_process(delta: float) -> void:
 		if main.clock - last_hurt > 4.0 and hp < max_hp:
 			heal(5.0 * delta)
 
+	_body_motion(delta)
 	_skid_and_smoke()
 	last_vel = linear_velocity
 
@@ -542,6 +567,13 @@ func _assists(delta: float, grounded: int, fwd: Vector3) -> void:
 	if nitro_active:
 		nitro = maxf(0.0, nitro - 28.0 * delta)
 		apply_central_force(fwd * mass * 9.0)
+		# a nitro-boosted car is hard to pin: it shoves police cars out of the way
+		for b in get_colliding_bodies():
+			var other := b as Car
+			if other != null and not other.is_player and not other.is_block:
+				var away := other.global_position - global_position
+				away.y = 0.0
+				other.apply_central_impulse(away.normalized() * other.mass * 0.3)
 	flame.emitting = nitro_active
 
 
@@ -677,6 +709,10 @@ func _ai(delta: float) -> void:
 			path.remove_at(0)
 		if not path.is_empty():
 			aim = path[0]
+	elif hold and dist < 22.0:
+		var hf: Vector3 = -target.global_transform.basis.z
+		var hr: Vector3 = target.global_transform.basis.x
+		aim = tpos - hf * 12.0 + hr * pit_side * 5.0
 	elif dist < 22.0 and target.speed > 6.0 and not is_swat:
 		var tf: Vector3 = -target.global_transform.basis.z
 		var tr: Vector3 = target.global_transform.basis.x
@@ -721,7 +757,10 @@ func _ai(delta: float) -> void:
 	if blocked:
 		want = minf(want, 8.0)
 	input_gas = clampf((want - fwd_speed) * 0.35, -1.0, 1.0)
-	if dist < 6.0 and absf(diff) < 0.6 and ram_cd <= 0.0:
+	if hold and dist < 26.0:
+		want = minf(want, maxf(target.speed, 5.0) + 2.0)
+		input_gas = clampf((want - fwd_speed) * 0.35, -1.0, 1.0)
+	elif dist < 6.0 and absf(diff) < 0.6 and ram_cd <= 0.0:
 		input_gas = 1.0
 	input_hb = 0.0
 

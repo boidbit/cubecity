@@ -35,7 +35,7 @@ set +e
 timeout 18000 xvfb-run -a -s "-screen 0 1920x1920x24" \
   "$GODOT" --path . --rendering-driver opengl3 --write-movie "$OUT/take.avi" \
   --fixed-fps "$FPS" --resolution "${W}x${H}" --quit-after $(( (${DURATION%.*} + 20) * FPS )) -- \
-  --bot="$MODE" --orientation="$ORIENTATION" --duration="$DURATION" --seed="$SEED" \
+  --bot="$MODE" --orientation="$ORIENTATION" --duration="$DURATION" --seed="$SEED" --trace \
   --time="$TIME" --title="$TITLE" --summary="$OUT/summary.json" > "$OUT/godot.log" 2>&1
 rc=$?
 set -e
@@ -47,8 +47,8 @@ fi
 [ -s "$OUT/take.avi" ] || { echo "::error::no video was written"; exit 1; }
 [ -s "$OUT/summary.json" ] || { echo "::error::the bot run did not finish (no summary.json), see godot.log"; exit 1; }
 
-ffmpeg -y -loglevel error -i "$OUT/take.avi" -c:v libx264 -preset medium -crf 18 \
-  -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart "$OUT/video.mp4"
+ffmpeg -y -loglevel error -i "$OUT/take.avi" -c:v libx264 -preset medium -crf 24 -maxrate 10M -bufsize 20M \
+  -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "$OUT/video.mp4"
 rm -f "$OUT/take.avi"
 mkdir -p "$OUT/frames"
 ffmpeg -y -loglevel error -i "$OUT/video.mp4" -vf "fps=1/3,scale=360:-2" "$OUT/frames/f_%02d.jpg"

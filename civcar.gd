@@ -20,13 +20,17 @@ var target := Vector3.ZERO
 var cruise := 11.0
 var yaw := 0.0
 var last_v := Vector3.ZERO
+var straight_only := false   # crossing traffic for the director: never turns at an intersection
+
+
+const TAXI := Color(0.95, 0.72, 0.08)
 
 
 static func palette(i: int) -> Color:
 	return COLORS[i % COLORS.size()]
 
 
-func build(m, color: Color, traffic: bool) -> void:
+func build(m, color: Color, traffic: bool, kind: String = "sedan") -> void:
 	main = m
 	mass = 1000.0
 	collision_layer = 4
@@ -42,10 +46,23 @@ func build(m, color: Color, traffic: bool) -> void:
 	mat.shader = Shaders.get_shader(Shaders.CAR)
 	mat.set_shader_parameter("color", color)
 	var bmi := MeshInstance3D.new()
-	bmi.mesh = CarMesh.body("sedan")
+	bmi.mesh = CarMesh.body("sedan" if kind == "taxi" else kind)
 	bmi.material_override = mat
 	bmi.position = Vector3(0, -0.15, 0)
 	add_child(bmi)
+	if kind == "taxi":
+		var sign := MeshInstance3D.new()
+		var sb := BoxMesh.new()
+		sb.size = Vector3(0.62, 0.16, 0.3)
+		var sm := StandardMaterial3D.new()
+		sm.albedo_color = Color(1.0, 0.95, 0.7)
+		sm.emission_enabled = true
+		sm.emission = Color(1.0, 0.9, 0.5)
+		sm.emission_energy_multiplier = 1.5
+		sb.material = sm
+		sign.mesh = sb
+		sign.position = Vector3(0, 1.34, 0.2)
+		add_child(sign)
 	var tire := CylinderMesh.new()
 	tire.top_radius = 0.38
 	tire.bottom_radius = 0.38
@@ -101,6 +118,9 @@ func _set_target() -> void:
 
 
 func _next_dir() -> void:
+	if straight_only:
+		node = node + Vector2i(roundi(dir.x), roundi(dir.z))
+		return
 	var opts := []
 	var right := dir.cross(Vector3.UP)
 	var left := -right

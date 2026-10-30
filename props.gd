@@ -186,7 +186,7 @@ func load_block(key: Vector2i, parent: Node3D) -> void:
 			"parked":
 				var cc := CivCar.new()
 				parent.add_child(cc)
-				cc.build(main, CivCar.palette(d["c"]), false)
+				cc.build(main, CivCar.palette(d["c"]), false, ["sedan", "suv", "van", "sedan"][int(d["c"]) % 4])
 				cc.global_transform = Transform3D(Basis(Vector3.UP, d["yaw"]), d["p"])
 				cc.prop_ref = d
 				d["node"] = cc

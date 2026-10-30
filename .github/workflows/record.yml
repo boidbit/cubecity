@@ -1,14 +1,14 @@
 name: Record video
 
-# Actions tab -> "Record video" -> Run workflow. Records one or more takes of a bot
-# run, keeps the most exciting one and attaches it (MP4 + thumbnail) to the run.
+# Actions tab -> "Record video" -> Run workflow. Records one or more takes of an automatic
+# run, keeps the most exciting one and attaches it (MP4 + thumbnail + upload text) to the run.
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "What the bot does"
+        description: "chase = 1 car vs a growing pack of police | heli = low police helicopter, ends with the car jumping into it | rush = cars from every direction, near misses | stunt = tower jumps, barrel corridors, falling towers | destroy = smash as much city as possible | survive = 5 stars from the start"
         type: choice
-        options: [chase, destroy, survive]
+        options: [chase, heli, rush, stunt, destroy, survive]
         default: chase
       orientation:
         description: "vertical = YouTube Shorts (1080x1920), horizontal = normal video (1920x1080)"
@@ -24,10 +24,14 @@ on:
         options: ["60", "30"]
         default: "60"
       takes:
-        description: "Record this many runs and keep the most exciting"
+        description: "Record this many runs and keep the most exciting (3 is best for heli: the takedown works about half the time)"
         type: choice
         options: ["1", "2", "3"]
-        default: "2"
+        default: "3"
+      teaser:
+        description: "Hook: open with a flash-forward of the biggest moment, then EARLIER..."
+        type: boolean
+        default: true
       time:
         description: "Time of day"
         type: choice
@@ -108,8 +112,9 @@ jobs:
       - name: Pick the best take
         env:
           NAME: cubecity-${{ inputs.mode }}-${{ inputs.orientation }}-${{ github.run_number }}
+          TEASER: ${{ inputs.teaser }}
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
+          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg fonts-dejavu-core
           python3 tools/pick.py takes video "$NAME"
           python3 tools/report.py takes/*/summary.json
       - uses: actions/upload-artifact@v4
