@@ -6,19 +6,21 @@ extends Node3D
 
 # MEGA JUMP, measured along the road from the start of the ramp (metres):
 #   0..56     ramp up the face of tower A (rises 11 m)
-#   56..70    roof of tower A; the last 8 m kick up 1.7 m
-#   70..106   gap
-#   106..126  roof of tower B (2 m lower, so a short jump still lands)
-#   126..186  ramp down
+#   56..70    roof of tower A; the last 8 m kick up 2.2 m
+#   70..100   gap
+#   100..124  roof of tower B (3 m lower than tower A)
+#   124..184  ramp down
+# A car leaving the kicker at 20 to 40 m/s lands on tower B or its ramp down; slower or
+# faster would fall short or overshoot.
 const RAMP_L := 56.0
 const RAMP_H := 11.0
 const DECK_L := 14.0
-const DECK_B_L := 20.0
+const DECK_B_L := 24.0
 const KICK_L := 8.0
-const KICK_H := 1.7
-const GAP := 36.0
+const KICK_H := 2.2
+const GAP := 30.0
 const DOWN_L := 60.0
-const DROP_B := 2.0
+const DROP_B := 3.0
 const TOWER_W := 14.0
 const RAMP_W := 9.0
 const MEGA_LEN := RAMP_L + DECK_L + GAP + DECK_B_L + DOWN_L
@@ -155,6 +157,23 @@ func demolish(b: Building) -> void:
 		b.collapsing = true
 		b.collapse_t = 0.0
 		world.register_collapse(b)
+
+
+# Takes down the stunt structure the car is stuck in or next to, so it can drive on.
+func dismantle_near(p: Vector3, r: float) -> bool:
+	for e in live.duplicate():
+		var a: Vector3 = e["a"]
+		var b: Vector3 = e["b"]
+		var ab := b - a
+		var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.01), 0.0, 1.0)
+		if p.distance_to(a + ab * t) < r:
+			world.stunt_zones.erase([a, b])
+			var root: Node3D = e["root"]
+			if is_instance_valid(root):
+				root.queue_free()
+			live.erase(e)
+			return true
+	return false
 
 
 func _process(_dt: float) -> void:

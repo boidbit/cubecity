@@ -48,6 +48,7 @@ var shot_end := 3.0
 var next_shot := 9.0
 var break_t := 0.0
 var last_free := -9.0
+var jam_t := 0.0
 var jump_slowmo := false
 var end_card := false
 var finished := false
@@ -311,6 +312,7 @@ func tick(dt: float) -> void:
 	_story(t)
 	_camera(t)
 	_break_free(dt)
+	_stunt_jam(dt)
 	_jump_moment()
 	if bot.replan_needed or bot.needs_plan():
 		bot.plan_flee(_away_point())
@@ -804,6 +806,19 @@ func _jump_moment() -> void:
 
 # Before the finale the run cannot be busted: when the meter gets close, the car
 # shoves the police off and gets a full nitro. Good drama, and the clip goes on.
+# Stuck for a few seconds next to one of our own stunt structures: take it down.
+func _stunt_jam(dt: float) -> void:
+	var pl: Car = main.player
+	if pl.speed < 2.0 and pl.airtime == 0.0:
+		jam_t += dt
+	else:
+		jam_t = maxf(0.0, jam_t - dt * 2.0)
+	if jam_t > 3.0:
+		jam_t = 0.0
+		if main.stunts.dismantle_near(pl.global_position, 24.0):
+			bot.replan_needed = true
+
+
 # Boxed in by a pile of cars (police, roadblocks, traffic): after a moment the car shoves
 # them all away and gets a full nitro, so a clip never stalls in a jam. Only video runs
 # do this; in the real game, getting out of a pile-up is up to the player.

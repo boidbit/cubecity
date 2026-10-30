@@ -287,7 +287,6 @@ func _shot_down() -> void:
 	smoke.emitting = true
 	spot.visible = false
 	chop.stop()
-	pl.linear_velocity *= 0.92
 	main.fx.explosion(global_position, 5.0)
 	main.fx.play("explosion", global_position, 4.0)
 	main.shake_cam(1.0)
