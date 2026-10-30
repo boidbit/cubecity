@@ -24,10 +24,10 @@ on:
         options: ["60", "30"]
         default: "60"
       takes:
-        description: "Record this many runs and keep the most exciting"
+        description: "Record this many runs and keep the most exciting (3 is best for heli: the takedown works about half the time)"
         type: choice
         options: ["1", "2", "3"]
-        default: "2"
+        default: "3"
       teaser:
         description: "Hook: open with a flash-forward of the biggest moment, then EARLIER..."
         type: boolean
