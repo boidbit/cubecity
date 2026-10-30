@@ -107,7 +107,7 @@ func build_corridor(origin: Vector3, dirv: Vector3, count: int = 7) -> Dictionar
 		var p := origin + dirv * (i * 9.0) + right * (2.0 if i % 2 == 0 else -2.0)
 		world.props.spawn_barrels(p)
 	var end := origin + dirv * (count * 9.0)
-	return {"pts": [origin - dirv * 30.0, end + dirv * 6.0, end + dirv * 40.0], "kinds": ["ramp", "ramp", "road"]}
+	return {"pts": [origin - dirv * 30.0, end + dirv * 6.0, end + dirv * 40.0], "kinds": ["road", "road", "road"]}
 
 
 # Picks a tall building beside the road ahead and returns it with the point to blow at its

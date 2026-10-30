@@ -41,6 +41,7 @@ var last_ramp := {}      # lip (top end of the ramp) and heading of the latest r
 var trail: Array[Vector3] = []
 var stuck_count := 0
 var stuck_times: Array[float] = []
+var stuck_spots: Array[Vector3] = []
 var dist_sum := 0.0
 var time_sum := 0.0
 
@@ -134,14 +135,22 @@ func drive(dt: float) -> void:
 		stuck_t = 0.0
 		stuck_count += 1
 		# against a wall mid-smash: back up further for a run-up (ploughing needs 9 m/s)
-		reverse_t = randf_range(1.8, 2.2) if kind in ["smash", "hit"] else randf_range(1.2, 1.6)
+		reverse_t = randf_range(1.8, 2.2) if kind in ["smash", "hit", "ramp"] else randf_range(1.2, 1.6)
 		rev_steer = -signf(st) if absf(st) > 0.1 else (1.0 if randf() < 0.5 else -1.0)
 		stuck_times.append(main.clock)
-		while stuck_times.size() > 0 and main.clock - stuck_times[0] > 10.0:
+		stuck_spots.append(p)
+		while stuck_times.size() > 0 and main.clock - stuck_times[0] > 16.0:
 			stuck_times.remove_at(0)
-		if stuck_times.size() >= 3:
+			stuck_spots.remove_at(0)
+		# stuck again in the same place: this route does not work from here, plan another
+		var same := 0
+		for sp in stuck_spots:
+			if sp.distance_to(p) < 9.0:
+				same += 1
+		if same >= 2 or stuck_times.size() >= 3:
 			replan_needed = true
 			stuck_times.clear()
+			stuck_spots.clear()
 	_apply(gas, st, hb, nitro)
 
 

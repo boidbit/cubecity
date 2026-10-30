@@ -69,6 +69,7 @@ var last_nm := -9.0
 var nm_count := 0
 var jump := {}            # heli mode: the mega jump the helicopter waits above
 var jump_stage := 0
+var jump_t := 0.0
 var pass_until := 0.0
 var next_pass := 6.0
 
@@ -540,15 +541,17 @@ func _heli_show(t: float) -> void:
 	var f := t / duration
 	if bot.busy() or not jump.is_empty():
 		return
-	if f > 0.45 and not done.has("jump") and _plan_mega():
+	if f > 0.45 and t < duration - 9.0 and not done.has("jump") and _plan_mega():
 		done["jump"] = t
 		jump = {"lip": mega_info["lip"], "dir": mega_info["dir"], "lip_h": Stunts.RAMP_H + Stunts.KICK_H, "hover_d": 30.0, "hover_up": 3.0}
 		jump_stage = 0
-	elif f > 0.6 and not done.has("jump") and _plan_ramp():
+		jump_t = t
+	elif f > 0.6 and t < duration - 9.0 and not done.has("jump") and _plan_ramp():
 		# no long straight for the tower jump: the helicopter waits above an ordinary ramp
 		done["jump"] = t
 		jump = {"lip": cam_jump["lip"], "dir": cam_jump["dir"], "lip_h": 2.3, "hover_d": 22.0, "hover_up": 2.6}
 		jump_stage = 0
+		jump_t = t
 	elif f > 0.1 and f < 0.4 and not done.has("ramp1") and _plan_ramp():
 		done["ramp1"] = t
 	elif f > 0.2 and f < 0.45 and not done.has("corridor") and _plan_corridor():
@@ -572,12 +575,19 @@ func _heli_tick(t: float) -> void:
 	var dirv: Vector3 = jump["dir"]
 	var flat := Vector3(pl.global_position.x, 0.0, pl.global_position.z)
 	var along := (flat - Vector3(lip.x, 0.0, lip.z)).dot(dirv)
+	# the finale did not work out (car stuck, helicopter timed out): try another jump
+	if jump_stage >= 1 and heli.state == "chase" and t - jump_t > 3.0:
+		jump = {}
+		jump_stage = 0
+		done.erase("jump")
+		return
 	match jump_stage:
 		0:
-			if along > -110.0 and along < -20.0:
+			if along > -75.0 and along < -20.0 and pl.speed > 12.0:
 				var hover := Vector3(lip.x, 0.0, lip.z) + dirv * float(jump["hover_d"]) + Vector3(0, float(jump["lip_h"]) + float(jump["hover_up"]), 0)
 				heli.start_intercept(hover, -dirv, 9.0)
 				jump_stage = 1
+				jump_t = t
 		1:
 			if pl.airtime > 0.15 and along > -14.0:
 				var th := 0.62
@@ -586,8 +596,9 @@ func _heli_tick(t: float) -> void:
 				jump_stage = 2
 		2:
 			if heli.state == "chase" and not heli.down:
-				jump = {}      # it missed: back to the chase
+				jump = {}      # it missed: back to the chase, and try another jump
 				jump_stage = 0
+				done.erase("jump")
 
 
 # The stunt show: one set piece after another, so every second has something in it.
