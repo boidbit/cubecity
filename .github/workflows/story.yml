@@ -1,21 +1,39 @@
 name: Story video (experiment)
 
-# Story lab: two blocky characters talk in the car while the usual police chase goes on.
-# Actions tab -> "Story video (experiment)" -> Run workflow. It makes the voices, records
-# the run, lays the voices over it and attaches the MP4, a thumbnail and the upload text.
-# On every push to story-lab it makes a small, quick preview instead.
+# Story lab: Babu and Shona drive through the city and act out an episode. Gemini writes the
+# episode from the story type and your idea, gives the characters their voices, and the game
+# stages it: police, the helicopter or a jump only appear when the story asks for them.
+# Actions tab -> "Story video (experiment)" -> Run workflow. The run attaches the MP4, a
+# thumbnail, the upload text and the screenplay (which you can save to story/screenplays).
+#
+# Needs a repository secret GEMINI_API_KEY for the AI writer and the Gemini voices. Without it
+# the saved episode and the free Edge voices are used.
+# On every push to story-lab it makes a small, quick preview of the saved episode instead.
 on:
   workflow_dispatch:
     inputs:
-      screenplay:
-        description: "Which story (a file in story/screenplays)"
+      story_type:
+        description: "Mood of the episode"
         type: choice
-        options: [ep1_date_night]
-        default: ep1_date_night
+        options: [funny, romantic, cringe, happy, sad, action, twist]
+        default: funny
+      idea:
+        description: "Your idea in a few words (blank = AI decides). Example: Shona's birthday, Babu forgot the cake"
+        type: string
+        default: ""
+      script:
+        description: "ai = Gemini writes a new episode; otherwise a saved episode from story/screenplays"
+        type: choice
+        options: [ai, ep1_date_night]
+        default: ai
+      language:
+        type: choice
+        options: [hinglish, hindi, english]
+        default: hinglish
       voice:
-        description: "auto = free Edge voices (best Hindi), falls back to a robotic voice, then to subtitles only"
+        description: "auto = Gemini voices if there is a key, else the free Edge voices"
         type: choice
-        options: [auto, espeak, none]
+        options: [auto, gemini, edge, none]
         default: auto
       orientation:
         description: "vertical = Shorts / Reels (1080x1920), horizontal = normal video"
@@ -27,17 +45,17 @@ on:
         options: ["60", "30"]
         default: "60"
       time:
-        description: "Time of day"
+        description: "Time of day (auto = what suits the story)"
         type: choice
-        options: [dusk, day, night]
-        default: dusk
+        options: [auto, day, dusk, night]
+        default: auto
       seed:
-        description: "Random seed for the chase (blank = random)"
+        description: "Random seed for the city and traffic (blank = random)"
         type: string
         default: ""
   push:
     branches: [story-lab]
-    paths: ["story/**", "tools/story/**", ".github/workflows/story.yml"]
+    paths: ["story/**", "tools/story/**", ".github/workflows/story.yml", "director.gd", "stunts.gd"]
 
 concurrency:
   group: story-${{ github.ref }}-${{ github.event_name }}
@@ -49,11 +67,15 @@ jobs:
     timeout-minutes: 180
     env:
       PREVIEW: ${{ github.event_name == 'push' }}
-      SCREENPLAY: ${{ inputs.screenplay || 'ep1_date_night' }}
-      VOICE: ${{ inputs.voice || 'auto' }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY || secrets.GEMINI_KEY || secrets.GEMINI }}
+      STORY_TYPE: ${{ inputs.story_type || 'funny' }}
+      IDEA: ${{ inputs.idea }}
+      SCRIPT: ${{ inputs.script || 'ep1_date_night' }}
+      LANGUAGE: ${{ inputs.language || 'hinglish' }}
+      VOICE: ${{ inputs.voice || 'edge' }}
       ORIENTATION: ${{ inputs.orientation || 'vertical' }}
       FPS_IN: ${{ inputs.fps || '30' }}
-      TIME: ${{ inputs.time || 'dusk' }}
+      TIME_IN: ${{ inputs.time || 'auto' }}
       SEED_IN: ${{ inputs.seed }}
     steps:
       - uses: actions/checkout@v4
@@ -71,15 +93,29 @@ jobs:
             libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
           pip install --quiet edge-tts
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+          if [ -n "$GEMINI_API_KEY" ]; then echo "Gemini key: found"; else echo "::warning::No GEMINI_API_KEY secret: using the saved episode and the free voices"; fi
+      - name: Write the episode
+        id: write
+        run: |
+          mkdir -p story-out
+          if [ "$SCRIPT" = ai ]; then
+            python3 tools/story/write.py --out story-out/screenplay.json --type "$STORY_TYPE" --idea "$IDEA" --language "$LANGUAGE"
+          else
+            cp "story/screenplays/$SCRIPT.json" story-out/screenplay.json
+            python3 -c "import json; print('time=' + json.load(open('story-out/screenplay.json')).get('time', 'dusk'))" >> "$GITHUB_OUTPUT"
+          fi
       - name: Voices
         id: voices
-        run: python3 tools/story/voices.py "story/screenplays/$SCREENPLAY.json" story-out --provider "$VOICE"
+        run: python3 tools/story/voices.py story-out/screenplay.json story-out --provider "$VOICE"
       - name: Record
         env:
           MODE: chase
           DURATION: ${{ steps.voices.outputs.duration_hint }}
+          STORY_TIME: ${{ steps.write.outputs.time }}
         run: |
-          export ORIENTATION FPS="$FPS_IN" TIME
+          export ORIENTATION FPS="$FPS_IN"
+          export TIME="$TIME_IN"
+          if [ "$TIME" = auto ]; then export TIME="${STORY_TIME:-dusk}"; fi
           export SEED="${SEED_IN//[^0-9]/}"
           [ -n "$SEED" ] || SEED=$(( RANDOM * 7 + RANDOM ))
           export SEED
@@ -94,8 +130,20 @@ jobs:
           python3 tools/story/text.py story-out/timed.json video/upload.txt
           t=$(python3 -c "import json; l=json.load(open('take/story_log.json'))['lines']; print(l[1]['t'] + 1.2 if len(l) > 1 else 6)")
           ffmpeg -y -loglevel error -ss "$t" -i video/story.mp4 -frames:v 1 -q:v 2 video/thumbnail.jpg
-          cat take/story_log.json
-          echo "voice provider: $(python3 -c "import json; print(json.load(open('story-out/timed.json'))['provider'])")" | tee -a "$GITHUB_STEP_SUMMARY"
+          cp story-out/screenplay.json video/screenplay.json
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          sp = json.load(open("story-out/timed.json", encoding="utf-8"))
+          log = json.load(open("take/story_log.json"))
+          print(f"### {sp.get('title')} / {sp.get('episode')}")
+          print(f"written by: {sp.get('writer', 'saved episode')} | voices: {sp.get('provider')} | ending: {log.get('ending') or '-'}")
+          print()
+          for b in sp.get("beats", []):
+              if "say" in b:
+                  print(f"- **{b['say']}** ({b.get('emotion', 'neutral')}): {b['sub']}")
+              else:
+                  print(f"- _{json.dumps(b, ensure_ascii=False)}_")
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: story-video-${{ github.run_number }}

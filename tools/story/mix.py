@@ -32,15 +32,18 @@ def main(video, log_path, timed_path, out):
     with open(timed_path, encoding="utf-8") as f:
         sp = json.load(f)
     base = os.path.dirname(os.path.abspath(timed_path))
-    by_id = {l["id"]: l for l in sp.get("lines", []) + sp.get("reactions", [])}
+    spoken = [b for b in sp.get("beats", []) if "say" in b] + sp.get("lines", []) + sp.get("reactions", [])
+    by_id = {l["id"]: l for l in spoken}
+    cast = sp.get("cast", {})
     clips = []
     for p in log.get("lines", []):
         line = by_id.get(p["id"])
         if not line or not line.get("audio"):
             continue
         path = os.path.join(base, line["audio"])
+        who = cast.get(line.get("say", line.get("who", "")), {})
         if os.path.exists(path):
-            clips.append((path, float(p["t"]), p.get("cut")))
+            clips.append((path, float(p["t"]), p.get("cut"), bool(who.get("radio"))))
     if not clips:
         print("no voice clips to mix: keeping the game sound")
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", video, "-c", "copy", out])
@@ -48,9 +51,12 @@ def main(video, log_path, timed_path, out):
 
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", video]
     parts = ["[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[g]"]
-    for i, (path, t, cut) in enumerate(clips, start=1):
+    for i, (path, t, cut, radio) in enumerate(clips, start=1):
         cmd += ["-i", path]
         f = f"[{i}:a]"
+        if radio:
+            # megaphone / police radio: thin and a little crunchy
+            f += "highpass=f=450,lowpass=f=3200,acompressor=threshold=0.1:ratio=6,"
         if cut is not None:
             cut = max(float(cut), 0.2)
             f += f"atrim=0:{cut:.2f},afade=t=out:st={max(cut - 0.07, 0):.2f}:d=0.07,"

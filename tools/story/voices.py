@@ -8,10 +8,13 @@ For every line (and reaction) it makes a voice clip, measures it, and writes
 The game reads timed.json; tools/story/mix.py lays the clips over the recorded video.
 
 Voice providers (--provider):
+  gemini  Google Gemini speech (needs GEMINI_API_KEY): the most natural, follows the emotion
   edge    Microsoft Edge read-aloud voices through the edge-tts package (free, good Hindi)
   espeak  espeak-ng, offline and robotic, only a fallback
   none    no voice: subtitles only, lengths are estimated from the text
-  auto    edge, then espeak, then none (the default)
+  auto    gemini (if there is a key), then edge, then espeak, then none (the default)
+A provider that fails part way is dropped for the whole story, so one episode never mixes
+two sets of voices.
 Set CUBE_CA_BUNDLE to a CA file if edge-tts must go through a TLS-inspecting proxy.
 
 Usage: tools/story/voices.py screenplay.json out_dir [--provider auto]
@@ -31,6 +34,10 @@ SR = 44100
 ENV_HZ = 20
 # how much faster / higher an emotion speaks, added to the character's own rate (%) and pitch (Hz)
 EMO_EDGE = {"shock": (6, 3), "angry": (4, 2), "sad": (-8, -3), "love": (-3, 1), "laugh": (3, 3)}
+# how Gemini is asked to say a line
+EMO_SAY = {"neutral": "naturally", "smug": "smugly, full of confidence", "love": "softly and lovingly, a bit shy",
+           "shock": "in shock, loud and fast", "angry": "angrily", "sad": "sadly and slowly",
+           "happy": "happily", "laugh": "laughing"}
 
 
 def sh(cmd):
@@ -81,17 +88,33 @@ def synth_edge(text, voice, rate, pitch, out_mp3, tries=3):
     raise RuntimeError(f"edge-tts failed: {last}")
 
 
+def synth_gemini(line, voice, out_wav):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import gemini
+    text = line.get("tts") or line.get("sub", "")
+    how = EMO_SAY.get(line.get("emotion", "neutral"), "naturally")
+    lang = "Hindi" if any("\u0900" <= ch <= "\u097f" for ch in text) else "Hinglish"
+    who = voice.get("style", "a young Indian person")
+    prompt = f"Say this in {lang}, {how}, as {who}: {text}"
+    pcm, rate, _ = gemini.speak(prompt, voice.get("gemini", "Kore"))
+    raw = out_wav + ".pcm"
+    with open(raw, "wb") as f:
+        f.write(pcm)
+    to_wav(raw, out_wav, ["-f", "s16le", "-ar", str(rate), "-ac", "1"])
+    os.remove(raw)
+
+
 def synth_espeak(text, pitch, out_wav):
     r = sh(["espeak-ng", "-v", "hi", "-s", "150", "-p", str(pitch), "-w", out_wav, text])
     if r.returncode != 0 or not os.path.exists(out_wav):
         raise RuntimeError("espeak-ng failed: " + r.stderr[:200])
 
 
-def to_wav(src, dst):
+def to_wav(src, dst, in_args=()):
     """Mono 44.1 kHz wav with the leading and trailing silence cut off."""
     af = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.04,"
           "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.12,areverse")
-    r = sh(["ffmpeg", "-y", "-v", "error", "-i", src, "-ac", "1", "-ar", str(SR), "-af", af, dst])
+    r = sh(["ffmpeg", "-y", "-v", "error", *in_args, "-i", src, "-ac", "1", "-ar", str(SR), "-af", af, dst])
     if r.returncode != 0 or not os.path.exists(dst):
         raise RuntimeError("ffmpeg failed: " + r.stderr[:200])
 
@@ -115,20 +138,28 @@ def analyze(path):
 
 # ------------------------------------------------------------ main
 
+def spoken(sp):
+    """Every line that is spoken: "say" beats, and old-style lines and reactions."""
+    out = [b for b in sp.get("beats", []) if "say" in b]
+    out += sp.get("lines", []) + sp.get("reactions", [])
+    return out
+
+
 def make_voices(sp, out, provider):
     vdir = os.path.join(out, "voices")
     os.makedirs(vdir, exist_ok=True)
-    items = [(l, "lines") for l in sp.get("lines", [])] + [(r, "reactions") for r in sp.get("reactions", [])]
     cast = sp.get("cast", {})
     results = {}
-    for line, _ in items:
+    for line in spoken(sp):
         lid = line["id"]
-        who = cast.get(line["who"], {})
+        who = cast.get(line.get("say", line.get("who", "")), {})
         v = who.get("voice", {})
         wav = os.path.join(vdir, lid + ".wav")
         tmp = os.path.join(vdir, lid + ".src")
         text = line.get("tts") or line.get("sub", "")
-        if provider == "edge":
+        if provider == "gemini":
+            synth_gemini(line, v, wav)
+        elif provider == "edge":
             rate, pitch = edge_prosody(v, line.get("emotion", ""))
             synth_edge(text, v.get("edge", "hi-IN-SwaraNeural"), rate, pitch, tmp + ".mp3")
             to_wav(tmp + ".mp3", wav)
@@ -150,12 +181,19 @@ def make_voices(sp, out, provider):
 
 
 def simulate(sp):
-    """Rough length of the story: lines back to back, plus some slack for reactions."""
+    """Rough length of the story: lines back to back, waits, the jump and the ending."""
     t = float(sp.get("start", 2.8))
     gap = float(sp.get("gap", 0.3))
+    for b in sp.get("beats", []):
+        if "say" in b:
+            t += b["dur"] + gap + (2.5 if b.get("on") else 0.0)
+        elif "wait" in b:
+            t += float(b["wait"])
+        elif "end" in b:
+            t += 3.5
     for l in sp.get("lines", []):
         t += l["dur"] + gap
-    slack = min(sum(r["dur"] for r in sp.get("reactions", [])), 6.0)
+    slack = min(sum(r["dur"] for r in sp.get("reactions", [])), 6.0) + 3.0
     return t, t + slack
 
 
@@ -163,19 +201,22 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("screenplay")
     ap.add_argument("out")
-    ap.add_argument("--provider", default="auto", choices=["auto", "edge", "espeak", "none"])
+    ap.add_argument("--provider", default="auto", choices=["auto", "gemini", "edge", "espeak", "none"])
     a = ap.parse_args()
     with open(a.screenplay, encoding="utf-8") as f:
         sp = json.load(f)
-    ids = [l["id"] for l in sp.get("lines", []) + sp.get("reactions", [])]
+    ids = [l["id"] for l in spoken(sp)]
     if len(ids) != len(set(ids)):
         sys.exit("duplicate line ids in the screenplay")
     os.makedirs(a.out, exist_ok=True)
 
-    order = {"auto": ["edge", "espeak", "none"], "edge": ["edge", "none"], "espeak": ["espeak", "none"],
-             "none": ["none"]}[a.provider]
+    order = {"auto": ["gemini", "edge", "espeak", "none"], "gemini": ["gemini", "edge", "none"],
+             "edge": ["edge", "none"], "espeak": ["espeak", "none"], "none": ["none"]}[a.provider]
     used, results = "none", {}
     for prov in order:
+        if prov == "gemini" and not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
+            print("no Gemini key (GEMINI_API_KEY)")
+            continue
         if prov == "edge":
             try:
                 import edge_tts  # noqa: F401
@@ -192,7 +233,7 @@ def main():
             break
         except Exception as e:
             print(f"::warning::voice provider {prov} failed: {e}")
-    for l in sp.get("lines", []) + sp.get("reactions", []):
+    for l in spoken(sp):
         r = results.get(l["id"])
         if r:
             l["dur"] = round(r[0], 2)

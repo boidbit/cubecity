@@ -7,12 +7,30 @@ import json
 import sys
 
 
+def from_writer(sp, up):
+    titles = [str(t) for t in up.get("titles", []) if str(t).strip()][:3]
+    tags = [h if str(h).startswith("#") else "#" + str(h) for h in up.get("hashtags", [])][:10]
+    if "#shorts" not in tags:
+        tags.insert(0, "#shorts")
+    out = ["TITLES (pick one)"]
+    out += [f"{i + 1}. {t}" for i, t in enumerate(titles)]
+    out += ["", "DESCRIPTION", str(up.get("description", "")).strip(), "",
+            "Made with a game I am building in Godot. The voices are AI-generated.", "", " ".join(tags), "",
+            "PINNED COMMENT", "Which line was the most cringe? 😂 Comment it and it might be in the next part!", "",
+            "BEFORE YOU PUBLISH",
+            "- YouTube Studio > Details > 'Altered content': answer YES (the voices are synthetic)",
+            f"- Episode: {sp.get('title', '')} / {sp.get('episode', '')} (written by {sp.get('writer', 'hand')})"]
+    return "\n".join(out) + "\n"
+
+
 def build(sp):
+    if isinstance(sp.get("upload"), dict) and sp["upload"].get("titles"):
+        return from_writer(sp, sp["upload"])
     cast = sp.get("cast", {})
-    names = [c.get("name", k).title() for k, c in cast.items()]
+    names = [c.get("name", k).title() for k, c in cast.items() if c.get("seat")]
     couple = " & ".join(names) if names else sp.get("title", "Story")
     ep = sp.get("episode", "")
-    lines = sp.get("lines", [])
+    lines = [b for b in sp.get("beats", []) if "say" in b] or sp.get("lines", [])
     hook = lines[0].get("sub", "") if lines else ""
     last = lines[-1].get("sub", "") if lines else ""
     out = []

@@ -53,20 +53,23 @@ Every push runs **CI**: the bot plays every mode headless and the job fails on a
 
 ## Story lab (experiment)
 
-Two blocky characters sit in the player's car and talk while the usual police chase goes on:
-subtitles, hearts, a pixel-art face that changes with the emotion, Hindi voices. Everything is
-in `story/` and `tools/story/`; the game only reads `--story` (one hook in `main.gd`), so without
-it nothing changes. The folder is left out of the Android build (`exclude_filter` in
-`export_presets.cfg`).
+Babu and Shona drive through the city in a pink convertible and act out an episode: pixel-art
+faces that change with the emotion, voices, subtitles, props (a pizza that flies off on a jump),
+and a real ending. The director runs in a scripted mode for this: nothing happens by itself;
+the police, the helicopter, a jump or a roadblock only appear when the episode asks for them.
+Everything is in `story/` and `tools/story/`; the game only reads `--story`, and `story/` is left
+out of the Android build (`exclude_filter` in `export_presets.cfg`).
 
-- **Make a video:** Actions -> "Story video (experiment)" -> Run workflow. It makes the voices
-  (free Edge voices; falls back to a robotic voice, then to subtitles only), records the run, lays
-  the voices over it, and attaches the MP4, a thumbnail and the upload text.
-- **Write a story:** copy `story/screenplays/ep1_date_night.json`. `lines` play in order;
-  `reactions` fire when the chase does something (`big_air`, `near_miss`, `cop_wrecked`, ...).
-  `sub` is the subtitle, `tts` is what the voice says (Devanagari reads best), `emotion` is one of
-  neutral, smug, love, shock, angry, sad, happy, laugh.
-- **Try it locally:** `godot -- --bot=chase --duration=50 --story=1`
+- **Make an episode:** Actions -> "Story video (experiment)" -> Run workflow. Pick the mood
+  (funny, romantic, cringe, happy, sad, action, twist), type an idea if you have one, and Gemini
+  writes the episode, the characters get Gemini voices, the game stages it, and the run attaches
+  the MP4, a thumbnail, the upload text and the screenplay. The run page shows the script.
+- **Gemini key:** add it as a repository secret named `GEMINI_API_KEY` (Settings -> Secrets and
+  variables -> Actions). Without it the saved episode and the free Edge voices are used.
+- **Keep an episode:** copy `screenplay.json` from the run into `story/screenplays/` and add its
+  name to the `script` choice in `.github/workflows/story.yml`.
+- **Screenplay format:** see the top of `story/story.gd` (lines, actions, endings, props).
+- **Try it locally:** `godot -- --bot=chase --duration=70 --story=1`
 
 ## Android build
 
