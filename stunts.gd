@@ -102,6 +102,25 @@ func build_mega(origin: Vector3, dirv: Vector3) -> Dictionary:
 	}
 
 
+# A short kicker ramp on the road itself (story lab: "jump" right where the story needs it).
+# About a second of air at 25-35 m/s.
+func build_kicker(origin: Vector3, dirv: Vector3) -> Dictionary:
+	var root := Node3D.new()
+	add_child(root)
+	var rl := 15.0
+	var h := 2.6
+	_ramp(root, _pt(origin, dirv, 0.0, 0.05), _pt(origin, dirv, rl, h), RAMP_W, Color(0.9, 0.68, 0.1))
+	# the support under the lip, so it reads as a ramp and not a floating slab
+	var lip := _pt(origin, dirv, rl)
+	world._static_box(Vector3(RAMP_W, h, 0.5), Transform3D(Basis.looking_at(dirv, Vector3.UP), lip + Vector3(0, h * 0.5, 0) - dirv * 0.25), Color(0.3, 0.3, 0.32), root)
+	_register(root, origin - dirv * 10.0, lip + dirv * 6.0, 12.0)
+	return {
+		"pts": [_pt(origin, dirv, -30.0), origin, lip, _pt(origin, dirv, rl + 30.0), _pt(origin, dirv, rl + 70.0)],
+		"kinds": ["road", "ramp", "ramp", "air", "road"],
+		"lip": lip, "dir": dirv,
+	}
+
+
 # A run of barrel clusters down the road: they go off one after another as the bot passes.
 func build_corridor(origin: Vector3, dirv: Vector3, count: int = 7) -> Dictionary:
 	var right := dirv.cross(Vector3.UP)

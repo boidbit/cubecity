@@ -1,0 +1,215 @@
+{
+  "id": "ep1_date_night",
+  "title": "BABU & SHONA",
+  "episode": "EP 1: DATE NIGHT",
+  "end_text": "PART 2 JALDI...",
+  "mood": "funny",
+  "time": "dusk",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "props": [
+    "pizza"
+  ],
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    }
+  },
+  "beats": [
+    {
+      "say": "babu",
+      "emotion": "smug",
+      "react": "love",
+      "sub": "Shona, aaj perfect date night hai. Pizza bhi, sunset bhi.",
+      "tts": "शोना, आज परफ़ेक्ट डेट नाइट है। पिज़्ज़ा भी, सनसेट भी।",
+      "id": "b01"
+    },
+    {
+      "say": "shona",
+      "emotion": "love",
+      "react": "smug",
+      "sub": "Aww Babu! Tum kitne romantic ho!",
+      "tts": "अरे बाबू! तुम कितने रोमांटिक हो!",
+      "id": "b02"
+    },
+    {
+      "say": "babu",
+      "emotion": "happy",
+      "react": "love",
+      "sub": "Bas ek chhoti si baat... pizza ke paise dena bhool gaya.",
+      "tts": "बस एक छोटी सी बात... पिज़्ज़ा के पैसे देना भूल गया।",
+      "id": "b03"
+    },
+    {
+      "do": "police",
+      "stars": 1
+    },
+    {
+      "wait": 1.5
+    },
+    {
+      "say": "shona",
+      "emotion": "shock",
+      "react": "smug",
+      "gesture": "up",
+      "sub": "Kya?! Babu, peeche police hai!",
+      "tts": "क्या?! बाबू, पीछे पुलिस है!",
+      "id": "b04"
+    },
+    {
+      "say": "police",
+      "react": "shock",
+      "sub": "Pink car! Pizza ke paise do, warna ruk jao!",
+      "tts": "पिंक कार! पिज़्ज़ा के पैसे दो, वरना रुक जाओ!",
+      "id": "b05"
+    },
+    {
+      "say": "babu",
+      "emotion": "smug",
+      "react": "angry",
+      "sub": "Tension mat lo baby. Main hoon na.",
+      "tts": "टेंशन मत लो बेबी। मैं हूँ ना।",
+      "id": "b06"
+    },
+    {
+      "do": "police",
+      "stars": 2
+    },
+    {
+      "do": "jump"
+    },
+    {
+      "do": "prop_fly",
+      "prop": "pizza"
+    },
+    {
+      "say": "shona",
+      "emotion": "shock",
+      "react": "happy",
+      "gesture": "up",
+      "on": "takeoff",
+      "max_wait": 12,
+      "sub": "BABUUU! Hum ud rahe hain!",
+      "tts": "बाबू! हम उड़ रहे हैं!",
+      "id": "b07"
+    },
+    {
+      "say": "shona",
+      "emotion": "angry",
+      "react": "sad",
+      "gesture": "point",
+      "sub": "Aur mera pizza bhi ud gaya!",
+      "tts": "और मेरा पिज़्ज़ा भी उड़ गया!",
+      "id": "b08"
+    },
+    {
+      "say": "babu",
+      "emotion": "sad",
+      "react": "angry",
+      "sub": "Sorry Shona... pizza ka break-up ho gaya.",
+      "tts": "सॉरी शोना... पिज़्ज़ा का ब्रेकअप हो गया।",
+      "id": "b09"
+    },
+    {
+      "say": "police",
+      "react": "shock",
+      "sub": "Pizza mil gaya! Chalo, case khatam.",
+      "tts": "पिज़्ज़ा मिल गया! चलो, केस ख़त्म।",
+      "id": "b10"
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "say": "shona",
+      "emotion": "love",
+      "react": "love",
+      "sub": "Babu... police pizza le gayi. Ab sirf hum dono.",
+      "tts": "बाबू... पुलिस पिज़्ज़ा ले गई। अब सिर्फ़ हम दोनों।",
+      "id": "b11"
+    },
+    {
+      "say": "babu",
+      "emotion": "love",
+      "react": "love",
+      "sub": "Aur ye sunset. Forever, Shona.",
+      "tts": "और ये सनसेट। फ़ॉरेवर, शोना।",
+      "id": "b12"
+    },
+    {
+      "say": "shona",
+      "emotion": "laugh",
+      "react": "happy",
+      "sub": "Forever. Par agli baar pizza ke paise pehle dena!",
+      "tts": "फ़ॉरेवर। पर अगली बार पिज़्ज़ा के पैसे पहले देना!",
+      "id": "b13"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "Babu Forgot to Pay for the Pizza 🍕🚓",
+      "Date Night Went Wrong 😭💕 | Babu & Shona",
+      "Cringe Couple vs Police 😂 #shorts"
+    ],
+    "description": "Babu planned the perfect date night. He just forgot one thing: paying for the pizza. 🍕🚓💕",
+    "hashtags": [
+      "#shorts",
+      "#couplegoals",
+      "#cringe",
+      "#funny",
+      "#lovestory",
+      "#hindi"
+    ]
+  }
+}

@@ -29,6 +29,7 @@ const START_CAPTIONS := {
 }
 const PRIORITY := ["trap", "heli_down", "mega_jump", "collapse", "gas"]
 const FINALE := 12.0      # seconds before the end when the protection lifts and the finale starts
+const STARS_HEAT := [1.0, 12.0, 30.0, 55.0, 85.0]   # heat for 1..5 stars (main.LEVEL_HEAT)
 
 var main
 var bot: Bot
@@ -73,6 +74,12 @@ var jump_stage := 0
 var jump_t := 0.0
 var pass_until := 0.0
 var next_pass := 6.0
+# Story lab: with --story the director stages nothing by itself. The story calls cue() when
+# its script needs police, a jump, the helicopter... so the action supports the story.
+var scripted := false
+var heat_cap := 100.0
+var calm_at := -1.0
+var still := false        # the story has stopped the car on purpose (an ending): no breaking free
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -86,6 +93,7 @@ func setup(main_node, cfg: Dictionary) -> void:
 	if title == "":
 		title = TITLES[mode]
 	summary_path = cfg.get("summary", "")
+	scripted = cfg.has("story")
 	trace = cfg.has("trace")
 	bot.trace = trace
 	climax_t = duration - FINALE
@@ -109,6 +117,9 @@ func setup(main_node, cfg: Dictionary) -> void:
 		_:
 			bot.cruise = 31.0
 			start_heat = 14.0
+	if scripted:
+		bot.cruise = 24.0
+		start_heat = 0.0
 	_place_start()
 
 
@@ -140,6 +151,9 @@ func _place_start() -> void:
 
 
 func start() -> void:
+	if scripted:
+		_start_scripted()
+		return
 	main.heat = start_heat
 	main.level = main.level_for(start_heat)
 	heat_floor = start_heat
@@ -183,6 +197,99 @@ func start() -> void:
 	main.log_event("start")
 
 
+# Story lab: a quiet drive, no police until the story calls for them.
+func _start_scripted() -> void:
+	main.heat = 0.0
+	main.level = 0
+	heat_floor = 0.0
+	heat_cap = 0.0
+	main.protect = true
+	main.player.dmg_scale = 0.35
+	main.block_t = 1e9
+	main.spawn_t = 1e9
+	main.spawn_gap = Vector2(2.0, 3.5)
+	main.traffic_cap = 8
+	bot.drift_style = false
+	bot.plan_flee(_away_point())
+	main.cam_mode = "chase"
+	main.cam_cut = true
+	shot_end = 3.0
+	next_shot = 9.0
+	main.log_event("start")
+
+
+# Story lab: the story asks for a piece of action. Returns false if it cannot happen right
+# now (no ramp near, no straight road ...); the story tries again a moment later.
+func cue(kind: String, arg: float = 0.0) -> bool:
+	var t: float = main.clock
+	match kind:
+		"police":
+			var lv := clampi(int(arg) if arg > 0.0 else 1, 1, 5)
+			heat_floor = float(STARS_HEAT[lv - 1]) + 0.5
+			heat_cap = float(STARS_HEAT[lv]) - 0.5 if lv < 5 else 100.0
+			main.heat = maxf(main.heat, heat_floor)
+			calm_at = -1.0
+			main.spawn_t = 2.0
+			main.cap_bonus = 0
+			if main.alive_police() == 0:
+				_opening_police(mini(lv, 3))
+			for c in main.police:
+				if is_instance_valid(c) and not c.dead:
+					c.target = main.player
+			bot.drift_style = true
+			bot.cruise = 30.0
+		"calm":
+			# the police give up: they ease off now and are gone a few seconds later
+			for c in main.police:
+				if is_instance_valid(c) and not c.dead:
+					c.target = null
+			heat_floor = 0.0
+			main.spawn_t = 1e9
+			main.heli_forced = false
+			calm_at = t + 3.5
+			bot.drift_style = false
+			bot.cruise = 24.0
+		"heli":
+			main.heli_forced = true
+			main.heli.low = true
+			if heat_floor < 1.0:
+				cue("police", 1.0)
+		"heli_off":
+			main.heli_forced = false
+		"jump":
+			# arg: seconds the story has been waiting. A kicker on the straight ahead first;
+			# after a while any ramp in reach (which can take longer to drive to).
+			if bot.busy() or main.player.airtime > 0.0:
+				return false
+			if _plan_kicker():
+				return true
+			return arg > 5.0 and (_plan_mega() or _plan_ramp())
+		"roadblock":
+			if heat_floor < 1.0:
+				cue("police", 2.0)
+			done.erase("roadblock")
+			_try_roadblock(t)
+			return done.has("roadblock")
+		"crossers":
+			return not bot.busy() and _spawn_crossers()
+		"boom":
+			done.erase("trap")
+			_try_trap(t)
+			return done.has("trap")
+		"swat":
+			main.spawn_swat()
+	return true
+
+
+func _scripted_heat(t: float) -> void:
+	if calm_at > 0.0 and t >= calm_at:
+		calm_at = -1.0
+		heat_cap = 0.0
+	main.heat = clampf(main.heat, heat_floor, maxf(heat_cap, heat_floor))
+	if heat_cap <= 0.0:
+		main.spawn_t = 1e9
+
+
 func _opening_police(n: int) -> void:
 	var pl: Car = main.player
 	var f := -pl.global_transform.basis.z
@@ -196,6 +303,9 @@ func _opening_police(n: int) -> void:
 # Called by main when a police car is due. Spawning on the road the car just drove
 # down puts the pack behind it, where the camera can see the chase.
 func spawn_police() -> bool:
+	if scripted:
+		# story runs: the police come from behind, where the camera sees them follow
+		return _spawn_behind(randf_range(45.0, 75.0))
 	if mode == "destroy" or main.cam_mode in ["front", "anchor"]:
 		return false
 	# a mix of directions: out of side streets, head-on from ahead, from behind.
@@ -301,15 +411,19 @@ func tick(dt: float) -> void:
 		next_trace = t + 1.0
 		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)],
 			(" heli=%s d=%.0f jump_stage=%d" % [main.heli.state, main.heli.global_position.distance_to(pl.global_position), jump_stage]) if mode == "heli" else "")
-	_heat(t)
-	if t >= next_try:
-		next_try = t + 0.5
-		_beats(t)
+	if scripted:
+		_scripted_heat(t)
+	else:
+		_heat(t)
+		if t >= next_try:
+			next_try = t + 0.5
+			_beats(t)
 	_update_traps(t)
 	_near_miss(t)
 	_heli_tick(t)
 	_tower_tick(t)
-	_story(t)
+	if not scripted:
+		_story(t)
 	_camera(t)
 	_break_free(dt)
 	_stunt_jam(dt)
@@ -423,6 +537,30 @@ func _plan_mega() -> bool:
 	mega_cam_t = 0.0
 	cam_jump = {"lip": mega_info["lip"], "dir": mega_info["dir"]}
 	bot.set_plan(mega_info["pts"], mega_info["kinds"], "mega")
+	return true
+
+
+# Story lab: a kicker ramp built on the road just ahead.
+func _plan_kicker() -> bool:
+	var ahead := clampf(main.player.speed * 1.7, 38.0, 60.0)
+	var origin := Vector3.ZERO
+	var dirv := Vector3.ZERO
+	if bot.straight_ahead() >= ahead + 75.0:
+		var pa: Dictionary = bot.point_ahead(ahead)
+		origin = pa["pos"]
+		dirv = pa["dir"]
+	else:
+		# the route turns soon: go straight on instead, if the road ahead allows it
+		var ax: Dictionary = bot.stunt_axis(105.0, 38.0)
+		if ax.is_empty():
+			return false
+		origin = ax["origin"]
+		dirv = ax["dir"]
+	origin.y = 0.0
+	var info: Dictionary = main.stunts.build_kicker(origin, dirv)
+	cam_jump = {"lip": info["lip"], "dir": info["dir"]}
+	mega_cam_t = 0.0
+	bot.set_plan(info["pts"], info["kinds"], "kicker")
 	return true
 
 
@@ -823,6 +961,8 @@ func _stunt_jam(dt: float) -> void:
 # them all away and gets a full nitro, so a clip never stalls in a jam. Only video runs
 # do this; in the real game, getting out of a pile-up is up to the player.
 func _break_free(dt: float) -> void:
+	if still:
+		return
 	var pl: Car = main.player
 	var crowd := 0
 	for c in main.cars_near(pl.global_position, 9.0):

@@ -51,6 +51,26 @@ Locally: `tools/record.sh path/to/godot out` (Linux, needs `xvfb` and `ffmpeg`; 
 
 Every push runs **CI**: the bot plays every mode headless and the job fails on any script error, then a short half-size preview clip is recorded.
 
+## Story lab (experiment)
+
+Babu and Shona drive through the city in a pink convertible and act out an episode: pixel-art
+faces that change with the emotion, voices, subtitles, props (a pizza that flies off on a jump),
+and a real ending. The director runs in a scripted mode for this: nothing happens by itself;
+the police, the helicopter, a jump or a roadblock only appear when the episode asks for them.
+Everything is in `story/` and `tools/story/`; the game only reads `--story`, and `story/` is left
+out of the Android build (`exclude_filter` in `export_presets.cfg`).
+
+- **Make an episode:** Actions -> "Story video (experiment)" -> Run workflow. Pick the mood
+  (funny, romantic, cringe, happy, sad, action, twist), type an idea if you have one, and Gemini
+  writes the episode, the characters get Gemini voices, the game stages it, and the run attaches
+  the MP4, a thumbnail, the upload text and the screenplay. The run page shows the script.
+- **Gemini key:** add it as a repository secret named `GEMINI_API_KEY` (Settings -> Secrets and
+  variables -> Actions). Without it the saved episode and the free Edge voices are used.
+- **Keep an episode:** copy `screenplay.json` from the run into `story/screenplays/` and add its
+  name to the `script` choice in `.github/workflows/story.yml`.
+- **Screenplay format:** see the top of `story/story.gd` (lines, actions, endings, props).
+- **Try it locally:** `godot -- --bot=chase --duration=70 --story=1`
+
 ## Android build
 
 The project uses the Compatibility (OpenGL ES 3) renderer so it runs on more phones.
@@ -98,4 +118,5 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `audio/` | Sound effects (Ogg Vorbis): siren and rotor loops, crashes, boom, tyre screech |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade, ground, car and debris shaders |
+| `story/` | Story lab: blocky characters, the open-top car, the story scheduler, screenplays |
 | `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |

@@ -9,3 +9,6 @@ build/
 
 # Python bytecode from the tools scripts
 __pycache__/
+
+# Godot 4.4 script ids, made automatically
+*.uid

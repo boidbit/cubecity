@@ -117,6 +117,11 @@ func _ready() -> void:
 	cam.global_position = player.global_position + Vector3(0, 4, 9)
 	if director != null:
 		director.start()
+		if cfg.has("story") and ResourceLoader.exists("res://story/story.gd"):
+			# story lab (experiment): characters in the car, only with --story
+			var st: Node = load("res://story/story.gd").new()
+			add_child(st)
+			st.setup(self, cfg)
 
 
 # Arguments after "--" on the command line, as --key=value.
