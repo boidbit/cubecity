@@ -302,6 +302,12 @@ func _board(k: String, car_id: String) -> void:
 func tick(dt: float, t: float) -> void:
 	_chase_tick(dt, t)
 	_fight_tick(t)
+	# nobody walks into (or is knocked back into) a parked van
+	for r in s.rigs.values() + s.extras.values():
+		if r.visible and not r.seated and r.pose != "carried":
+			for v in cars.values():
+				if v.visible and v.speed < 0.5:
+					_keep_out(r, v)
 	for p: Dictionary in pops.duplicate():
 		var l: Label3D = p["label"]
 		var k := (t - float(p["t0"])) / 0.9
@@ -465,6 +471,20 @@ func _fight_tick(t: float) -> void:
 							f["phase"] = "approach"
 							a.set_pose("stand")
 					f["step"] = i + 1
+
+
+func _keep_out(r, v) -> void:
+	var lp: Vector3 = v.to_local(r.global_position)
+	var hx := 1.1 + 0.35
+	var hz := 2.6 + 0.35
+	if absf(lp.x) < hx and absf(lp.z) < hz:
+		# out through the nearest side
+		if hx - absf(lp.x) < hz - absf(lp.z):
+			lp.x = hx * signf(lp.x if lp.x != 0.0 else 1.0)
+		else:
+			lp.z = hz * signf(lp.z if lp.z != 0.0 else 1.0)
+		var p: Vector3 = v.to_global(lp)
+		r.global_position = Vector3(p.x, r.global_position.y, p.z)
 
 
 func _hit(r, ko: bool, t: float) -> void:
