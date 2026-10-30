@@ -32,6 +32,7 @@ var rng := RandomNumberGenerator.new()
 var ramp_points: Array[Vector3] = []
 var ramps: Array[Dictionary] = []   # jump ramps: p0 (low end), p1 (high end), road k, block m, along_z, sgn
 var flyovers: Array[Vector2i] = []  # (kx, jz): road x = line(kx) rises over node jz
+var stunt_zones: Array = []         # [start, end] of stunt set pieces standing on the road right now
 var total_cells := 0
 var props: Props
 

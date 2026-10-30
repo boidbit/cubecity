@@ -23,6 +23,7 @@ var heli_spot: SpotLight3D
 var police: Array[Car] = []
 var blocks: Array[Car] = []
 var bot: Bot = null
+var stunts: Stunts = null
 var director: Director = null
 var cfg := {}
 var vertical := false
@@ -73,7 +74,8 @@ var cine_ang := 0.0
 var boom_times: Array[float] = []
 var events: Array = []
 var stats := {"collapses": 0, "chains": 0, "gas": 0, "big_air": 0, "drifts": 0, "smash": 0,
-	"cops_spawned": 0, "max_cops": 0}
+	"cops_spawned": 0, "max_cops": 0, "mega_jump": 0, "near_miss": 0, "heli_down": 0}
+var cam_anchor := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -96,6 +98,9 @@ func _ready() -> void:
 	if cfg.has("bot"):
 		bot = Bot.new()
 		bot.setup(self)
+		stunts = Stunts.new()
+		add_child(stunts)
+		stunts.setup(self)
 		director = Director.new()
 		add_child(director)
 		director.setup(self, cfg)
@@ -597,6 +602,8 @@ func _update_cam(dt: float) -> void:
 		cam.look_at(cine_target + Vector3(0, cine_h * 0.3, 0), Vector3.UP)
 		return
 	match cam_mode:
+		"anchor":
+			_cam_anchor(dt)
 		"front":
 			_cam_front(dt)
 		"heli":
@@ -663,6 +670,14 @@ func _cam_front(dt: float) -> void:
 	cam.global_position = (target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-10.0 * dt))) + _intro_off()
 	cam.look_at(player.global_position - fwd * 5.0 + Vector3(0, 0.8, 0), Vector3.UP)
 	cam.fov = lerpf(cam.fov, 58.0 + fov_kick, 6.0 * dt)
+
+
+# A fixed camera beside the action that turns to follow the car (stunt photographer).
+func _cam_anchor(dt: float) -> void:
+	var p := cam_anchor + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake
+	cam.global_position = p
+	cam.look_at(player.global_position + Vector3(0, 1.5, 0), Vector3.UP)
+	cam.fov = lerpf(cam.fov, 52.0 + fov_kick, 6.0 * dt)
 
 
 # Drone shot at the start of a video run: the camera comes down from above the city.
@@ -810,7 +825,13 @@ func on_big_air(t: float) -> void:
 	bonus += pts
 	stats["big_air"] += 1
 	log_event("big_air")
-	hud.banner("BIG AIR +%d" % pts)
+	if t > 1.5:
+		stats["mega_jump"] += 1
+		bonus += 500
+		log_event("mega_jump")
+		hud.banner("MEGA JUMP +%d" % (pts + 500))
+	else:
+		hud.banner("BIG AIR +%d" % pts)
 
 
 func on_drift(t: float) -> void:

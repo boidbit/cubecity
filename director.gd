@@ -12,7 +12,10 @@ extends Node
 #   destroy  smash as much of the city as possible; finale is a tall tower
 #   survive  5 stars from the first second; just stay alive
 
-const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "BOT vs THE CITY", "survive": "SURVIVE 5 STARS"}
+const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "BOT vs THE CITY", "survive": "SURVIVE 5 STARS",
+	"stunt": "THE STUNT SHOW", "heli": "BOT vs HELICOPTER", "rush": "RUSH HOUR vs 1 BOT"}
+# The stunt show runs these in order, moving on as soon as one is done (or cannot be placed).
+const STUNT_ORDER := ["mega", "corridor", "tower", "ramp", "mega", "gas", "tower", "corridor"]
 # Story lines shown in the middle of the screen when these events happen (once each).
 const EVENT_CAPTIONS := {
 	"roadblock": "THEY BLOCKED THE ROAD", "heli": "NOW A HELICOPTER?!", "swat": "THE SWAT TRUCK ARRIVES",
@@ -52,6 +55,12 @@ var next_trace := 0.0
 var ev_seen := 0
 var last_cap := -9.0
 var cap_kinds := {}
+var mega_info := {}
+var mega_cam_t := 0.0
+var pending_tower: Building = null
+var tower_t := 0.0
+var stunt_i := 0
+var stunt_wait := 0.0
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -76,6 +85,9 @@ func setup(main_node, cfg: Dictionary) -> void:
 		"survive":
 			bot.cruise = 33.0
 			start_heat = 90.0
+		"stunt":
+			bot.cruise = 30.0
+			start_heat = 14.0
 		_:
 			bot.cruise = 31.0
 			start_heat = 14.0
@@ -127,6 +139,9 @@ func start() -> void:
 			main.spawn_gap = Vector2(1.0, 2.0)
 			main.swat_t = 8.0
 			_opening_police(4)
+		"stunt":
+			main.spawn_gap = Vector2(3.5, 5.5)
+			_opening_police(2)
 		_:
 			main.spawn_gap = Vector2(2.5, 4.0)
 	bot.plan_flee(_away_point())
@@ -151,7 +166,7 @@ func _opening_police(n: int) -> void:
 # Called by main when a police car is due. Spawning on the road the car just drove
 # down puts the pack behind it, where the camera can see the chase.
 func spawn_police() -> bool:
-	if mode == "destroy" or main.cam_mode == "front":
+	if mode == "destroy" or main.cam_mode in ["front", "anchor"]:
 		return false
 	# a mix of directions: out of side streets, head-on from ahead, from behind.
 	# Returning false lets the game pick its own spot.
@@ -258,6 +273,7 @@ func tick(dt: float) -> void:
 		next_try = t + 0.5
 		_beats(t)
 	_update_traps(t)
+	_tower_tick(t)
 	_story(t)
 	_camera(t)
 	_break_free(dt)
@@ -302,12 +318,17 @@ func _heat(t: float) -> void:
 			heat_floor = 14.0 if f < 0.18 else (32.0 if f < 0.45 else (58.0 if f < 0.68 else 88.0))
 		"destroy":
 			heat_floor = 2.0 if f < 0.3 else (14.0 if f < 0.6 else 32.0)
+		"stunt":
+			heat_floor = 14.0 if f < 0.5 else 32.0
 		_:
 			heat_floor = 90.0
 
 
 func _beats(t: float) -> void:
 	var f := t / duration
+	if mode == "stunt":
+		_stunt_show(t)
+		return
 	if mode == "destroy":
 		# a smash whenever the road ahead allows one; the tallest towers for the finale
 		if bot.busy():
@@ -325,7 +346,13 @@ func _beats(t: float) -> void:
 		_try_roadblock(t)
 	if mode == "chase" and f > 0.35 and f < 0.75 and not done.has("smash") and not bot.busy() and bot.plan_smash(5):
 		done["smash"] = t
-	if f > 0.62 and t < climax_t - 1.0 and not done.has("ramp2") and not bot.busy() and bot.plan_ramp():
+	if f > 0.2 and f < 0.5 and not done.has("corridor") and not bot.busy() and _plan_corridor():
+		done["corridor"] = t
+	if f > 0.28 and f < 0.8 and not done.has("tower") and pending_tower == null and not bot.busy() and _plan_tower(7):
+		done["tower"] = t
+	if f > 0.5 and f < 0.8 and not done.has("mega") and not bot.busy() and _plan_mega():
+		done["mega"] = t
+	if f > 0.62 and t < climax_t - 1.0 and not done.has("ramp2") and not done.has("mega") and not bot.busy() and bot.plan_ramp():
 		done["ramp2"] = t
 	if t >= climax_t - 3.0 and not done.has("backup"):
 		done["backup"] = t
@@ -333,6 +360,108 @@ func _beats(t: float) -> void:
 			_spawn_behind(50.0 + i * 12.0)
 	if t >= climax_t and not done.has("trap"):
 		_try_trap(t)
+
+
+# ------------------------------------------------------------ stunt set pieces
+
+func _plan_mega() -> bool:
+	var ax: Dictionary = bot.stunt_axis(Stunts.MEGA_LEN + 50.0, 70.0 if main.player.speed < 22.0 else 50.0)
+	if ax.is_empty():
+		return false
+	mega_info = main.stunts.build_mega(ax["origin"], ax["dir"])
+	mega_cam_t = 0.0
+	bot.set_plan(mega_info["pts"], mega_info["kinds"], "mega")
+	return true
+
+
+func _plan_corridor() -> bool:
+	var ax: Dictionary = bot.stunt_axis(7 * 9.0 + 70.0, 45.0)
+	if ax.is_empty():
+		return false
+	var info: Dictionary = main.stunts.build_corridor(ax["origin"], ax["dir"], 7)
+	bot.set_plan(info["pts"], info["kinds"], "corridor")
+	return true
+
+
+# Picks a tall building beside the road; it is brought down as the bot passes.
+func _plan_tower(min_h: int) -> bool:
+	var v: Vector3 = main.player.linear_velocity
+	v.y = 0.0
+	if v.length() < 8.0:
+		return false
+	var found: Dictionary = main.stunts.pick_tower(main.player.global_position, v.normalized(), min_h)
+	if found.is_empty():
+		return false
+	pending_tower = found["building"]
+	tower_t = main.clock
+	return true
+
+
+func _tower_tick(t: float) -> void:
+	if pending_tower == null:
+		return
+	var b := pending_tower
+	if b.collapsing or not b.loaded or t - tower_t > 9.0:
+		pending_tower = null
+		return
+	var pl: Vector3 = main.player.global_position
+	var v: Vector3 = main.player.linear_velocity
+	v.y = 0.0
+	var along := (b.center() - pl).dot(v.normalized())
+	if along < 40.0:
+		main.stunts.demolish(b)
+		pending_tower = null
+
+
+# The stunt show: one set piece after another, so every second has something in it.
+func _stunt_show(t: float) -> void:
+	if bot.busy() or pending_tower != null or t < stunt_wait:
+		return
+	var kind: String = STUNT_ORDER[stunt_i % STUNT_ORDER.size()]
+	var ok := false
+	match kind:
+		"mega":
+			ok = _plan_mega()
+		"corridor":
+			ok = _plan_corridor()
+		"tower":
+			ok = _plan_tower(7)
+		"ramp":
+			ok = bot.plan_ramp()
+		"gas":
+			ok = bot.plan_gas(240.0)
+	if ok:
+		stunt_i += 1
+		stunt_wait = t + (3.0 if kind == "tower" else 0.5)
+		done[kind + str(stunt_i)] = t
+	elif t - stunt_wait > 7.0:
+		stunt_i += 1      # could not place this one here: move on to the next
+		stunt_wait = t
+
+
+# A side-on camera for the mega jump: the car flies across the frame.
+func _mega_camera(t: float) -> bool:
+	if mega_info.is_empty():
+		return false
+	var pl: Car = main.player
+	var lip: Vector3 = mega_info["lip"]
+	var dirv: Vector3 = mega_info["dir"]
+	var along := (pl.global_position - lip).dot(dirv)
+	if mega_cam_t == 0.0:
+		if along > -70.0 and along < -15.0:
+			mega_cam_t = t
+			main.cam_anchor = lip + dirv * 22.0 + dirv.cross(Vector3.UP) * 24.0 + Vector3(0, 4.5, 0)
+			main.cam_mode = "anchor"
+			main.cam_cut = true
+		return false
+	if along > 62.0 or t - mega_cam_t > 7.0:
+		main.cam_mode = "chase"
+		main.cam_cut = true
+		mega_info = {}
+		mega_cam_t = 0.0
+		next_shot = t + 3.0
+		return false
+	return true
 
 
 func _try_roadblock(t: float) -> void:
@@ -400,6 +529,8 @@ func _update_traps(t: float) -> void:
 # and the helicopter view (the whole pack).
 func _camera(t: float) -> void:
 	if main.cine_t > 0.0 or t < shot_end:
+		return
+	if _mega_camera(t):
 		return
 	if main.cam_mode != "chase":
 		main.cam_mode = "chase"
@@ -480,6 +611,8 @@ func overlay_line() -> String:
 			return "CITY DESTROYED %.2f%%   COPS %d" % [_destroyed_pct(), cops]
 		"survive":
 			return "SURVIVED %s   COPS %d" % [clock_s, cops]
+		"stunt":
+			return "JUMPS %d   BOOMS %d   COPS %d" % [main.stats["big_air"], main.stats["chains"] + main.stats["gas"] + main.stats["collapses"], cops]
 	return "COPS %d   %s   %d KM/H" % [cops, clock_s, int(absf(main.player.fwd_speed) * 3.6)]
 
 
@@ -511,6 +644,9 @@ func summary() -> Dictionary:
 		"big_air": st["big_air"],
 		"drifts": st["drifts"],
 		"smash": st["smash"],
+		"mega_jump": st["mega_jump"],
+		"near_miss": st["near_miss"],
+		"heli_down": st["heli_down"],
 		"busted_peak": snappedf(main.busted_peak, 0.01),
 		"stuck": bot.stuck_count,
 		"avg_kmh": int(bot.dist_sum / maxf(bot.time_sum, 0.1) * 3.6),
@@ -520,6 +656,7 @@ func summary() -> Dictionary:
 	}
 	var e: float = 4.0 * main.wrecked + 8.0 * st["collapses"] + 5.0 * st["chains"] + 6.0 * st["gas"]
 	e += 4.0 * st["big_air"] + 1.5 * st["drifts"] + 1.5 * st["smash"] + 0.5 * st["max_cops"]
+	e += 7.0 * st["mega_jump"] + 2.0 * st["near_miss"] + 12.0 * st["heli_down"]
 	if main.busted_peak > 0.6:
 		e += 4.0
 	if done.has("trap_boom"):

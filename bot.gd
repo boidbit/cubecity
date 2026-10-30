@@ -420,7 +420,45 @@ func _blocked(n: Vector2i) -> bool:
 	for f in world.flyovers:
 		if n.x == f.x and absi(n.y - f.y) <= 1:
 			return true
+	# a stunt set piece standing on the road: keep routes off it
+	var np := _flat(world.node_pos(n))
+	for z in world.stunt_zones:
+		var a: Vector3 = _flat(z[0])
+		var ab: Vector3 = _flat(z[1]) - a
+		var t := clampf((np - a).dot(ab) / maxf(ab.length_squared(), 0.01), 0.0, 1.0)
+		if np.distance_to(a + ab * t) < 16.0:
+			return true
 	return false
+
+
+# A free straight stretch ahead for a stunt set piece: the point where it starts (just
+# past an intersection, at least `approach` m from the car), the heading, and the grid
+# node it follows. Empty if the road ahead is not free for `length` m.
+func stunt_axis(length: float, approach: float = 50.0) -> Dictionary:
+	var h := _grid_dir()
+	var dirv := Vector3(h.x, 0, h.y)
+	var p := _flat(car.global_position)
+	var node := node_ahead()
+	for k in 3:
+		var origin := _flat(world.node_pos(node)) + dirv * 18.0
+		if (origin - p).dot(dirv) >= approach:
+			var end := origin + dirv * length
+			var ok := absf(end.x) < World.HALF - 25.0 and absf(end.z) < World.HALF - 25.0
+			var cnt := int(ceil(length / World.PITCH)) + 1
+			for i in range(-1, cnt + 1):
+				var m := node + h * i
+				if not _inside(m) or _blocked(m):
+					ok = false
+			if ok:
+				return {"origin": origin, "dir": dirv, "node": node}
+		node += h
+	return {}
+
+
+# Follow a ready-made list of waypoints (stunts build their own).
+func set_plan(points: Array, kinds_in: Array, name: String) -> void:
+	var none: Array[Vector2i] = []
+	_commit(none, points, kinds_in, name)
 
 
 # Prefer carrying straight on, then turning; fall back to the other order.
