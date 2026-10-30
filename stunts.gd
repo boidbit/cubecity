@@ -5,22 +5,23 @@ extends Node3D
 # top to another, a corridor of barrels, a tower brought down as the car goes by.
 
 # MEGA JUMP, measured along the road from the start of the ramp (metres):
-#   0..46     ramp up the face of tower A (rises 9 m)
-#   46..60    roof of tower A; the last 8 m kick up 1.2 m
-#   60..84    gap
-#   84..98    roof of tower B (1.5 m lower, so a short jump still lands)
-#   98..158   ramp down
-const RAMP_L := 46.0
-const RAMP_H := 9.0
+#   0..56     ramp up the face of tower A (rises 11 m)
+#   56..70    roof of tower A; the last 8 m kick up 1.7 m
+#   70..106   gap
+#   106..126  roof of tower B (2 m lower, so a short jump still lands)
+#   126..186  ramp down
+const RAMP_L := 56.0
+const RAMP_H := 11.0
 const DECK_L := 14.0
+const DECK_B_L := 20.0
 const KICK_L := 8.0
-const KICK_H := 1.2
-const GAP := 24.0
+const KICK_H := 1.7
+const GAP := 36.0
 const DOWN_L := 60.0
-const DROP_B := 1.5
+const DROP_B := 2.0
 const TOWER_W := 14.0
 const RAMP_W := 9.0
-const MEGA_LEN := RAMP_L + DECK_L + GAP + DECK_L + DOWN_L
+const MEGA_LEN := RAMP_L + DECK_L + GAP + DECK_B_L + DOWN_L
 
 var main
 var world: World
@@ -82,11 +83,11 @@ func build_mega(origin: Vector3, dirv: Vector3) -> Dictionary:
 	var ha := RAMP_H
 	var hb := RAMP_H - DROP_B
 	_tower(root, origin, dirv, RAMP_L, DECK_L, ha, Color(0.62, 0.62, 0.6), 0.5)
-	_tower(root, origin, dirv, RAMP_L + DECK_L + GAP, DECK_L, hb, Color(0.3, 0.42, 0.55), 0.85)
+	_tower(root, origin, dirv, RAMP_L + DECK_L + GAP, DECK_B_L, hb, Color(0.3, 0.42, 0.55), 0.85)
 	_ramp(root, _pt(origin, dirv, 0.0, 0.05), _pt(origin, dirv, RAMP_L, ha), RAMP_W, yellow)
 	var s_kick := RAMP_L + DECK_L - KICK_L
 	_ramp(root, _pt(origin, dirv, s_kick, ha), _pt(origin, dirv, RAMP_L + DECK_L, ha + KICK_H), RAMP_W, yellow)
-	var s_down := RAMP_L + DECK_L + GAP + DECK_L
+	var s_down := RAMP_L + DECK_L + GAP + DECK_B_L
 	_ramp(root, _pt(origin, dirv, s_down, hb), _pt(origin, dirv, s_down + DOWN_L, 0.05), RAMP_W + 2.0, yellow)
 	var end := _pt(origin, dirv, MEGA_LEN)
 	_register(root, origin - dirv * 12.0, end + dirv * 12.0, 14.0)

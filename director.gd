@@ -15,7 +15,7 @@ extends Node
 const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "BOT vs THE CITY", "survive": "SURVIVE 5 STARS",
 	"stunt": "THE STUNT SHOW", "heli": "BOT vs HELICOPTER", "rush": "RUSH HOUR vs 1 BOT"}
 # The stunt show runs these in order, moving on as soon as one is done (or cannot be placed).
-const STUNT_ORDER := ["mega", "corridor", "tower", "ramp", "mega", "gas", "tower", "corridor"]
+const STUNT_ORDER := ["corridor", "mega", "tower", "ramp", "mega", "gas", "tower", "corridor"]
 # Story lines shown in the middle of the screen when these events happen (once each).
 const EVENT_CAPTIONS := {
 	"roadblock": "THEY BLOCKED THE ROAD", "heli": "NOW A HELICOPTER?!", "swat": "THE SWAT TRUCK ARRIVES",
@@ -25,7 +25,7 @@ const EVENT_CAPTIONS := {
 }
 const START_CAPTIONS := {
 	"chase": "ONE BOT. NO BRAKES.", "survive": "5 STARS. NO ESCAPE.", "destroy": "HOW MUCH CAN IT BREAK?",
-	"heli": "THEY SENT A HELICOPTER.", "rush": "RUSH HOUR. NO RULES.", "stunt": "THE STUNT SHOW.",
+	"heli": "THEY SENT A HELICOPTER.", "rush": "RUSH HOUR. NO RULES.", "stunt": "NO RAMP IS TOO BIG.",
 }
 const PRIORITY := ["trap", "heli_down", "mega_jump", "collapse", "gas"]
 const FINALE := 12.0      # seconds before the end when the protection lifts and the finale starts
@@ -60,7 +60,7 @@ var mega_cam_t := 0.0
 var pending_tower: Building = null
 var tower_t := 0.0
 var stunt_i := 0
-var stunt_wait := 0.0
+var stunt_wait := 2.0
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -450,11 +450,12 @@ func _mega_camera(t: float) -> bool:
 	if mega_cam_t == 0.0:
 		if along > -70.0 and along < -15.0:
 			mega_cam_t = t
-			main.cam_anchor = lip + dirv * 22.0 + dirv.cross(Vector3.UP) * 24.0 + Vector3(0, 4.5, 0)
+			main.cam_anchor = lip + dirv * 26.0 + dirv.cross(Vector3.UP) * 26.0 + Vector3(0, 4.5, 0)
 			main.cam_mode = "anchor"
 			main.cam_cut = true
+			return true
 		return false
-	if along > 62.0 or t - mega_cam_t > 7.0:
+	if along > 78.0 or t - mega_cam_t > 8.0:
 		main.cam_mode = "chase"
 		main.cam_cut = true
 		mega_info = {}

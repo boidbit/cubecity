@@ -353,8 +353,8 @@ func _build_video() -> void:
 
 	var vg := Gradient.new()
 	vg.set_color(0, Color(0, 0, 0, 0.0))
-	vg.set_color(1, Color(0, 0, 0, 0.6))
-	vg.add_point(0.55, Color(0, 0, 0, 0.0))
+	vg.set_color(1, Color(0, 0, 0, 0.42))
+	vg.add_point(0.62, Color(0, 0, 0, 0.0))
 	var vt := GradientTexture2D.new()
 	vt.gradient = vg
 	vt.fill = GradientTexture2D.FILL_RADIAL

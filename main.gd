@@ -436,6 +436,11 @@ func _update_police(dt: float) -> void:
 			c.queue_free()
 		elif not c.is_swat:
 			c.top_speed = 25.0 + level * 2.2
+			if director != null:
+				# video runs: rubber-band the pack so it stays close enough to be filmed
+				var gap := c.global_position.distance_to(player.global_position)
+				c.top_speed = maxf(c.top_speed, player.speed + clampf((gap - 18.0) * 0.12, 0.0, 12.0))
+				c.vmax = c.top_speed + 6.0
 	for c in blocks.duplicate():
 		if not is_instance_valid(c):
 			blocks.erase(c)
@@ -825,7 +830,7 @@ func on_big_air(t: float) -> void:
 	bonus += pts
 	stats["big_air"] += 1
 	log_event("big_air")
-	if t > 1.5:
+	if t > 0.8 and bot != null and bot.plan_name == "mega":
 		stats["mega_jump"] += 1
 		bonus += 500
 		log_event("mega_jump")
