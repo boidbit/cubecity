@@ -40,6 +40,7 @@ const Props := preload("res://story/props.gd")
 const Street := preload("res://story/street.gd")
 const Spots := preload("res://story/spots.gd")
 const Action := preload("res://story/action.gd")
+const Grade := preload("res://story/grade.gd")
 const DEFAULT_SCREENPLAY := "res://story/screenplays/ep1_date_night.json"
 const INTRO := 2.6          # the opening drone shot; the title card sits on it
 const END_HOLD := 3.4       # seconds the end card stays after the last line
@@ -91,6 +92,19 @@ var cam_on := false
 var cam_new := true
 var cam_pos := Vector3.ZERO
 var cam_fov := 50.0
+# the camera moves on springs (eases in and out), in the frame of what it follows
+var cam_local := Vector3.ZERO
+var cam_vel := Vector3.ZERO
+var look_local := Vector3.ZERO
+var look_vel := Vector3.ZERO
+var cam_anchor: Node3D = null
+const STRONG := ["shock", "angry", "love", "sad", "cry", "scared", "shy"]
+var push := false                # this line gets a slow push-in on the face
+var since_two := 0               # lines since the last wide two-shot
+var last_speaker := ""
+var react_who := ""              # after a big line: whose reaction the camera holds on
+var react_until := 0.0
+var line_gap := 0.3
 var orbit_a := 0.0
 var max_duration := 90.0         # the clip may run this long if the story needs it
 # on foot
@@ -109,6 +123,7 @@ var extras := {}                 # who -> rig of a side character on foot (the v
 var passing: Array = []          # things being handed over: {"node", "from", "to", "t0"}
 var act                          # Action: other cars, grabbing, the chase, fights, drama shots
 var to_place := {}               # who -> {"at", "dist"}: side characters waiting for the street
+var grade                        # Grade: the colour grade for the mood
 
 var ui_name: Label
 var ui_sub: Label
@@ -147,6 +162,10 @@ func setup(main_node, cfg: Dictionary) -> void:
 	act.setup(self)
 	_make_side_cast()
 	_make_ui()
+	if not bool(data.get("no_grade", false)):
+		grade = Grade.new()
+		add_child(grade)
+		grade.setup(str(data.get("mood", "")))
 	if bool(data.get("start_on_foot", false)):
 		_start_on_foot()
 	for k: String in data.get("props", []):
@@ -337,6 +356,9 @@ func _process(dt: float) -> void:
 	_on_foot(t)
 	_pass_things(t)
 	act.tick(dt, t)
+	if grade != null:
+		var zoom: bool = not act.shot.is_empty() and str(act.shot.get("type", "")) == "zoom"
+		grade.set_drama(1.0 if zoom else (0.6 if t < react_until or (push and not cur.is_empty()) else 0.0))
 	_schedule(t)
 	_ending(dt, t)
 	_animate(dt, t)
@@ -414,7 +436,7 @@ func _schedule(t: float) -> void:
 	while bi < beats.size():
 		var b: Dictionary = beats[bi]
 		if b.has("say"):
-			if t - last_end < gap:
+			if t - last_end < line_gap:
 				return
 			if ending != "" and not end_ready:
 				return
@@ -1044,7 +1066,11 @@ func _start_line(line: Dictionary, t: float, is_reaction: bool) -> void:
 			r.set_state("happy", "idle", false)
 	played.append({"id": str(line.get("id", "")), "t": snappedf(t, 0.01)})
 	_write_log()
+	var old_shot := shot
+	var old_who := shot_who
 	shot_who = who
+	var emo := str(line.get("emotion", "neutral"))
+	push = emo in STRONG
 	if extras.has(who):
 		shot = "close"          # filmed by the camera on foot
 	elif not rigs.has(who):
@@ -1053,16 +1079,27 @@ func _start_line(line: Dictionary, t: float, is_reaction: bool) -> void:
 		shot = ["orbit", "close", "orbit", "two"][shot_i % 4]
 	elif ending == "caught":
 		shot = ["two", "close", "police_wide"][shot_i % 3]
-	elif main.alive_police() > 0:
-		shot = ["two", "close", "behind", "close", "side", "close"][shot_i % 6]
+	elif push:
+		shot = "close"          # a big feeling: on the face, moving in
+	elif old_shot == "close" and who != last_speaker:
+		shot = "close"          # shot / reverse shot
+	elif since_two >= 3:
+		shot = "two"
+	elif main.alive_police() > 0 and shot_i % 5 == 4:
+		shot = "behind"
 	else:
-		shot = ["two", "close", "side", "close", "two", "close"][shot_i % 6]
+		shot = "close" if shot_i % 2 == 0 else "two"
 	if is_reaction:
 		shot = "close"
 	if forced_shot != "":
 		shot = forced_shot
+	since_two = 0 if shot == "two" else since_two + 1
+	last_speaker = who
 	shot_i += 1
-	cam_new = true
+	# a cut only when the picture changes (the same shot on the same person just carries on)
+	if shot != old_shot or who != old_who or t < react_until:
+		cam_new = true
+	react_until = 0.0
 	ui_name.text = str(c.get("name", who.to_upper()))
 	var chip := StyleBoxFlat.new()
 	chip.bg_color = Color.from_string(str(c.get("color", "#2f6bff" if who == "police" else "#ffffff")), Color.WHITE)
@@ -1082,8 +1119,27 @@ func _end_line(t: float, cut: bool) -> void:
 	if cut and not played.is_empty():
 		played[played.size() - 1]["cut"] = snappedf(t - cur_start, 0.01)
 		_write_log()
+	var big := str(cur.get("emotion", "")) in STRONG or str(cur.get("react", "")) in STRONG
+	var who := str(cur.get("say", cur.get("who", "")))
 	cur = {}
 	last_end = t
+	line_gap = gap
+	if big and not cut and ending == "":
+		var listener: Rig = _other(who) if rigs.has(who) else null
+		if listener == null:
+			var bd := 9.0
+			for r: Rig in rigs.values():
+				var sp := _rig_of(who)
+				if sp != null and r.visible and r.global_position.distance_to(sp.global_position) < bd:
+					bd = r.global_position.distance_to(sp.global_position)
+					listener = r
+		if listener != null and listener.visible:
+			react_who = listener.who
+			react_until = t + 0.95
+			line_gap = gap + 0.85
+			shot_who = react_who
+			shot = "close"
+			cam_new = true
 	ui_name.visible = false
 	ui_sub.visible = false
 	for r: Rig in rigs.values() + extras.values():
@@ -1160,7 +1216,7 @@ func _camera(dt: float, t: float) -> void:
 		_chase_camera(dt, t)
 		return
 	var pl: Car = main.player
-	var want := (not cur.is_empty() or t - last_end < 0.45) and not done and t > INTRO
+	var want := (not cur.is_empty() or t - last_end < 0.45 or t < react_until) and not done and t > INTRO
 	if pl.airtime > 0.0 or main.cine_t > 0.0 or main.game_over:
 		want = false
 	if ending != "" and end_ready:
@@ -1198,7 +1254,11 @@ func _camera(dt: float, t: float) -> void:
 			var r: Rig = rigs.get(shot_who, null)
 			var hp: Vector3 = r.head.global_position + Vector3(0, 0.27, 0) if r != null else heads
 			var sx: float = r.seat_x if r != null else 0.0
-			pos = hp + fwd * 2.9 + right * sx * 1.3 + Vector3(0, 0.1, 0)
+			var dist := 2.9
+			if push and not cur.is_empty():
+				var k := clampf((t - cur_start) / maxf(cur_end - cur_start, 0.6), 0.0, 1.0)
+				dist = lerpf(2.9, 2.05, k * k * (3.0 - 2.0 * k))
+			pos = hp + fwd * dist + right * sx * 1.3 * dist / 2.9 + Vector3(0, 0.1, 0)
 			look_at_p = hp + right * sx * -0.35
 			shot_fov = 42.0
 		"side":
@@ -1241,14 +1301,9 @@ func _camera(dt: float, t: float) -> void:
 	if not hit.is_empty():
 		pos = (hit["position"] as Vector3) + (from - pos).normalized() * 0.5
 	pos += Vector3(sin(t * 2.3), sin(t * 3.1), sin(t * 1.7)) * 0.012
-	# the game's own camera has already moved the camera this frame, so smooth from our own state
-	cam_pos = pos if cam_new else cam_pos.lerp(pos, 1.0 - exp(-20.0 * dt))
-	cam_fov = shot_fov if cam_new else lerpf(cam_fov, shot_fov, 1.0 - exp(-8.0 * dt))
-	cam.global_position = cam_pos
-	if cam_pos.distance_to(look_at_p) > 0.05:
-		cam.look_at(look_at_p, Vector3.UP)
-	cam.fov = cam_fov
-	cam_new = false
+	# the game's own camera has already moved the camera this frame, so it moves from our
+	# own state: on a spring, in the car's frame (so it does not trail behind the car)
+	_cam_to(pos, look_at_p, shot_fov, 7.0, dt, pl)
 
 
 # On foot the story films everything itself: a wide shot as they get out, a tracking shot
@@ -1271,6 +1326,20 @@ func _drama_camera(dt: float, t: float) -> void:
 				var facing := -r.global_transform.basis.z
 				facing.y = 0.0
 				facing = facing.normalized()
+				if not sh.has("ang"):
+					# from in front, turned aside if somebody stands in the way (picked once per shot)
+					sh["ang"] = 0.0
+					for a: float in [0.0, 0.5, -0.5, 0.95, -0.95, 1.4, -1.4]:
+						var dv := facing.rotated(Vector3.UP, a)
+						var clear := true
+						for q: Rig in rigs.values() + extras.values():
+							if q != r and q.visible and not q.seated and q.global_position.distance_to(r.global_position) < 4.5:
+								if _blocks(q, hp + dv * 3.4, hp) or _blocks(q, hp + dv * 1.15, hp):
+									clear = false
+						if clear:
+							sh["ang"] = a
+							break
+				facing = facing.rotated(Vector3.UP, float(sh["ang"]))
 				var e := 1.0 - pow(1.0 - k, 3.0)
 				pos = hp + facing * lerpf(3.4, 1.15, e) + Vector3(0, 0.06, 0)
 				look = hp
@@ -1281,7 +1350,7 @@ func _drama_camera(dt: float, t: float) -> void:
 				var d := other.global_position - r.global_position
 				d.y = 0.0
 				d = d.normalized()
-				pos = r.head.global_position + Vector3(0, 0.32, 0) - d * 0.9 + d.cross(Vector3.UP) * 0.45
+				pos = r.head.global_position + Vector3(0, 0.5, 0) - d * 0.75 + d.cross(Vector3.UP) * 0.7
 				look = other.head.global_position + Vector3(0, 0.1, 0)
 				fov = 38.0
 		"car":
@@ -1298,7 +1367,7 @@ func _drama_camera(dt: float, t: float) -> void:
 			pos = c - out * 11.0 + along * 5.0 + Vector3(0, 6.5, 0)
 			look = c + Vector3(0, 1.0, 0)
 			fov = 50.0
-	_put_camera(pos, look, fov, smooth, dt)
+	_put_camera(pos, look, fov, smooth, dt, act.cars.get(str(sh.get("car", "")), null) if str(sh["type"]) == "car" else null)
 
 
 # Somebody inside a story car is talking (or screaming): film the car from beside it.
@@ -1307,7 +1376,7 @@ func _van_camera(dt: float, t: float) -> void:
 	var v = act.cars[act.in_car[shot_who]]
 	var right: Vector3 = v.forward().cross(Vector3.UP)
 	var pos: Vector3 = v.global_position + right * 4.2 + v.forward() * 2.5 + Vector3(0, 1.9, 0)
-	_put_camera(pos, v.global_position + Vector3(0, 1.4, 0), 52.0, 10.0, dt)
+	_put_camera(pos, v.global_position + Vector3(0, 1.4, 0), 52.0, 10.0, dt, v)
 
 
 # The chase: from behind the leads' car, looking up the road at the van; the flight off a
@@ -1334,18 +1403,54 @@ func _chase_camera(dt: float, t: float) -> void:
 	else:
 		pos = pl.global_position - aim * 9.5 + Vector3(0, 3.6, 0)
 		look = pl.global_position + aim * minf(d, 40.0) * 0.6 + Vector3(0, 1.0, 0)
-	_put_camera(pos, look, fov, 4.0, dt)
+	_put_camera(pos, look, fov, 6.0, dt, pl)
 
 
-func _put_camera(pos: Vector3, look: Vector3, fov: float, smooth: float, dt: float) -> void:
-	var cam: Camera3D = main.cam
-	cam_pos = pos if cam_new else cam_pos.lerp(pos, 1.0 - exp(-smooth * dt))
-	cam_fov = fov if cam_new else lerpf(cam_fov, fov, 1.0 - exp(-smooth * dt))
+func _put_camera(pos: Vector3, look: Vector3, fov: float, smooth: float, dt: float, anchor: Node3D = null) -> void:
+	_cam_to(pos, look, fov, smooth * 0.75, dt, anchor)
+
+
+# Moves the camera toward pos, looking at look, on critically damped springs (it eases in and
+# out instead of sliding at a constant rate). With an anchor (a moving car) the springs work in
+# its frame, turned only about the vertical, so the camera keeps up with it.
+func _cam_to(pos: Vector3, look: Vector3, fov: float, omega: float, dt: float, anchor: Node3D = null) -> void:
+	var xf := Transform3D.IDENTITY
+	if anchor != null:
+		var f := -anchor.global_transform.basis.z
+		xf = Transform3D(Basis(Vector3.UP, atan2(-f.x, -f.z)), anchor.global_position)
+	var inv := xf.affine_inverse()
+	var p := inv * pos
+	var l := inv * look
+	if cam_new or anchor != cam_anchor:
+		cam_local = p
+		look_local = l
+		cam_vel = Vector3.ZERO
+		look_vel = Vector3.ZERO
+		cam_fov = fov
+	else:
+		var r1 := _spring(cam_local, cam_vel, p, omega, dt)
+		cam_local = r1[0]
+		cam_vel = r1[1]
+		var r2 := _spring(look_local, look_vel, l, omega * 1.3, dt)
+		look_local = r2[0]
+		look_vel = r2[1]
+		cam_fov = lerpf(cam_fov, fov, 1.0 - exp(-omega * 0.8 * dt))
+	cam_anchor = anchor
 	cam_new = false
+	cam_pos = xf * cam_local
+	var cam: Camera3D = main.cam
 	cam.global_position = cam_pos
-	if cam_pos.distance_to(look) > 0.05:
-		cam.look_at(look, Vector3.UP)
+	var lw := xf * look_local
+	if cam_pos.distance_to(lw) > 0.05:
+		cam.look_at(lw, Vector3.UP)
 	cam.fov = cam_fov
+
+
+static func _spring(x: Vector3, v: Vector3, target: Vector3, omega: float, dt: float) -> Array:
+	var d := x - target
+	var e := exp(-omega * dt)
+	var tmp := (v + d * omega) * dt
+	return [target + (d + tmp) * e, (v - tmp * omega) * e]
 
 
 func _foot_camera(dt: float, t: float) -> void:
@@ -1386,10 +1491,13 @@ func _foot_camera(dt: float, t: float) -> void:
 	var fighters := _fighters()
 	if not fighters.is_empty() and cur.is_empty():
 		s = "foot_fight"
+	elif cur.is_empty() and t < react_until and _rig_of(react_who) != null and people.has(_rig_of(react_who)):
+		s = "foot_close"        # holding on the reaction to a big line
 	elif not cur.is_empty() and extras.has(shot_who):
 		s = "foot_close"
 	elif not cur.is_empty():
-		s = "foot_close" if (shot_i % 2 == 0 and rigs.has(shot_who) and not (rigs[shot_who] as Rig).seated) else "foot_two"
+		var on_foot := rigs.has(shot_who) and not (rigs[shot_who] as Rig).seated
+		s = "foot_close" if (on_foot and (push or shot == "close")) else "foot_two"
 	elif (not exits.is_empty() or not boarding.is_empty()) and _near_car(people, 5.0):
 		s = "foot_wide"
 	elif walking:
@@ -1417,8 +1525,12 @@ func _foot_camera(dt: float, t: float) -> void:
 		var side := -out - facing * facing.dot(-out)
 		side = side.normalized() if side.length() > 0.2 else facing.cross(Vector3.UP)
 		# a three-quarter view from the road side, turned further while the partner is in the way
+		var dist := 2.4
+		if push and not cur.is_empty():
+			var pk := clampf((t - cur_start) / maxf(cur_end - cur_start, 0.6), 0.0, 1.0)
+			dist = lerpf(2.4, 1.7, pk * pk * (3.0 - 2.0 * pk))
 		for a: float in [0.5, 0.85, 1.2, 1.55]:
-			var p := hp + (facing * cos(a) + side * sin(a)) * 2.4 + Vector3(0, 0.12, 0)
+			var p := hp + (facing * cos(a) + side * sin(a)) * dist + Vector3(0, 0.12, 0)
 			if not r.hug and others.all(func(o: Rig) -> bool: return o.pose in ["fall", "ko"] or not _blocks(o, p, hp)):
 				cands.append(p)
 		if cands.is_empty():
@@ -1514,13 +1626,7 @@ func _foot_camera(dt: float, t: float) -> void:
 	if not hit.is_empty():
 		pos = (hit["position"] as Vector3) + (from - pos).normalized() * 0.5
 	pos += Vector3(sin(t * 2.3), sin(t * 3.1), sin(t * 1.7)) * 0.01
-	cam_pos = pos if cam_new else cam_pos.lerp(pos, 1.0 - exp(-6.0 * dt))
-	cam_fov = fov if cam_new else lerpf(cam_fov, fov, 1.0 - exp(-6.0 * dt))
-	cam.global_position = cam_pos
-	if cam_pos.distance_to(look) > 0.05:
-		cam.look_at(look, Vector3.UP)
-	cam.fov = cam_fov
-	cam_new = false
+	_cam_to(pos, look, fov, 4.5, dt)
 
 
 # The two in the fight going on (attacker, opponent), or [] when nobody is fighting.

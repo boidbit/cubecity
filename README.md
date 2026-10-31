@@ -77,6 +77,12 @@ Episodes are no longer only a couple in a car:
   fight with comic "DHISHUM!" pops and knock-outs.
 - **Drama:** episodes can start on the pavement; people walk together, stare at each other, and the camera does
   a push-in on a shocked face (with a "dun dun DUNNN" in the music) or looks over a shoulder.
+- **Acting:** faces with brows and eyes that look about (neutral, smug, love, shock, angry, sad, happy,
+  laugh, cry, shy, scared, think; a blink hides each change), body language for each feeling (slumped when
+  sad, arms crossed when smug, hands to the face when crying ...), breathing, nods while listening. The
+  camera eases in and out on springs, moves in slowly on emotional lines, holds on the listener's
+  reaction after a big line (with a beat before the next one), and each mood gets its own colour grade
+  and vignette (`story/grade.gd`).
 - **Templates:** the workflow's `template` input (kidnap_rescue, jealous_reveal, date, proposal) gives the AI
   writer a recipe; `ep5_kidnap` and `ep6_cousin` are saved examples.
 
