@@ -11,14 +11,18 @@ const FACE_PX := 16
 const SKIN_DARK := Color(0.12, 0.09, 0.1)
 const PINK := Color(1.0, 0.35, 0.55)
 const EMOTIONS := {
-	"neutral": {"eyes": "open", "mouth": "smile"},
-	"smug": {"eyes": "smug", "mouth": "smirk"},
-	"love": {"eyes": "heart", "mouth": "smile", "blush": true},
-	"shock": {"eyes": "wide", "mouth": "o"},
-	"angry": {"eyes": "angry", "mouth": "frown"},
-	"sad": {"eyes": "sad", "mouth": "frown"},
-	"happy": {"eyes": "happy", "mouth": "smile", "blush": true},
-	"laugh": {"eyes": "happy", "mouth": "open"},
+	"neutral": {"eyes": "open", "mouth": "smile", "brows": "flat"},
+	"smug": {"eyes": "smug", "mouth": "smirk", "brows": "one"},
+	"love": {"eyes": "heart", "mouth": "smile", "blush": true, "brows": "soft"},
+	"shock": {"eyes": "wide", "mouth": "o", "brows": "up"},
+	"angry": {"eyes": "angry", "mouth": "frown", "brows": "angry"},
+	"sad": {"eyes": "sad", "mouth": "frown", "brows": "sad"},
+	"happy": {"eyes": "happy", "mouth": "smile", "blush": true, "brows": "soft"},
+	"laugh": {"eyes": "happy", "mouth": "open", "brows": "up"},
+	"cry": {"eyes": "cry", "mouth": "cry", "brows": "sad"},
+	"shy": {"eyes": "shy", "mouth": "small", "blush": true, "brows": "soft"},
+	"scared": {"eyes": "scared", "mouth": "wavy", "brows": "up"},
+	"think": {"eyes": "think", "mouth": "flat", "brows": "one"},
 }
 static var face_cache := {}
 static var heart_tex: ImageTexture
@@ -67,6 +71,10 @@ var held: Node3D = null
 var reach_t := 0.0           # arm stretched out (giving or taking) while > 0
 var bite_t := 3.0            # food: next bite or sip
 var t := 0.0
+var emo_t := 0.0             # time since the emotion changed (poses ease in)
+var glance_t := 3.0          # eyes dart somewhere now and then
+var gaze := Vector2i.ZERO
+var phase := randf() * 10.0  # so two people do not breathe in step
 var blink_t := 2.5
 var face_key := ""
 var mats := {}
@@ -308,44 +316,84 @@ func _rect(img: Image, x0: int, y0: int, w: int, h: int, c: Color) -> void:
 			_px(img, x, y, c)
 
 
-func _eyes(img: Image, kind: String) -> void:
-	for ex in [3, 10]:
+# Eyes are 4 px wide with a white and a 2 px pupil that can look left / right (gx) and
+# up / down (gy); brows sit on row 3.
+func _eyes(img: Image, kind: String, gx: int, gy: int, frame: int) -> void:
+	var white := Color(0.97, 0.97, 0.97)
+	var tear := Color(0.45, 0.75, 1.0)
+	for ex in [3, 9]:
+		var px: int = ex + 1 + gx
 		match kind:
 			"open":
-				_rect(img, ex, 5, 3, 4, SKIN_DARK)
+				_rect(img, ex, 5, 4, 4, white)
+				_rect(img, px, 6 + gy, 2, 3 - absi(gy), SKIN_DARK)
 			"blink":
-				_rect(img, ex, 7, 3, 1, SKIN_DARK)
+				_rect(img, ex, 7, 4, 1, SKIN_DARK)
 			"smug":
-				_rect(img, ex, 6, 3, 2, SKIN_DARK)
-				_rect(img, ex, 5, 3, 1, SKIN_DARK)
+				_rect(img, ex, 6, 4, 2, white)
+				_rect(img, px, 6, 2, 2, SKIN_DARK)
+				_rect(img, ex, 5, 4, 1, SKIN_DARK)
 			"happy":
 				_px(img, ex, 7, SKIN_DARK)
-				_rect(img, ex + 1, 6, 1, 1, SKIN_DARK)
-				_px(img, ex + 2, 7, SKIN_DARK)
+				_rect(img, ex + 1, 6, 2, 1, SKIN_DARK)
+				_px(img, ex + 3, 7, SKIN_DARK)
 			"heart":
-				var pat := ["101", "111", "010"]
+				var pat := ["1001", "1111", "0110"]
 				for y in 3:
-					for x in 3:
+					for x in 4:
 						if pat[y][x] == "1":
 							_px(img, ex + x, 5 + y, PINK)
 			"wide":
-				_rect(img, ex, 4, 3, 5, Color.WHITE)
-				_rect(img, ex + 1, 6, 1, 2, SKIN_DARK)
+				_rect(img, ex, 4, 4, 5, white)
+				_rect(img, px, 6, 2, 2, SKIN_DARK)
+			"scared":
+				_rect(img, ex, 4, 4, 5, white)
+				_px(img, ex + 1 + (frame % 2), 6, SKIN_DARK)
 			"angry":
-				_rect(img, ex, 6, 3, 3, SKIN_DARK)
+				_rect(img, ex, 6, 4, 3, white)
+				_rect(img, px, 6, 2, 3, SKIN_DARK)
 			"sad":
-				_rect(img, ex, 5, 3, 4, SKIN_DARK)
-				_px(img, ex + 1, 9, Color(0.4, 0.7, 1.0))
-				_px(img, ex + 1, 10, Color(0.4, 0.7, 1.0))
-	if kind == "angry":
-		for i in 3:
-			_px(img, 3 + i, 4 - (i - 1) + 0, SKIN_DARK)
-			_px(img, 10 + i, 4 + (i - 1) + 0, SKIN_DARK)
-		_rect(img, 2, 3, 4, 1, SKIN_DARK)
-		_rect(img, 10, 3, 4, 1, SKIN_DARK)
-	if kind == "sad":
-		_rect(img, 3, 3, 3, 1, SKIN_DARK)
-		_rect(img, 10, 3, 3, 1, SKIN_DARK)
+				_rect(img, ex, 5, 4, 4, white)
+				_rect(img, px, 7, 2, 2, SKIN_DARK)
+				_px(img, ex + 1, 9, tear)
+			"cry":
+				# squeezed shut, tears running down (two frames)
+				_rect(img, ex, 7, 4, 1, SKIN_DARK)
+				_px(img, ex, 6, SKIN_DARK)
+				_px(img, ex + 3, 6, SKIN_DARK)
+				for y in range(8, 14):
+					if (y + frame) % 2 == 0:
+						_px(img, ex + 1, y, tear)
+			"shy":
+				_rect(img, ex, 6, 4, 3, white)
+				_rect(img, ex + 2, 7, 2, 2, SKIN_DARK)
+			"think":
+				_rect(img, ex, 5, 4, 4, white)
+				_rect(img, ex + 2, 5, 2, 2, SKIN_DARK)
+
+
+func _brows(img: Image, kind: String) -> void:
+	match kind:
+		"flat":
+			_rect(img, 3, 3, 4, 1, SKIN_DARK)
+			_rect(img, 9, 3, 4, 1, SKIN_DARK)
+		"soft":
+			_rect(img, 4, 3, 3, 1, SKIN_DARK)
+			_rect(img, 9, 3, 3, 1, SKIN_DARK)
+		"up":
+			_rect(img, 3, 2, 4, 1, SKIN_DARK)
+			_rect(img, 9, 2, 4, 1, SKIN_DARK)
+		"one":
+			_rect(img, 3, 4, 4, 1, SKIN_DARK)
+			_rect(img, 9, 2, 4, 1, SKIN_DARK)
+		"angry":
+			for i in 4:
+				_px(img, 3 + i, 2 + i / 2, SKIN_DARK)
+				_px(img, 12 - i, 2 + i / 2, SKIN_DARK)
+		"sad":
+			for i in 4:
+				_px(img, 3 + i, 4 - i / 2, SKIN_DARK)
+				_px(img, 12 - i, 4 - i / 2, SKIN_DARK)
 
 
 func _mouth(img: Image, kind: String) -> void:
@@ -371,12 +419,26 @@ func _mouth(img: Image, kind: String) -> void:
 			_rect(img, 5, 11, 6, 1, SKIN_DARK)
 			_px(img, 4, 12, SKIN_DARK)
 			_px(img, 11, 12, SKIN_DARK)
+		"cry":
+			_rect(img, 5, 11, 6, 2, SKIN_DARK)
+			_rect(img, 6, 12, 4, 1, red)
+			_px(img, 4, 13, SKIN_DARK)
+			_px(img, 11, 13, SKIN_DARK)
+		"wavy":
+			for i in 6:
+				_px(img, 5 + i, 11 + (i % 2), SKIN_DARK)
+		"small":
+			_rect(img, 7, 11, 2, 1, SKIN_DARK)
+			_px(img, 6, 10, SKIN_DARK)
+			_px(img, 9, 10, SKIN_DARK)
+		"flat":
+			_rect(img, 6, 11, 4, 1, SKIN_DARK)
 		_:
 			_rect(img, 6, 11, 4, 1, SKIN_DARK)
 
 
-func _set_face(eyes: String, mouth_kind: String, blush: bool) -> void:
-	var key := "%s|%s|%s" % [eyes, mouth_kind, blush]
+func _set_face(eyes: String, mouth_kind: String, blush: bool, brows := "flat", gx := 0, gy := 0, frame := 0) -> void:
+	var key := "%s|%s|%s|%s|%d|%d|%d" % [eyes, mouth_kind, blush, brows, gx, gy, frame]
 	if key == face_key:
 		return
 	face_key = key
@@ -387,7 +449,9 @@ func _set_face(eyes: String, mouth_kind: String, blush: bool) -> void:
 			var bc := Color(1.0, 0.45, 0.55, 0.65)
 			_rect(img, 2, 9, 2, 1, bc)
 			_rect(img, 12, 9, 2, 1, bc)
-		_eyes(img, eyes)
+		_eyes(img, eyes, gx, gy, frame)
+		if eyes != "blink":
+			_brows(img, brows)
 		_mouth(img, mouth_kind)
 		face_cache[key] = ImageTexture.create_from_image(img)
 	face_mat.albedo_texture = face_cache[key]
@@ -396,7 +460,11 @@ func _set_face(eyes: String, mouth_kind: String, blush: bool) -> void:
 # ------------------------------------------------------------ state
 
 func set_state(emo: String, gest: String, talk: bool) -> void:
-	emotion = emo if EMOTIONS.has(emo) else "neutral"
+	var e := emo if EMOTIONS.has(emo) else "neutral"
+	if e != emotion:
+		blink_t = 0.0          # a blink hides the change of face
+		emo_t = 0.0
+	emotion = e
 	gesture = gest
 	speaking = talk
 	hearts.emitting = emotion == "love"
@@ -648,17 +716,26 @@ func _locomotion(dt: float) -> void:
 	knee_r.rotation.x = lerpf(knee_r.rotation.x, kr, minf(14.0 * dt, 1.0))
 	global_position.y = lerpf(global_position.y, ground + (lift + absf(sw) * 0.05 * amp) * size, minf(12.0 * dt, 1.0))
 	rotation.x = lerpf(rotation.x, tilt, minf(10.0 * dt, 1.0))
-	torso.rotation.x = lerpf(torso.rotation.x, -0.22 if running and speed_now > 1.0 else 0.0, minf(6.0 * dt, 1.0))
+	var lean := 0.0
+	if running and speed_now > 1.0:
+		lean = -0.22
+	elif pose == "stand" and path.is_empty():
+		lean = {"sad": -0.1, "cry": -0.14, "angry": -0.1, "shock": 0.12, "scared": 0.1, "laugh": -0.08 + 0.08 * sin(t * 9.0),
+			"shy": -0.05, "smug": 0.06}.get(emotion, 0.0)
+	torso.rotation.x = lerpf(torso.rotation.x, lean, minf(6.0 * dt, 1.0))
 	var twist := 0.0
 	if pose == "dance":
 		twist = 0.35 * sin(pose_t * 3.5)
 	elif pose == "punch":
 		twist = 0.45 if pose_t > 0.13 and pose_t < 0.35 else -0.2
+	if pose == "stand" and path.is_empty() and emotion == "shy":
+		twist = 0.18 * sin(t * 1.6 + phase)      # swaying, embarrassed
 	torso.rotation.y = twist if pose == "dance" else lerpf(torso.rotation.y, twist, minf(14.0 * dt, 1.0))
 
 
 func update(dt: float, partner: Node3D) -> void:
 	t += dt
+	emo_t += dt
 	if not seated:
 		_locomotion(dt)
 	blink_t -= dt
@@ -668,11 +745,19 @@ func update(dt: float, partner: Node3D) -> void:
 		if blink_t > -0.12:
 			eyes = "blink"
 		else:
-			blink_t = randf_range(2.0, 4.0)
+			blink_t = randf_range(2.0, 4.5)
+	# the eyes look about now and then (not while talking: then they look at whoever listens)
+	glance_t -= dt
+	if glance_t < 0.0:
+		if glance_t < -0.6 or speaking:
+			gaze = Vector2i.ZERO
+			glance_t = randf_range(1.8, 4.0)
+		elif gaze == Vector2i.ZERO:
+			gaze = Vector2i([-1, 1][randi() % 2], [0, 0, 1][randi() % 3])
 	var m: String = emo["mouth"]
 	if speaking:
 		m = "wide" if mouth > 0.6 else ("open" if mouth > 0.22 else m)
-	_set_face(eyes, m, bool(emo.get("blush", false)))
+	_set_face(eyes, m, bool(emo.get("blush", false)), str(emo.get("brows", "flat")), gaze.x, gaze.y, int(t * 6.0) % 2)
 
 	# head: turn toward the other character while talking or listening
 	var toward := 1.0 if seat_x > 0.0 else -1.0
@@ -682,23 +767,78 @@ func update(dt: float, partner: Node3D) -> void:
 		if face_point != Vector3.INF and path.is_empty():
 			yaw = clampf(wrapf(_yaw_to(face_point) - rotation.y, -PI, PI), -0.9, 0.9) * look
 	var amp := mouth if speaking else 0.0
-	var pitch := 0.07 * amp * sin(t * 9.0) + 0.04 * sin(t * 1.3)
+	var pitch := 0.07 * amp * sin(t * 9.0) + 0.03 * sin(t * 1.3 + phase)
+	yaw += 0.03 * sin(t * 0.8 + phase)
 	var roll := 0.0
-	if emotion == "love":
-		roll = 0.14 * sin(t * 1.7) * toward
-	elif emotion == "angry":
-		yaw += 0.12 * sin(t * 22.0)
-	elif emotion == "sad":
-		pitch += 0.22
-	head.rotation = Vector3(pitch, yaw, roll)
+	# listening: a little nod now and then
+	if not speaking and look > 0.5 and emotion in ["neutral", "happy", "love", "smug"]:
+		pitch += 0.06 * maxf(0.0, sin(t * 3.0 + phase)) * maxf(0.0, sin(t * 0.7 + phase))
+	match emotion:
+		"love":
+			roll = 0.14 * sin(t * 1.7) * toward
+		"angry":
+			yaw += 0.06 * sin(t * 20.0) * (1.0 if speaking else 0.3)
+			pitch -= 0.08
+		"sad":
+			pitch += 0.22
+		"cry":
+			pitch += 0.3 + 0.04 * sin(t * 14.0)
+		"shy":
+			pitch += 0.18
+			roll = 0.12 * toward
+		"scared":
+			yaw += 0.03 * sin(t * 30.0)
+		"think":
+			roll = -0.12 * toward
+			pitch -= 0.1
+		"shock":
+			pitch -= 0.12 * maxf(0.0, 1.0 - emo_t * 2.0)
+	head.rotation = head.rotation.lerp(Vector3(pitch, yaw, roll), minf(10.0 * dt, 1.0))
 
 	var bounce := 0.0
 	if emotion in ["laugh", "happy"] and speaking:
 		bounce = 0.035 * sin(t * 18.0)
+	elif emotion == "cry":
+		bounce = 0.012 * sin(t * 16.0)      # sobbing
+	# breathing (the head moves with the chest), slower when sad
+	var breath := 1.0 + 0.016 * sin(t * (1.1 if emotion in ["sad", "cry"] else 1.7) + phase)
+	torso.scale = Vector3(1.0, breath, 1.0)
 	torso.position.y = bounce
-	torso.rotation.z = look * 0.07 * toward if seated else 0.0
+	torso.rotation.z = look * 0.07 * toward if seated else 0.012 * sin(t * 0.6 + phase)
 
 	_arms(dt, toward)
+
+
+# Arms for how they feel, while standing still (or sitting next to the driver):
+# [left x, left y, right x, right y]. Rotating x swings an arm forward, y turns it in.
+func _feeling_arms() -> Array:
+	var w := sin(t * 2.0 + phase)
+	match emotion:
+		"sad":
+			return [0.15, 0.15, 0.15, -0.15]
+		"angry":
+			return [0.5, 0.3, 0.5, -0.3]
+		"shock":
+			# hands fly up, then come down a little
+			var k := clampf(emo_t * 3.0, 0.0, 1.0)
+			return [lerpf(1.0, 2.2, k) - maxf(emo_t - 1.2, 0.0) * 0.5, 0.5, lerpf(1.0, 2.2, k) - maxf(emo_t - 1.2, 0.0) * 0.5, -0.5]
+		"love":
+			return [1.25, -0.6, 1.25, 0.6]
+		"laugh":
+			return [0.9, -0.35 + 0.1 * w, 0.4, 0.0]
+		"smug":
+			return [1.2, -1.0, 1.25, 1.0]
+		"cry":
+			return [2.45, -0.55, 2.45, 0.55]
+		"shy":
+			return [-0.45, 0.0, -0.45, 0.0]
+		"scared":
+			return [1.7 + 0.08 * sin(t * 25.0), 0.35, 1.7 + 0.08 * sin(t * 25.0 + 1.0), -0.35]
+		"think":
+			return [1.0, -0.6, 2.35, -0.75]
+		"happy":
+			return [0.25 + 0.1 * w, 0.1, 0.25 - 0.1 * w, -0.1]
+	return []
 
 
 func _arms(dt: float, toward: float) -> void:
@@ -748,12 +888,29 @@ func _arms(dt: float, toward: float) -> void:
 	elif not driver:
 		lx = 0.95
 		rx = 0.95
+	# how they feel shows in the arms when they are not busy walking, fighting or dancing
+	var still := (not seated and pose == "stand" and path.is_empty()) or (seated and not driver)
+	var feel := _feeling_arms() if still else []
+	if not feel.is_empty():
+		lx = feel[0]
+		ly = feel[1]
+		rx = feel[2]
+		ry = feel[3]
+	# talking adds hands on top of the feeling (bigger when excited)
+	var big := emotion in ["angry", "shock", "laugh", "happy"]
 	match gesture:
 		"talk":
 			if not seated:
-				rx = 0.6 + 0.35 * sin(t * 5.0)
+				if feel.is_empty() or emotion in ["neutral", "happy", "sad"]:
+					rx = (0.6 if feel.is_empty() else rx + 0.3) + (0.45 if big else 0.3) * sin(t * 5.0 + phase)
+					lx = lx + 0.12 * sin(t * 3.7 + phase)
+				else:
+					rx += 0.12 * sin(t * 5.0)
 			elif not driver:
-				rx = 1.35 + 0.35 * sin(t * 5.0)
+				if feel.is_empty():
+					rx = 1.35 + 0.35 * sin(t * 5.0)
+				else:
+					rx += 0.15 * sin(t * 5.0)
 			else:
 				rx = 1.25 + 0.05 * sin(t * 5.0)
 		"up":
@@ -787,7 +944,9 @@ func _arms(dt: float, toward: float) -> void:
 		rx = 1.35
 		ly = -0.55
 		ry = 0.55
-	arm_l.rotation = arm_l.rotation.lerp(Vector3(lx, ly, 0), minf(12.0 * dt, 1.0))
-	arm_r.rotation = arm_r.rotation.lerp(Vector3(rx, ry, 0), minf(12.0 * dt, 1.0))
+	# eased: quick for walking and fighting, softer for feelings
+	var k := 12.0 if (pose in ["fight", "punch", "hit", "ko", "carried"] or not path.is_empty()) else 7.0
+	arm_l.rotation = arm_l.rotation.lerp(Vector3(lx, ly, 0), minf(k * dt, 1.0))
+	arm_r.rotation = arm_r.rotation.lerp(Vector3(rx, ry, 0), minf(k * dt, 1.0))
 	if held != null and is_instance_valid(held):
 		held.global_rotation = Vector3(0, global_rotation.y, 0)     # keep it upright

@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import gemini  # noqa: E402
 
-EMOTIONS = ["neutral", "smug", "love", "shock", "angry", "sad", "happy", "laugh"]
+EMOTIONS = ["neutral", "smug", "love", "shock", "angry", "sad", "happy", "laugh", "cry", "shy", "scared", "think"]
 GESTURES = ["talk", "up", "point", "wave", "idle"]
 ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers", "boom",
            "prop_show", "prop_fly", "prop_hide", "slowmo", "stop", "go",
@@ -79,7 +79,9 @@ THE SET-UP (fixed, the game cannot do anything else):
 WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
 1. A line: {"say": "babu"|"shona"|"police"|"vendor", "emotion": E, "react": E, "gesture": G, "sub": "...", "tts": "..."}
    - emotion = how the speaker looks, react = how the other one looks while listening.
-   - E is one of: neutral, smug, love, shock, angry, sad, happy, laugh.  G is one of: talk, up, point, wave, idle.
+   - E is one of: neutral, smug, love, shock, angry, sad, happy, laugh, cry, shy, scared, think.
+     G is one of: talk, up, point, wave, idle. The faces and bodies act these out, so use the strong ones
+     (cry, shock, angry, love, shy, scared) where the story turns, and give the listener a "react" that fits.
    - Optional "on": wait for a moment in the action before saying the line: takeoff (the car leaves a ramp,
      perfect for a scream), big_air (the car lands), prop_fly, near_miss, cop_wrecked, roadblock.
 2. An action: {"do": A} where A is one of:
@@ -154,6 +156,8 @@ WRITING RULES:
 - Keep it PG: cute, cringe, funny or emotional. No real people, brands or places, no hate, no real violence.
 - The voice actor only gets the words, so put the feeling into them: exclamations, "arre", "uff", "haha",
   "hmm...", question marks and pauses ("...") where they belong.
+- Rhythm makes it emotional: a few quick back-and-forth lines, then a big line and a beat of silence
+  ({"wait": 1}) while the other one reacts. Do not let every line rush into the next one.
 
 LANGUAGE:
 - hinglish: "sub" is natural Roman-script Hinglish like Instagram captions; "tts" is the SAME line written in

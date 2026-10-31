@@ -1,14 +1,32 @@
 name: Build Android APK
 
+# Where the APK ends up:
+# - every push to main: the "Latest build" release (always the newest APK, replaced each time)
+# - a release you publish on GitHub (Releases -> Draft a new release), or a pushed v* tag:
+#   the APK is attached to that release
+# - Actions -> Build Android APK -> Run workflow with a "release_tag" (e.g. v1.2): a new
+#   release with that tag
+# - every run (pull requests too): the run's artifact
 on:
   push:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Make a release with this tag (e.g. v1.2). Blank = just build"
+        type: string
+        default: ""
 
 permissions:
   contents: write
+
+concurrency:
+  group: android-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
 
 env:
   GODOT_VERSION: 4.4.1
@@ -96,8 +114,38 @@ jobs:
           path: build/cube_city_chase.apk
           retention-days: 30
 
-      - name: Attach APK to release (tag pushes only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Update the "Latest build" release (pushes to main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          short="${GITHUB_SHA::7}"
+          notes="The newest APK, built automatically from main (commit $short).
+
+          Install: open this page on your phone, download cube_city_chase.apk and open it
+          (allow installing from this source when Android asks)."
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest build/cube_city_chase.apk --target "$GITHUB_SHA" --prerelease \
+            --title "Latest build ($(date -u +%Y-%m-%d), $short)" --notes "$notes"
+
+      - name: Attach the APK to the release (published releases and v* tags)
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
           files: build/cube_city_chase.apk
+
+      - name: Make a release (manual run with a release_tag)
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          if ! [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::release_tag may only use letters, digits, '.', '_' and '-'"
+            exit 1
+          fi
+          gh release create "$TAG" build/cube_city_chase.apk --target "$GITHUB_SHA" \
+            --title "Cube City Chase $TAG" --generate-notes
