@@ -67,6 +67,19 @@ the police, the helicopter, a jump or a roadblock only appear when the episode a
 Everything is in `story/` and `tools/story/`; the game only reads `--story`, and `story/` is left
 out of the Android build (`exclude_filter` in `export_presets.cfg`).
 
+Episodes are no longer only a couple in a car:
+- **Characters:** the screenplay's cast can have up to three side characters of its own (a cousin, goons, a
+  parent ...), each with a look (boy, girl, man, woman, old, kid; hair style; slim or big; cap, hat, glasses,
+  sunglasses, moustache, beard, mask, tie, scarf, bindi) and their own Gemini voice. The car has a roof and
+  clear glass all round.
+- **Action** (`story/action.gd`, `story/van.gd`): the villains' van drives up, goons get out and carry somebody
+  off, the van speeds away and the couple's car chases it (jumps included) until it is cornered; then a fist
+  fight with comic "DHISHUM!" pops and knock-outs.
+- **Drama:** episodes can start on the pavement; people walk together, stare at each other, and the camera does
+  a push-in on a shocked face (with a "dun dun DUNNN" in the music) or looks over a shoulder.
+- **Templates:** the workflow's `template` input (kidnap_rescue, jealous_reveal, date, proposal) gives the AI
+  writer a recipe; `ep5_kidnap` and `ep6_cousin` are saved examples.
+
 - **Make an episode:** Actions -> "Story video (experiment)" -> Run workflow. Pick the mood
   (funny, romantic, cringe, happy, sad, action, twist), type an idea if you have one, and Gemini
   writes the episode, the characters get Gemini voices, the game stages it, and the run attaches

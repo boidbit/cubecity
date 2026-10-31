@@ -1,0 +1,276 @@
+{
+  "title": "BABU & SHONA",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      },
+      "start": {
+        "at": "back",
+        "dist": 22
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      },
+      "start": {
+        "at": "ahead",
+        "dist": 3
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    },
+    "rahul": {
+      "name": "RAHUL",
+      "color": "#22aa66",
+      "start": {
+        "at": "near:shona"
+      },
+      "voice": {
+        "gemini": "Achird",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+14%",
+        "pitch": "+4Hz",
+        "espeak_pitch": 45
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e0a070",
+        "hair": "#3a2414",
+        "shirt": "#f2f2f2",
+        "pants": "#3a4a6a",
+        "hair_style": "spiky",
+        "acc": [
+          "glasses"
+        ]
+      }
+    }
+  },
+  "id": "ep6_cousin",
+  "episode": "EP 6: DHOKHA?",
+  "end_text": "JIJU KI PARTY!",
+  "mood": "romantic",
+  "time": "dusk",
+  "props": [],
+  "upload": {
+    "titles": [
+      "He Saw Her With Another Guy 😳💔",
+      "Babu & Shona: Dhokha? 🌹",
+      "Wait For The Twist 😂 #shorts"
+    ],
+    "description": "Babu came with flowers... and found Shona laughing with someone else. Wait for it. 😂",
+    "hashtags": [
+      "#shorts",
+      "#couple",
+      "#jealous",
+      "#twist",
+      "#funny",
+      "#hindi",
+      "#animation"
+    ]
+  },
+  "start_on_foot": true,
+  "beats": [
+    {
+      "do": "hold",
+      "who": "babu",
+      "prop": "flowers"
+    },
+    {
+      "say": "babu",
+      "sub": "Aaj Shona ko surprise dunga... phool leke!",
+      "emotion": "happy",
+      "id": "b01",
+      "tts": "आज शोना को सरप्राइज़ दूँगा... फूल लेके!",
+      "react": "neutral"
+    },
+    {
+      "do": "walk",
+      "who": "babu",
+      "to": "ahead",
+      "dist": 9
+    },
+    {
+      "do": "walk",
+      "who": "shona,rahul",
+      "to": "ahead",
+      "dist": 5
+    },
+    {
+      "say": "shona",
+      "sub": "Haha Rahul, tum bhi na!",
+      "emotion": "laugh",
+      "id": "b02",
+      "tts": "हाहा राहुल, तुम भी ना!",
+      "react": "happy"
+    },
+    {
+      "do": "look",
+      "who": "babu",
+      "to": "shona"
+    },
+    {
+      "do": "shot",
+      "type": "zoom",
+      "who": "babu",
+      "dur": 2.0
+    },
+    {
+      "say": "babu",
+      "sub": "Ye... ye kaun hai Shona ke saath?!",
+      "emotion": "shock",
+      "id": "b03",
+      "tts": "ये... ये कौन है शोना के साथ?!",
+      "react": "neutral"
+    },
+    {
+      "do": "shot",
+      "type": "pov",
+      "who": "babu",
+      "to": "rahul",
+      "dur": 2.4
+    },
+    {
+      "say": "rahul",
+      "sub": "Chalo, golgappe khilata hoon!",
+      "emotion": "happy",
+      "id": "b04",
+      "tts": "चलो, गोलगप्पे खिलाता हूँ!",
+      "react": "laugh"
+    },
+    {
+      "do": "run",
+      "who": "babu",
+      "to": "shona"
+    },
+    {
+      "wait_for": "arrived",
+      "max_wait": 8
+    },
+    {
+      "do": "look",
+      "who": "babu",
+      "to": ""
+    },
+    {
+      "say": "babu",
+      "sub": "Shona! Ye sab kya hai?!",
+      "emotion": "angry",
+      "gesture": "point",
+      "id": "b05",
+      "tts": "शोना! ये सब क्या है?!",
+      "react": "shock"
+    },
+    {
+      "say": "shona",
+      "sub": "Babu? Tum yahan?",
+      "emotion": "shock",
+      "id": "b06",
+      "tts": "बाबू? तुम यहाँ?",
+      "react": "angry"
+    },
+    {
+      "say": "rahul",
+      "sub": "Aap Babu ho? Main Rahul... Shona ka cousin!",
+      "emotion": "smug",
+      "id": "b07",
+      "tts": "आप बाबू हो? मैं राहुल... शोना का कज़िन!",
+      "react": "shock"
+    },
+    {
+      "do": "shot",
+      "type": "zoom",
+      "who": "babu",
+      "dur": 1.6
+    },
+    {
+      "say": "babu",
+      "sub": "C-cousin?",
+      "emotion": "shock",
+      "id": "b08",
+      "tts": "क... कज़िन?",
+      "react": "laugh"
+    },
+    {
+      "say": "shona",
+      "sub": "Haan! Aur ye phool kiske liye?",
+      "emotion": "smug",
+      "id": "b09",
+      "tts": "हाँ! और ये फूल किसके लिए?",
+      "react": "smug"
+    },
+    {
+      "do": "give",
+      "who": "babu",
+      "to": "shona"
+    },
+    {
+      "say": "babu",
+      "sub": "Tumhare liye hi to... meri jaan!",
+      "emotion": "love",
+      "id": "b10",
+      "tts": "तुम्हारे लिए ही तो... मेरी जान!",
+      "react": "love"
+    },
+    {
+      "do": "cheer",
+      "who": "rahul"
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "say": "rahul",
+      "sub": "Jiju, golgappe aapki taraf se!",
+      "emotion": "laugh",
+      "id": "b11",
+      "tts": "जीजू, गोलगप्पे आपकी तरफ़ से!",
+      "react": "love"
+    }
+  ]
+}

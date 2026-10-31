@@ -44,9 +44,16 @@ SR = 44100
 ENV_HZ = 20
 # how much faster / higher an emotion speaks, added to the character's own rate (%) and pitch (Hz)
 EMO_EDGE = {"shock": (6, 3), "angry": (4, 2), "sad": (-8, -3), "love": (-3, 1), "laugh": (3, 3)}
-# Gemini is given only the line itself. Directions such as "Say angrily:" were read out as
-# part of the line (an extra phrase and a pause at the start of the clip), so the emotion
-# has to come from the words and punctuation the writer chose.
+# Gemini is given only the line itself as the text: directions such as "Say angrily:" in the
+# text were read out (an extra phrase and a pause at the start of the clip). How to say it
+# goes in the part's speech_metadata.style instead, which is not read out.
+GEMINI_STYLE = {"shock": "shocked and surprised", "angry": "angry, raised voice", "sad": "sad, low and slow",
+                "love": "soft, sweet and romantic", "laugh": "laughing, amused", "happy": "happy and cheerful",
+                "smug": "smug and showing off", "neutral": ""}
+
+
+def gemini_style(line):
+    return GEMINI_STYLE.get(line.get("emotion", "neutral"), "")
 
 
 def sh(cmd):
@@ -101,7 +108,7 @@ def synth_gemini(line, voice, out_wav):
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import gemini
     text = line.get("tts") or line.get("sub", "")
-    pcm, rate, _ = gemini.speak(text, voice.get("gemini", "Kore"))
+    pcm, rate, _ = gemini.speak(text, voice.get("gemini", "Kore"), style=gemini_style(line))
     raw = out_wav + ".pcm"
     with open(raw, "wb") as f:
         f.write(pcm)
@@ -153,7 +160,7 @@ def spoken(sp):
 def cache_name(provider, voice, line):
     text = line.get("tts") or line.get("sub", "")
     if provider == "gemini":
-        who = voice.get("gemini", "")
+        who = voice.get("gemini", "") + "|" + gemini_style(line)
     elif provider == "edge":
         who = "|".join([voice.get("edge", ""), *edge_prosody(voice, line.get("emotion", ""))])
     else:
@@ -184,7 +191,13 @@ def dialogue_voices(sp, vdir, cache, results):
     voices = {name[k]: cast[k].get("voice", {}).get("gemini", "Kore") for k in leads}
     turns = [(name[l.get("say", l.get("who"))], l.get("tts") or l.get("sub", "")) for l in lines]
     print(f"  dialogue: {len(lines)} lines of {' and '.join(voices)} in one request")
-    pcm, rate, _ = gemini.speak_dialogue(turns, voices)
+    try:
+        pcm, rate, _ = gemini.speak_dialogue(turns, voices, styles=[gemini_style(l) for l in lines])
+    except gemini.GeminiError as e:
+        if gemini.key_problem(e):
+            raise          # out of quota or refused: one request per line would fail too
+        print(f"  dialogue request failed ({str(e)[:200]}): one request per line")
+        return
     raw = os.path.join(vdir, "dialogue.pcm")
     full = os.path.join(os.path.dirname(vdir), "dialogue.wav")
     with open(raw, "wb") as f:
@@ -280,6 +293,12 @@ def simulate(sp):
             t += 5.5      # walking round the car
         elif b.get("wait_for") == "arrived":
             t += 4.0
+        elif b.get("wait_for") in ("car_arrived", "grabbed"):
+            t += 3.0
+        elif b.get("wait_for") == "cornered":
+            t += 10.0     # the chase
+        elif b.get("wait_for") == "won":
+            t += 7.5      # a fight is about 3.5 s a villain
     for l in sp.get("lines", []):
         t += l["dur"] + gap
     slack = min(sum(r["dur"] for r in sp.get("reactions", [])), 6.0) + 3.0

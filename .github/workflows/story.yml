@@ -18,16 +18,21 @@ on:
       story_type:
         description: "Mood of the episode"
         type: choice
-        options: [funny, romantic, cringe, happy, sad, action, twist]
+        options: [funny, romantic, cringe, happy, sad, action, twist, drama]
         default: funny
       idea:
         description: "Your idea in a few words (blank = AI decides). Example: Shona's birthday, Babu forgot the cake"
         type: string
         default: ""
+      template:
+        description: "Story recipe for the AI writer (auto = it decides from the mood and your idea)"
+        type: choice
+        options: [auto, kidnap_rescue, jealous_reveal, date, proposal]
+        default: auto
       script:
         description: "ai = Gemini writes a new episode; otherwise a saved episode from story/screenplays"
         type: choice
-        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream]
+        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin]
         default: ai
       language:
         type: choice
@@ -86,7 +91,8 @@ jobs:
       GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
       STORY_TYPE: ${{ inputs.story_type || 'funny' }}
       IDEA: ${{ inputs.idea }}
-      SCRIPT: ${{ inputs.script || 'ep4_icecream' }}
+      SCRIPT: ${{ inputs.script || 'ep5_kidnap' }}
+      TEMPLATE: ${{ inputs.template || 'auto' }}
       MUSIC: ${{ inputs.music || 'auto' }}
       LANGUAGE: ${{ inputs.language || 'hinglish' }}
       VOICE: ${{ inputs.voice || 'edge' }}
@@ -117,7 +123,7 @@ jobs:
         run: |
           mkdir -p story-out
           if [ "$SCRIPT" = ai ]; then
-            python3 tools/story/write.py --out story-out/screenplay.json --type "$STORY_TYPE" --idea "$IDEA" --language "$LANGUAGE"
+            python3 tools/story/write.py --out story-out/screenplay.json --type "$STORY_TYPE" --idea "$IDEA" --language "$LANGUAGE" --template "$TEMPLATE"
           else
             cp "story/screenplays/$SCRIPT.json" story-out/screenplay.json
             python3 -c "import json; print('time=' + json.load(open('story-out/screenplay.json')).get('time', 'dusk'))" >> "$GITHUB_OUTPUT"

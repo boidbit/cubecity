@@ -20,7 +20,13 @@ extends Node
 #                         kneel, fall, dance, cheer ("who"), hug
 #         in the hand:    hold ("who", "prop"), give ("who" gives "to" someone; the vendor
 #                         hands out "prop", by default what the stall sells)
+#         action:         arrive, grab, drive_off, chase, corner, fight, punch, look, appear,
+#                         shot (see story/action.gd); events car_arrived, grabbed, fled, cornered, won
 #                         events for "on" / "wait_for": parked, exited, arrived, seated
+# "cast" entries with a "look" and no seat are side characters: they start on the pavement
+# ("start": {"at": ahead | back | near:<who>, "dist"}), inside a story car ("start": {"car"}),
+# or off screen until "appear". "cars": {"van": {"color"}} are the cars the story drives.
+# "start_on_foot": true (and "start_spot") starts the episode parked, everybody on the pavement.
 #   {"wait": seconds}  {"wait_for": event, "max_wait": s}
 #   {"end": "happy" | "caught" | "crash" | "cliffhanger"}   the ending; lines after it play
 #                         once the ending scene is set (the car has stopped ...)
@@ -33,6 +39,7 @@ const Roadster := preload("res://story/roadster.gd")
 const Props := preload("res://story/props.gd")
 const Street := preload("res://story/street.gd")
 const Spots := preload("res://story/spots.gd")
+const Action := preload("res://story/action.gd")
 const DEFAULT_SCREENPLAY := "res://story/screenplays/ep1_date_night.json"
 const INTRO := 2.6          # the opening drone shot; the title card sits on it
 const END_HOLD := 3.4       # seconds the end card stays after the last line
@@ -100,6 +107,8 @@ var spot_kind := ""              # the set asked for with park "at"
 var spot = null                  # Spots: the set on the pavement
 var extras := {}                 # who -> rig of a side character on foot (the vendor)
 var passing: Array = []          # things being handed over: {"node", "from", "to", "t0"}
+var act                          # Action: other cars, grabbing, the chase, fights, drama shots
+var to_place := {}               # who -> {"at", "dist"}: side characters waiting for the street
 
 var ui_name: Label
 var ui_sub: Label
@@ -134,7 +143,12 @@ func setup(main_node, cfg: Dictionary) -> void:
 	gap = float(data.get("gap", gap))
 	_dress_car()
 	_make_cast()
+	act = Action.new()
+	act.setup(self)
+	_make_side_cast()
 	_make_ui()
+	if bool(data.get("start_on_foot", false)):
+		_start_on_foot()
 	for k: String in data.get("props", []):
 		_prop_show(k)
 	main.hud.visible = false
@@ -154,6 +168,8 @@ func _dress_car() -> void:
 	var col := Color.from_string(str(car.get("color", "#ff5c9a")), Color(1.0, 0.36, 0.6))
 	pl.mat_body.set_shader_parameter("color", col)
 	pl.body_color = col
+	if bool(car.get("roof", true)):
+		Roadster.make_cabin(pl.vis, col)
 	# a soft light over the seats so the faces read at dusk and at night
 	var lamp := OmniLight3D.new()
 	lamp.position = Vector3(0, 2.6, 0.5)
@@ -179,6 +195,84 @@ func _make_cast() -> void:
 		rigs[who] = r
 		if is_driver:
 			wheel = Roadster.make_wheel(pl.vis, x)
+
+
+# Side characters (anyone in the cast with a look and no seat): hidden until they are placed
+# on the pavement, start inside a story car, or walk on with "appear".
+func _make_side_cast() -> void:
+	for who: String in cast:
+		var c: Dictionary = cast[who]
+		if rigs.has(who) or who == "vendor" or not c.has("look"):
+			continue
+		var r := Rig.new()
+		main.add_child(r)
+		r.build(who, c.get("look", {}), false, 0.0)
+		r.seated = false
+		r.pose = "stand"
+		r.visible = false
+		extras[who] = r
+		var st: Dictionary = c.get("start", {})
+		if str(st.get("car", "")) in act.cars:
+			act.in_car[who] = str(st["car"])
+		elif st.has("at"):
+			to_place[who] = st
+
+
+# The episode starts out of the car: it stands parked at the kerb, everybody on the pavement.
+func _start_on_foot() -> void:
+	main.player.linear_velocity = Vector3.ZERO
+	_park_now(0.0)
+	for k: String in rigs:
+		var r: Rig = rigs[k]
+		var st: Dictionary = cast[k].get("start", {})
+		r.reparent(main, false)
+		_place_on_foot(k, str(st.get("at", "car")), float(st.get("dist", 0.0)))
+	var at := str(data.get("start_spot", ""))
+	if at != "" and spot == null:
+		_put_up_set(at)
+
+
+# Stops right here (an on-foot start, or behind a cornered car) instead of finding a kerb.
+func _park_now(t: float) -> void:
+	var pl: Car = main.player
+	stop_car = true
+	main.bot.cruise = 0.0
+	park_t = t
+	parked = true
+	street = Street.from_car(pl)
+	if main.director != null:
+		main.director.still = true
+		main.director.cue("calm")
+	_quiet_street(true)
+	ev_log.append({"type": "parked", "t": t})
+	for who: String in to_place.keys():
+		_place_on_foot(who, str(to_place[who].get("at", "ahead")), float(to_place[who].get("dist", 8.0)))
+	to_place.clear()
+
+
+# Puts somebody on the pavement: "car" (beside the car), "ahead" / "back" (dist m along the
+# street), "near:<who>" (next to them), "spot" (at the set).
+func _place_on_foot(who: String, at: String, dist: float) -> void:
+	var r := _rig_of(who)
+	if r == null or street == null:
+		return
+	var f: float = street.dir.x + street.dir.z
+	var a: float = street.along(main.player.global_position)
+	var off := 0.0
+	if at == "ahead":
+		a += maxf(dist, 3.0) * f
+	elif at == "back":
+		a -= maxf(dist, 3.0) * f
+	elif at.begins_with("near:") and _rig_of(at.substr(5)) != null:
+		a = street.along(_rig_of(at.substr(5)).global_position) + 0.9 * f
+		off = 0.35
+	elif at == "spot" and spot != null and spot.stand.has(who):
+		a = street.along(spot.stand[who])
+	elif rigs.has(who):
+		a += (0.7 if r.driver else -0.7) * f
+	var p: Vector3 = street.point(street.clamp_along(a), off)
+	r.visible = true
+	r.stand_at(p, atan2(-street.outward().x, -street.outward().z) + PI)
 
 
 func _prop_show(kind: String) -> void:
@@ -242,6 +336,7 @@ func _process(dt: float) -> void:
 	_park(t)
 	_on_foot(t)
 	_pass_things(t)
+	act.tick(dt, t)
 	_schedule(t)
 	_ending(dt, t)
 	_animate(dt, t)
@@ -373,7 +468,7 @@ func _finish(t: float) -> void:
 func _do(b: Dictionary, t: float) -> void:
 	var kind := str(b["do"])
 	var arg := float(b.get("stars", b.get("arg", 0.0)))
-	acted.append({"do": kind, "t": snappedf(t, 0.01)})
+	acted.append({"do": kind, "t": snappedf(t, 0.01), "type": str(b.get("type", ""))})
 	match kind:
 		"prop_show":
 			_prop_show(str(b.get("prop", "")))
@@ -397,9 +492,13 @@ func _do(b: Dictionary, t: float) -> void:
 			if park_t < 0.0:
 				park_t = t
 				spot_kind = str(b.get("at", ""))
-		"exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer", "hold", "give":
-			pending.append({"kind": kind, "who": str(b.get("who", "both")), "to": str(b.get("to", "")),
-				"dist": float(b.get("dist", 8.0)), "prop": str(b.get("prop", "")), "from": t, "until": t + 25.0})
+		"exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer", "hold", "give", \
+				"arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot":
+			var a := b.duplicate()
+			a.erase("do")
+			a.merge({"kind": kind, "who": str(b.get("who", "both")), "to": str(b.get("to", "")),
+				"dist": float(b.get("dist", 8.0)), "prop": str(b.get("prop", "")), "from": t, "until": t + 25.0}, true)
+			pending.append(a)
 		_:
 			pending.append({"kind": kind, "arg": arg, "from": t, "until": t + ACTION_TRIES})
 	print("STORYDO ", kind, " t=", snappedf(t, 0.01))
@@ -416,6 +515,10 @@ func _actions(t: float) -> void:
 			ok = main.player.airtime > 0.12 or (t > float(a["from"]) + 2.0 and not jump_coming)
 			if ok:
 				_fly_prop(str(a.get("prop", "")), t)
+		elif act.handles(a):
+			ok = act.run(a, t)
+		elif kind == "jump" and act.chase != "":
+			ok = act.chase_jump()
 		elif kind in ["hold", "give"]:
 			ok = _hand_action(a, t)
 		elif kind in ["exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer", "go"]:
@@ -443,14 +546,28 @@ func _fly_prop(kind: String, t: float) -> void:
 
 # ------------------------------------------------------------ on foot
 
+# A lead out of the car and in the scene (not carried off, not inside another car).
 func _anyone_on_foot() -> bool:
 	for k: String in rigs:
-		if not (rigs[k] as Rig).seated:
+		if _on_foot_now(k):
 			return true
 	return false
 
 
+func _on_foot_now(k: String) -> bool:
+	var r := _rig_of(k)
+	return r != null and not r.seated and r.visible and r.pose != "carried" and not act.hidden(k)
+
+
 func _who(sel: String) -> Array:
+	if sel.contains(","):
+		var out := []
+		for k in sel.split(","):
+			if _rig_of(k.strip_edges()) != null:
+				out.append(k.strip_edges())
+		return out
+	if extras.has(sel):
+		return [sel]
 	if sel == "both" or not rigs.has(sel):
 		return rigs.keys()
 	return [sel]
@@ -629,9 +746,13 @@ func _quiet_street(on: bool) -> void:
 
 
 func _drive_on() -> void:
+	main.bot.halt = false
 	stop_car = false
 	parked = false
 	park_t = -1.0
+	# the set stays where it is; the next stop is somewhere else
+	spot = null
+	spot_kind = ""
 	main.bot.cruise = 26.0
 	_quiet_street(false)
 	if main.director != null:
@@ -685,6 +806,11 @@ func _foot_action(a: Dictionary, t: float) -> bool:
 				var way := _door_path(k).slice(1)
 				if spot != null and spot.stand.has(k):
 					way.append(spot.stand[k])
+				if act.cornered != "":
+					# straight out of the door and into the action
+					var out: Vector3 = _door(k) - main.player.global_position
+					out.y = 0.0
+					way = [_door(k) + out.normalized() * 1.0]
 				r.walk_to(way, false, 1.4)
 				exits[k] = true
 			cam_new = true
@@ -697,7 +823,8 @@ func _foot_action(a: Dictionary, t: float) -> bool:
 				var back := _door_path(k)
 				back.reverse()
 				r.stand_up()
-				r.walk_to(back, false, 1.4)
+				# in a hurry when somebody is getting away
+				r.walk_to(back, act.cars.values().any(func(v) -> bool: return v.mode == "flee"), 1.4)
 				boarding[k] = true
 		"walk", "run":
 			var to := str(a.get("to", ""))
@@ -705,37 +832,42 @@ func _foot_action(a: Dictionary, t: float) -> bool:
 				to = "ahead"
 			var dist := float(a.get("dist", 8.0))
 			var i := 0
+			ks = ks.filter(func(k: String) -> bool: return _on_foot_now(k) or (extras.has(k) and extras[k].visible))
+			# a group walks together, side by side, from where the first of them stands
+			var lead_here: float = street.along(_rig_of(ks[0]).global_position) if not ks.is_empty() else 0.0
 			for k: String in ks:
-				var r: Rig = rigs[k]
-				if r.seated:
-					continue
-				var here: float = street.along(r.global_position)
+				var r: Rig = _rig_of(k)
+				var here: float = lead_here if ks.size() > 1 else street.along(r.global_position)
 				var target := here
-				match to:
-					"back":
-						target = here - dist * (street.dir.x + street.dir.z)
-					"car":
-						target = street.along(main.player.global_position)
-					"other":
-						var o := _other(k)
-						if o != null:
-							var op: Vector3 = o.path.back() if not o.path.is_empty() else o.global_position
-							var oa: float = street.along(op)
-							target = oa + (1.1 if here > oa else -1.1)
-					_:
-						target = here + dist * (street.dir.x + street.dir.z)
-				if ks.size() > 1:
-					target += (i - 0.5) * 0.9 * (street.dir.x + street.dir.z)
+				var person := _rig_of(to) if to not in ["other", "car", "back", "ahead", "spot", ""] else null
+				if person != null and person != r:
+					var pa: float = street.along(person.path.back() if not person.path.is_empty() else person.global_position)
+					target = pa + (1.1 if street.along(r.global_position) > pa else -1.1)
+				else:
+					match to:
+						"back":
+							target = here - dist * (street.dir.x + street.dir.z)
+						"car":
+							target = street.along(main.player.global_position)
+						"other":
+							var o := _other(k)
+							if o != null:
+								var op: Vector3 = o.path.back() if not o.path.is_empty() else o.global_position
+								var oa: float = street.along(op)
+								target = oa + (1.1 if here > oa else -1.1)
+						_:
+							target = here + dist * (street.dir.x + street.dir.z)
+				var off := _lane() + ((i - (ks.size() - 1) * 0.5) * 0.8 if ks.size() > 1 else 0.0)
 				r.stand_up()
 				if to == "spot" and spot != null and spot.stand.has(k):
 					r.walk_to([spot.stand[k]], kind == "run")
 				else:
-					r.walk_to([street.point(_along_now(r), _lane()), street.point(street.clamp_along(target), _lane())], kind == "run")
+					r.walk_to([street.point(_along_now(r), off), street.point(street.clamp_along(target), off)], kind == "run")
 				walkers[k] = true
 				i += 1
 		"sit":
 			for k: String in ks:
-				var r: Rig = rigs[k]
+				var r: Rig = _rig_of(k)
 				if spot != null and spot.seats.has(k):
 					r.stand_up()
 					r.sit_on([spot.stand[k], spot.seats[k]], atan2(-spot.face.x, -spot.face.z), Spots.BENCH_H)
@@ -743,19 +875,19 @@ func _foot_action(a: Dictionary, t: float) -> bool:
 					r.sit_down()
 		"dance":
 			for k: String in ks:
-				(rigs[k] as Rig).dance()
+				_rig_of(k).dance()
 		"cheer":
 			for k: String in ks:
-				(rigs[k] as Rig).cheer()
+				_rig_of(k).cheer()
 		"stand":
 			for k: String in ks:
-				(rigs[k] as Rig).stand_up()
+				_rig_of(k).stand_up()
 		"fall":
 			for k: String in ks:
-				(rigs[k] as Rig).fall_down()
+				_rig_of(k).fall_down()
 		"kneel":
 			for k: String in ks:
-				(rigs[k] as Rig).kneel()
+				_rig_of(k).kneel()
 		"hug":
 			var keys := rigs.keys()
 			if keys.size() == 2:
@@ -780,29 +912,37 @@ func _on_foot(t: float) -> void:
 		return
 	if parked:
 		_quiet_street(true)     # traffic from further away would drive into the scene
-	# people standing still face each other
-	for k: String in rigs:
-		var r: Rig = rigs[k]
-		if r.seated:
+	# people standing still look at whoever is talking nearby, else at the nearest person
+	var speaker: Rig = _rig_of(shot_who) if not cur.is_empty() else null
+	var everyone: Array = rigs.values() + extras.values()
+	for r: Rig in everyone:
+		if r.seated or not r.visible or r.pose == "carried":
 			continue
-		var o := _other(k)
-		r.face_point = o.global_position if o != null and not o.seated else main.player.global_position
-		if extras.has("vendor") and ((not cur.is_empty() and shot_who == "vendor") or passing.any(func(p: Dictionary) -> bool: return p["from"] == extras["vendor"])):
-			r.face_point = (extras["vendor"] as Rig).global_position    # listening to the vendor, taking from him
-		r.hug = t < hug_until and r.arrived()
-	for k: String in extras:
-		var v: Rig = extras[k]
-		var m := Vector3.ZERO
-		var n := 0
-		for r: Rig in rigs.values():
-			m += r.global_position
-			n += 1
-		if n > 0:
-			v.face_point = m / n
+		var target := Vector3.INF
+		var look_at: Rig = _rig_of(act.looks.get(r.who, "")) if act.looks.has(r.who) else null
+		if look_at != null:
+			target = look_at.global_position
+		elif speaker != null and speaker != r and speaker.visible and speaker.global_position.distance_to(r.global_position) < 7.0:
+			target = speaker.global_position
+		else:
+			var o := _other(r.who) if rigs.has(r.who) else null
+			if o != null and _on_foot_now(o.who) and o.global_position.distance_to(r.global_position) < 7.0:
+				target = o.global_position
+			else:
+				var bd := 7.0
+				for q: Rig in everyone:
+					if q != r and q.visible and not q.seated and q.global_position.distance_to(r.global_position) < bd:
+						bd = q.global_position.distance_to(r.global_position)
+						target = q.global_position
+		if extras.has("vendor") and rigs.has(r.who) and passing.any(func(p: Dictionary) -> bool: return p["from"] == extras["vendor"]):
+			target = (extras["vendor"] as Rig).global_position    # taking from the vendor
+		r.face_point = target if target != Vector3.INF else main.player.global_position
+		if rigs.has(r.who):
+			r.hug = t < hug_until and r.arrived()
 	if not exits.is_empty() and exits.keys().all(func(k: String) -> bool: return (rigs[k] as Rig).arrived()):
 		exits.clear()
 		ev_log.append({"type": "exited", "t": t})
-	if not walkers.is_empty() and walkers.keys().all(func(k: String) -> bool: return (rigs[k] as Rig).arrived()):
+	if not walkers.is_empty() and walkers.keys().all(func(k: String) -> bool: return _rig_of(k) == null or _rig_of(k).arrived()):
 		walkers.clear()
 		ev_log.append({"type": "arrived", "t": t})
 	for k: String in boarding.keys():
@@ -1007,8 +1147,17 @@ func _nearest_police() -> Car:
 # While somebody talks the camera rides with the car and films the speaker; between lines
 # and in the air it is left to the game's own director. Endings and a flying prop keep it.
 func _camera(dt: float, t: float) -> void:
+	if not act.shot.is_empty():
+		_drama_camera(dt, t)
+		return
+	if not cur.is_empty() and act.hidden(shot_who):
+		_van_camera(dt, t)
+		return
 	if _anyone_on_foot() or (parked and not exits.is_empty()) or (extras.has(shot_who) and not cur.is_empty()):
 		_foot_camera(dt, t)
+		return
+	if act.chase != "" and cur.is_empty():
+		_chase_camera(dt, t)
 		return
 	var pl: Car = main.player
 	var want := (not cur.is_empty() or t - last_end < 0.45) and not done and t > INTRO
@@ -1104,14 +1253,124 @@ func _camera(dt: float, t: float) -> void:
 
 # On foot the story films everything itself: a wide shot as they get out, a tracking shot
 # while they walk, a two-shot or the speaker's face while they talk.
+# Shots the story asks for: a push in on a face, over a shoulder, high and wide, a car.
+func _drama_camera(dt: float, t: float) -> void:
+	cam_on = true
+	var sh: Dictionary = act.shot
+	var r := _rig_of(str(sh.get("who", "")))
+	var other := _rig_of(str(sh.get("to", "")))
+	var k := clampf((t - float(sh["t0"])) / maxf(float(sh["until"]) - float(sh["t0"]), 0.1), 0.0, 1.0)
+	var pos := cam_pos
+	var look := cam_pos + Vector3.FORWARD
+	var fov := 46.0
+	var smooth := 8.0
+	match str(sh["type"]):
+		"zoom":
+			if r != null:
+				var hp := r.head.global_position + Vector3(0, 0.25 * r.size, 0)
+				var facing := -r.global_transform.basis.z
+				facing.y = 0.0
+				facing = facing.normalized()
+				var e := 1.0 - pow(1.0 - k, 3.0)
+				pos = hp + facing * lerpf(3.4, 1.15, e) + Vector3(0, 0.06, 0)
+				look = hp
+				fov = lerpf(54.0, 32.0, e)
+				smooth = 30.0
+		"pov":
+			if r != null and other != null:
+				var d := other.global_position - r.global_position
+				d.y = 0.0
+				d = d.normalized()
+				pos = r.head.global_position + Vector3(0, 0.32, 0) - d * 0.9 + d.cross(Vector3.UP) * 0.45
+				look = other.head.global_position + Vector3(0, 0.1, 0)
+				fov = 38.0
+		"car":
+			var v = act.cars.get(str(sh.get("car", "")), null)
+			if v != null:
+				var right: Vector3 = v.forward().cross(Vector3.UP)
+				pos = v.global_position + v.forward() * 9.0 + right * 3.0 * act._kerb_side(v) + Vector3(0, 2.2, 0)
+				look = v.global_position + Vector3(0, 1.2, 0)
+				fov = 50.0
+		_:
+			var c: Vector3 = r.global_position if r != null else main.player.global_position
+			var out: Vector3 = street.outward() if street != null else Vector3.RIGHT
+			var along: Vector3 = street.dir if street != null else Vector3.FORWARD
+			pos = c - out * 11.0 + along * 5.0 + Vector3(0, 6.5, 0)
+			look = c + Vector3(0, 1.0, 0)
+			fov = 50.0
+	_put_camera(pos, look, fov, smooth, dt)
+
+
+# Somebody inside a story car is talking (or screaming): film the car from beside it.
+func _van_camera(dt: float, t: float) -> void:
+	cam_on = true
+	var v = act.cars[act.in_car[shot_who]]
+	var right: Vector3 = v.forward().cross(Vector3.UP)
+	var pos: Vector3 = v.global_position + right * 4.2 + v.forward() * 2.5 + Vector3(0, 1.9, 0)
+	_put_camera(pos, v.global_position + Vector3(0, 1.4, 0), 52.0, 10.0, dt)
+
+
+# The chase: from behind the leads' car, looking up the road at the van; the flight off a
+# ramp from beside it.
+func _chase_camera(dt: float, t: float) -> void:
+	cam_on = true
+	var v = act.cars[act.chase]
+	var pl: Car = main.player
+	var to_van: Vector3 = v.global_position - pl.global_position
+	to_van.y = 0.0
+	var d := to_van.length()
+	var fwd := -pl.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	var aim := to_van.normalized() if d > 1.0 and d < 80.0 and to_van.normalized().dot(fwd) > 0.2 else fwd
+	var pos: Vector3
+	var look: Vector3
+	var fov := 58.0
+	if act.jump_lip != Vector3.INF and (v.airborne or pl.airtime > 0.05) and v.global_position.distance_to(act.jump_lip) < 70.0:
+		var right := aim.cross(Vector3.UP)
+		pos = act.jump_lip + right * 10.0 - aim * 3.0 + Vector3(0, 2.5, 0)
+		look = (v.global_position + pl.global_position) * 0.5 + Vector3(0, 2.0, 0)
+		fov = 60.0
+	else:
+		pos = pl.global_position - aim * 9.5 + Vector3(0, 3.6, 0)
+		look = pl.global_position + aim * minf(d, 40.0) * 0.6 + Vector3(0, 1.0, 0)
+	_put_camera(pos, look, fov, 4.0, dt)
+
+
+func _put_camera(pos: Vector3, look: Vector3, fov: float, smooth: float, dt: float) -> void:
+	var cam: Camera3D = main.cam
+	cam_pos = pos if cam_new else cam_pos.lerp(pos, 1.0 - exp(-smooth * dt))
+	cam_fov = fov if cam_new else lerpf(cam_fov, fov, 1.0 - exp(-smooth * dt))
+	cam_new = false
+	cam.global_position = cam_pos
+	if cam_pos.distance_to(look) > 0.05:
+		cam.look_at(look, Vector3.UP)
+	cam.fov = cam_fov
+
+
 func _foot_camera(dt: float, t: float) -> void:
 	cam_on = true
 	var cam: Camera3D = main.cam
 	var people: Array = []
-	for k: String in rigs:
-		var r: Rig = rigs[k]
-		if not r.seated:
+	for r: Rig in rigs.values() + extras.values():
+		if not r.seated and r.visible and r.pose != "carried" and not act.hidden(r.who):
 			people.append(r)
+	# the group around whoever is talking (or walking): people far down the street are not in it
+	var focus: Rig = _rig_of(shot_who) if not cur.is_empty() else null
+	if focus == null or not people.has(focus):
+		focus = null
+		for r: Rig in people:
+			if not r.arrived():
+				focus = r
+				break
+		if focus == null and not people.is_empty():
+			focus = people[0]
+			for r: Rig in people:
+				if rigs.has(r.who):
+					focus = r
+					break
+	if focus != null:
+		people = people.filter(func(r: Rig) -> bool: return r.global_position.distance_to(focus.global_position) < 8.0)
 	var mid: Vector3 = main.player.global_position
 	if not people.is_empty():
 		mid = Vector3.ZERO
@@ -1124,7 +1383,10 @@ func _foot_camera(dt: float, t: float) -> void:
 		if not r.arrived():
 			walking = true
 	var s := foot_shot
-	if not cur.is_empty() and extras.has(shot_who):
+	var fighters := _fighters()
+	if not fighters.is_empty() and cur.is_empty():
+		s = "foot_fight"
+	elif not cur.is_empty() and extras.has(shot_who):
 		s = "foot_close"
 	elif not cur.is_empty():
 		s = "foot_close" if (shot_i % 2 == 0 and rigs.has(shot_who) and not (rigs[shot_who] as Rig).seated) else "foot_two"
@@ -1147,8 +1409,8 @@ func _foot_camera(dt: float, t: float) -> void:
 	var cands: Array[Vector3] = []     # camera spots in order of preference: the first clear one is used
 	if s == "foot_close":
 		var r: Rig = _rig_of(shot_who)
-		var o := _other(shot_who)
-		var hp := r.head.global_position + Vector3(0, 0.25, 0)
+		var others: Array = people.filter(func(q: Rig) -> bool: return q != r)
+		var hp := r.head.global_position + Vector3(0, 0.25 * r.size, 0)
 		var facing := -r.global_transform.basis.z
 		facing.y = 0.0
 		facing = facing.normalized()
@@ -1157,7 +1419,7 @@ func _foot_camera(dt: float, t: float) -> void:
 		# a three-quarter view from the road side, turned further while the partner is in the way
 		for a: float in [0.5, 0.85, 1.2, 1.55]:
 			var p := hp + (facing * cos(a) + side * sin(a)) * 2.4 + Vector3(0, 0.12, 0)
-			if o == null or o.seated or (not r.hug and o.pose != "fall" and not _blocks(o, p, hp)):
+			if not r.hug and others.all(func(o: Rig) -> bool: return o.pose in ["fall", "ko"] or not _blocks(o, p, hp)):
 				cands.append(p)
 		if cands.is_empty():
 			s = "foot_two"      # hugging, or too close together: film them both
@@ -1178,6 +1440,25 @@ func _foot_camera(dt: float, t: float) -> void:
 			cands.append(mid - lead * 4.2 - out * 2.2 + Vector3(0, 2.3, 0))
 			look = mid + lead * 0.8 + Vector3(0, 1.3, 0)
 			fov = 50.0
+		"foot_fight":
+			# side-on to the two fighting, from whichever side is clear
+			var fa: Rig = fighters[0]
+			var fb: Rig = fighters[1]
+			var fm := (fa.global_position + fb.global_position) * 0.5
+			fm.y = 0.0
+			var ax := fb.global_position - fa.global_position
+			ax.y = 0.0
+			ax = ax.normalized() if ax.length() > 0.1 else along
+			var side_v := ax.cross(Vector3.UP)
+			for sg: float in [1.0, -1.0]:
+				cands.append(fm + side_v * sg * 4.6 + Vector3(0, 1.6, 0))
+				cands.append(fm + side_v * sg * 3.4 - ax * 2.5 + Vector3(0, 1.8, 0))
+			# a van or a wall beside them: higher and further, then from above
+			for sg: float in [1.0, -1.0]:
+				cands.append(fm + side_v * sg * 6.5 + Vector3(0, 4.2, 0))
+			cands.append(fm - ax * 5.0 + Vector3(0, 7.0, 0))
+			look = fm + Vector3(0, 1.1, 0)
+			fov = 50.0
 		"foot_orbit":
 			orbit_a += dt * 0.2
 			var ang := atan2(along.x, along.z) + orbit_a + 0.9
@@ -1194,7 +1475,7 @@ func _foot_camera(dt: float, t: float) -> void:
 			fov = 50.0
 		"foot_two":
 			# two-shot from the road, looking at both (and the vendor) and the buildings behind
-			var group: Array = people + extras.values()
+			var group: Array = people
 			var gm := mid
 			if group.size() > people.size():
 				gm = Vector3.ZERO
@@ -1209,14 +1490,21 @@ func _foot_camera(dt: float, t: float) -> void:
 			var back := clampf(spread * 1.6 + 2.4, 5.2, 8.0)
 			for a: float in [0.6, -0.6, 2.4, -2.4]:
 				cands.append(gm - out * back + along * a + Vector3(0, 1.75, 0))
+			# from along the pavement, when something stands on the road
+			for a: float in [6.5, -6.5]:
+				cands.append(gm + along * a - out * 0.4 + Vector3(0, 1.8, 0))
 			look = gm + Vector3(0, 1.4, 0)
 			fov = 46.0
 	if cands.is_empty():
 		cands.append(mid - out * 5.2 + Vector3(0, 1.75, 0))
-	# street trees and lamp posts have no collision, so look for them separately
+	# street trees and lamp posts have no collision, so look for them separately; cars
+	# (a van parked on the road) and walls must not stand in between either
 	pos = cands[0]
+	var space: PhysicsDirectSpaceState3D = main.get_world_3d().direct_space_state
 	for p: Vector3 in cands:
-		if not _post_between(look, p):
+		# the couple's own car (layer 2) counts too: no filming through it
+		var q2 := PhysicsRayQueryParameters3D.create(look, p, 1 | 2 | 4)
+		if not _post_between(look, p) and not _cabin_between(look, p) and space.intersect_ray(q2).is_empty():
 			pos = p
 			break
 	var from := mid + Vector3(0, 1.5, 0)
@@ -1235,12 +1523,35 @@ func _foot_camera(dt: float, t: float) -> void:
 	cam_new = false
 
 
+# The two in the fight going on (attacker, opponent), or [] when nobody is fighting.
+func _fighters() -> Array:
+	for f: Dictionary in act.fights:
+		if f["i"] < f["list"].size():
+			var a := _rig_of(f["a"])
+			var b := _rig_of(f["list"][f["i"]])
+			if a != null and b != null and a.visible and not a.seated:
+				return [a, b]
+	return []
+
+
 func _near_car(people: Array, d: float) -> bool:
 	var c: Vector3 = main.player.global_position
 	for r: Rig in people:
 		if Vector2(r.global_position.x - c.x, r.global_position.z - c.z).length() > d:
 			return false
 	return true
+
+
+# Whether the couple's car (its tall cabin has no collision of its own) is in the way.
+func _cabin_between(a: Vector3, b: Vector3) -> bool:
+	var vis: Node3D = main.player.vis
+	var la := vis.to_local(a)
+	var lb := vis.to_local(b)
+	for i in range(1, 12):
+		var q := la.lerp(lb, i / 12.0)
+		if absf(q.x) < 1.05 and q.y < Roadster.ROOF_Y + 0.15 and q.z > -2.2 and q.z < 2.2:
+			return true
+	return false
 
 
 # Whether a street tree or lamp post stands between the camera and what it films.

@@ -1,0 +1,367 @@
+{
+  "title": "BABU & SHONA",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      },
+      "start": {
+        "at": "spot"
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      },
+      "start": {
+        "at": "spot"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    },
+    "vendor": {
+      "name": "BHAIYA",
+      "color": "#f0a020",
+      "voice": {
+        "gemini": "Fenrir",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+12%",
+        "pitch": "-6Hz",
+        "espeak_pitch": 40,
+        "style": "a cheerful, chatty Indian street vendor"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#c98b5e",
+        "hair": "#1d1714",
+        "shirt": "#f3efe4"
+      }
+    },
+    "goon1": {
+      "name": "GOON",
+      "color": "#555555",
+      "start": {
+        "car": "van"
+      },
+      "voice": {
+        "gemini": "Algenib",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+0%",
+        "pitch": "-12Hz",
+        "espeak_pitch": 20
+      },
+      "look": {
+        "style": "man",
+        "skin": "#b07850",
+        "hair": "#111111",
+        "shirt": "#1c1c1f",
+        "pants": "#111114",
+        "build": "big",
+        "acc": [
+          "mask"
+        ]
+      }
+    },
+    "goon2": {
+      "name": "GOON 2",
+      "color": "#777777",
+      "start": {
+        "car": "van"
+      },
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+8%",
+        "pitch": "-4Hz",
+        "espeak_pitch": 30
+      },
+      "look": {
+        "style": "man",
+        "skin": "#c08a60",
+        "hair": "#2a2a2a",
+        "shirt": "#5a1d1d",
+        "pants": "#1d1d24",
+        "hair_style": "spiky",
+        "acc": [
+          "cap",
+          "sunglasses"
+        ]
+      }
+    }
+  },
+  "id": "ep5_kidnap",
+  "episode": "EP 5: KIDNAP!",
+  "end_text": "BOSS KAUN THA?",
+  "mood": "action",
+  "time": "day",
+  "props": [],
+  "upload": {
+    "titles": [
+      "They Kidnapped Her From The Chai Stall 😱🚐",
+      "Babu & Shona: Kidnap! 🔥",
+      "Hero Ki Entry Dekho 💪 #shorts"
+    ],
+    "description": "A black van, two goons and one very angry Babu. Chase, jump and DHISHUM! 💥",
+    "hashtags": [
+      "#shorts",
+      "#action",
+      "#kidnap",
+      "#chase",
+      "#couple",
+      "#hindi",
+      "#animation"
+    ]
+  },
+  "start_on_foot": true,
+  "start_spot": "chai",
+  "cars": {
+    "van": {
+      "color": "#26262b"
+    }
+  },
+  "beats": [
+    {
+      "say": "shona",
+      "sub": "Babu, yahan ki chai ekdum best hai!",
+      "emotion": "happy",
+      "id": "b01",
+      "tts": "बाबू, यहाँ की चाय एकदम बेस्ट है!",
+      "react": "love"
+    },
+    {
+      "say": "babu",
+      "sub": "Aur tum saath ho, to aur bhi best!",
+      "emotion": "love",
+      "id": "b02",
+      "tts": "और तुम साथ हो, तो और भी बेस्ट!",
+      "react": "happy"
+    },
+    {
+      "do": "give",
+      "who": "vendor",
+      "to": "both"
+    },
+    {
+      "do": "arrive",
+      "car": "van",
+      "to": "shona"
+    },
+    {
+      "wait_for": "car_arrived",
+      "max_wait": 14
+    },
+    {
+      "say": "babu",
+      "sub": "Ye kaali van yahan kyun ruki?",
+      "emotion": "shock",
+      "id": "b03",
+      "tts": "ये काली वैन यहाँ क्यों रुकी?",
+      "react": "shock"
+    },
+    {
+      "do": "exit_car",
+      "who": "goon1,goon2"
+    },
+    {
+      "wait": 1.0
+    },
+    {
+      "say": "goon1",
+      "sub": "Chal ladki, boss ne bulaya hai!",
+      "emotion": "angry",
+      "id": "b04",
+      "tts": "चल लड़की, बॉस ने बुलाया है!",
+      "react": "shock"
+    },
+    {
+      "do": "grab",
+      "who": "goon1",
+      "to": "shona"
+    },
+    {
+      "wait_for": "grabbed",
+      "max_wait": 8
+    },
+    {
+      "say": "shona",
+      "sub": "Babu! Bachaooo!",
+      "emotion": "shock",
+      "id": "b05",
+      "tts": "बाबू! बचाओ!",
+      "react": "shock"
+    },
+    {
+      "do": "enter_car",
+      "who": "goon1,goon2",
+      "car": "van"
+    },
+    {
+      "wait_for": "seated",
+      "max_wait": 8
+    },
+    {
+      "do": "drive_off",
+      "car": "van"
+    },
+    {
+      "do": "shot",
+      "type": "zoom",
+      "who": "babu",
+      "dur": 1.8
+    },
+    {
+      "say": "babu",
+      "sub": "Shona! Main aa raha hoon!",
+      "emotion": "angry",
+      "id": "b06",
+      "tts": "शोना! मैं आ रहा हूँ!",
+      "react": "neutral"
+    },
+    {
+      "do": "enter_car",
+      "who": "babu"
+    },
+    {
+      "wait_for": "seated",
+      "max_wait": 12
+    },
+    {
+      "do": "chase",
+      "car": "van"
+    },
+    {
+      "say": "babu",
+      "sub": "Bhaag kahan rahe ho!",
+      "emotion": "angry",
+      "id": "b07",
+      "tts": "भाग कहाँ रहे हो!",
+      "react": "neutral"
+    },
+    {
+      "wait": 2
+    },
+    {
+      "say": "shona",
+      "sub": "Babu jaldi karo!",
+      "emotion": "shock",
+      "id": "b08",
+      "tts": "बाबू जल्दी करो!",
+      "react": "neutral"
+    },
+    {
+      "do": "jump"
+    },
+    {
+      "wait": 4
+    },
+    {
+      "do": "corner",
+      "car": "van"
+    },
+    {
+      "wait_for": "cornered",
+      "max_wait": 30
+    },
+    {
+      "do": "exit_car",
+      "who": "babu"
+    },
+    {
+      "do": "exit_car",
+      "who": "goon1,goon2"
+    },
+    {
+      "wait": 1.5
+    },
+    {
+      "say": "goon2",
+      "sub": "Hero banega kya?",
+      "emotion": "smug",
+      "id": "b09",
+      "tts": "हीरो बनेगा क्या?",
+      "react": "angry"
+    },
+    {
+      "do": "fight",
+      "who": "babu",
+      "to": "goon1,goon2"
+    },
+    {
+      "wait_for": "won",
+      "max_wait": 25
+    },
+    {
+      "do": "exit_car",
+      "who": "shona"
+    },
+    {
+      "wait": 1.0
+    },
+    {
+      "do": "hug"
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "say": "shona",
+      "sub": "Mera hero!",
+      "emotion": "love",
+      "id": "b10",
+      "tts": "मेरा हीरो!",
+      "react": "love"
+    },
+    {
+      "say": "babu",
+      "sub": "Bas... chai thandi ho gayi yaar.",
+      "emotion": "sad",
+      "id": "b11",
+      "tts": "बस... चाय ठंडी हो गई यार।",
+      "react": "laugh"
+    }
+  ]
+}
