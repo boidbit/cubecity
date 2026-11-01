@@ -155,6 +155,18 @@ PY
     echo "::error::the release notes for the studio page are broken"
     status=1
   fi
+  # the publish script, with a stand-in gh that only writes down the release it would make
+  pub="$OUT/publish"
+  mkdir -p "$pub/bin" "$pub/chase"
+  printf '#!/usr/bin/env bash\necho "gh $*" >> "%s/gh.log"\n[ "$1 $2" != "release view" ]\n' "$pub" > "$pub/bin/gh"
+  chmod +x "$pub/bin/gh"
+  cp /tmp/smoke_summary.json "$pub/chase/cubecity-heli-vertical-1.json" 2>/dev/null || true
+  echo video > "$pub/chase/cubecity-heli-vertical-1.mp4"
+  if ! PATH="$pub/bin:$PATH" GH_REPO=x/y DEFAULT_BRANCH=main tools/publish.sh chase "$pub/chase" 7 \
+      || ! grep -q "release create chase-7 --target main .*cubecity-heli-vertical-1.mp4" "$pub/gh.log"; then
+    echo "::error::tools/publish.sh did not make the release"
+    status=1
+  fi
 fi
 python3 tools/report.py "$OUT"/*.json || status=1
 exit $status

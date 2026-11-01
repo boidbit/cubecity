@@ -414,9 +414,31 @@
   }
 
   // ---------- runs ----------
+  // the workflow that puts an earlier run's video on this page (no prefix: it makes no videos itself)
+  const PUBLISH = { key: "publish", file: "publish.yml", label: "📤 Publish", prefix: "" };
   function flowOfRun(run) {
     const path = String(run.path || "").split("@")[0];
-    return cfg.workflows.find((w) => path === `.github/workflows/${w.file}`);
+    return [...cfg.workflows, PUBLISH].find((w) => path === `.github/workflows/${w.file}`);
+  }
+  // a button that publishes a finished run's video (from its uploaded files) to this page
+  function publishButton(run) {
+    const b = el("button", "", "📤 Put on this page");
+    b.type = "button";
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        await gh(`/repos/${cfg.repo}/actions/workflows/${PUBLISH.file}/dispatches`, {
+          method: "POST", body: { ref: cfg.branch, inputs: { run_id: String(run.id) } },
+        });
+        toast("Publishing… it shows up under Videos in about a minute");
+        pending = { known: new Set([...document.querySelectorAll(".run")].map((x) => +x.dataset.id)), since: Date.now() };
+        setTimeout(tick, 3000);
+      } catch (e) {
+        toast(explain(e, "start runs", "Actions: Read and write"));
+        b.disabled = false;
+      }
+    });
+    return b;
   }
   async function listRuns() {
     const data = await gh(`/repos/${cfg.repo}/actions/runs?per_page=40&event=workflow_dispatch`);
@@ -488,6 +510,7 @@
   }
   function renderRun(run) {
     const li = el("li", "run");
+    li.dataset.id = String(run.id);
     if (run.id === newRunId) li.classList.add("new");
     const body = el("div", "rbody");
     const fl = flowOfRun(run) || cfg.workflows[0];
@@ -515,7 +538,8 @@
           if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
         });
         row.append(w);
-      } else {
+      } else if (fl.prefix) {
+        if (token) row.append(publishButton(run));
         row.append(link(`${run.html_url}#artifacts`, "Files on GitHub ↗", "button"));
       }
     } else {
@@ -523,7 +547,9 @@
       why.type = "button";
       why.addEventListener("click", () => showFailure(run, body, why));
       row.append(why);
-      if (token) {
+      // the video may be made even when a later step failed
+      if (fl.prefix && !rel && token) row.append(publishButton(run));
+      if (token && fl.prefix) {
         const again = el("button", "", "Run again");
         again.type = "button";
         again.addEventListener("click", async () => {
@@ -682,7 +708,7 @@
 
     $(".gh", node).href = rel.html_url;
     const remix = $(".remix", node);
-    if (!d.settings) remix.hidden = true;
+    if (!d.settings || !Object.keys(d.settings).length) remix.hidden = true;
     remix.addEventListener("click", () => {
       if (!flow || flow.key !== kind) selectFlow(kind);
       const s = Object.assign({}, d.settings, { seed: "" });

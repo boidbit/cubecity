@@ -44,7 +44,7 @@ def data(s, upload, env):
         files = json.loads(env.get("FILES") or "{}")
     except ValueError:
         files = {}
-    run_id = env.get("GITHUB_RUN_ID", "")
+    run_id = env.get("VIDEO_RUN_ID") or env.get("GITHUB_RUN_ID", "")
     repo = env.get("GITHUB_REPOSITORY", "")
     server = env.get("GITHUB_SERVER_URL", "https://github.com")
     mode = str(s.get("mode", "chase"))
@@ -66,7 +66,7 @@ def data(s, upload, env):
         "excitement": s.get("excitement", 0),
         "settings": settings,
         "files": files,
-        "run": {"id": run_id, "number": env.get("GITHUB_RUN_NUMBER", ""),
+        "run": {"id": run_id, "number": env.get("VIDEO_RUN_NUMBER") or env.get("GITHUB_RUN_NUMBER", ""),
                 "url": f"{server}/{repo}/actions/runs/{run_id}" if repo and run_id else ""},
     }
 
