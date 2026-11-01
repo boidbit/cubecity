@@ -1,0 +1,40 @@
+name: Release probe (temporary)
+
+# Throwaway check: which "gh release create" call does the GITHUB_TOKEN accept? Deletes what it makes.
+on:
+  push:
+    branches: [claude/sharp-lamport-iwervk]
+    paths: [".github/workflows/release-probe.yml"]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Probe
+        run: |
+          gh --version | head -1
+          main=$(git rev-parse HEAD)
+          echo "main is $main"
+          echo "hello" > probe.txt
+          printf '## probe\n\n<!-- studio-data\n{"a": 1}\n-->\n' > notes.md
+          try() { name="$1"; shift; if out=$("$@" 2>&1); then echo "OK   $name"; else echo "FAIL $name: $out"; fi; }
+          try "A plain"          gh release create "probe-a-$GITHUB_RUN_ID" --target "$main" --prerelease --title "probe a" --notes "probe"
+          try "B latest=false"   gh release create "probe-b-$GITHUB_RUN_ID" --target "$main" --prerelease --latest=false --title "probe b" --notes "probe"
+          try "C asset"          gh release create "probe-c-$GITHUB_RUN_ID" --target "$main" --prerelease --title "probe c" --notes "probe" probe.txt
+          try "D emoji+notes"    gh release create "probe-d-$GITHUB_RUN_ID" --target "$main" --prerelease --title "🎬 probe d · x" --notes-file notes.md probe.txt
+          try "E story- tag"     gh release create "story-probe-$GITHUB_RUN_ID" --target "$main" --prerelease --title "probe e" --notes "probe"
+          try "F like story.yml" gh release create "story-probe-f-$GITHUB_RUN_ID" --target "$main" --prerelease --latest=false --title "🎬 probe f · dark" --notes-file notes.md probe.txt
+          try "G api, no target" gh api -X POST "repos/$GH_REPO/releases" -f tag_name="probe-g-$GITHUB_RUN_ID" -F prerelease=true -f name="probe g" -f body="probe"
+          echo "--- clean up"
+          for t in probe-a probe-b probe-c probe-d story-probe probe-g story-probe-f; do
+            gh release delete "$t-$GITHUB_RUN_ID" --yes --cleanup-tag 2>&1 | tail -1 || true
+          done
+          gh api "repos/$GH_REPO/releases?per_page=50" --jq '.[] | select(.tag_name | test("probe")) | "LEFT: \(.tag_name) draft=\(.draft)"' || true
