@@ -18,11 +18,11 @@ import music
 import sfx as sfx_mod
 
 SR = music.SR
-CUES = ["calm", "romantic", "happy", "comic", "sad", "tension", "action", "silence"]
+CUES = ["calm", "romantic", "happy", "comic", "dark", "sad", "tension", "action", "silence"]
 COMIC_MOODS = ("funny", "cringe", "dark")
-CUE_MUSIC = {"calm": "calm", "romantic": "romantic", "happy": "happy", "comic": "funny", "sad": "sad",
+CUE_MUSIC = {"calm": "calm", "romantic": "romantic", "happy": "happy", "comic": "funny", "dark": "dark", "sad": "sad",
              "tension": "tension", "action": "action"}
-BASE = {"funny": "comic", "cringe": "comic", "dark": "comic", "happy": "happy", "romantic": "romantic",
+BASE = {"funny": "comic", "cringe": "comic", "dark": "dark", "happy": "happy", "romantic": "romantic",
         "sad": "sad", "action": "calm", "drama": "calm", "twist": "calm"}
 MUSIC_RMS = 0.11
 MIN_CUE = 3.5          # a cue plays at least this long before the next change (except hits)

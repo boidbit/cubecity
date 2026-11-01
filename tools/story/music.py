@@ -38,6 +38,9 @@ MOODS = {
                  "bass": 0.9, "drums": -1, "tune": "", "swing": 0.0},
     "calm":     {"root": 62, "minor": False, "bpm": 84, "prog": [0, 3, 5, 4], "keys": "pluck", "pad": 0.4,
                  "bass": 0.4, "drums": 0, "tune": "", "swing": 0.0},
+    # dark comedy: a sly minor-key tiptoe with a swing (the "something is very wrong but fine" tune)
+    "dark":     {"root": 57, "minor": True, "bpm": 104, "prog": [0, 5, 3, 4], "keys": "staccato", "pad": 0.2,
+                 "bass": 0.8, "drums": 1, "tune": "marimba", "swing": 0.22},
 }
 MAJOR = [0, 2, 4, 5, 7, 9, 11]
 MINOR = [0, 2, 3, 5, 7, 8, 10]

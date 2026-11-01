@@ -62,9 +62,9 @@ VENDOR = {"name": "BHAIYA", "color": "#f0a020",
                     "espeak_pitch": 40, "style": "a cheerful, chatty Indian street vendor"},
           "look": {"style": "boy", "skin": "#c98b5e", "hair": "#1d1714", "shirt": "#f3efe4"}}
 TIMES = ["day", "dusk", "night"]
-MOOD_ENDING = {"happy": "happy", "romantic": "happy", "funny": "happy", "cringe": "happy",
+MOOD_ENDING = {"happy": "happy", "romantic": "happy", "funny": "happy", "cringe": "happy", "dark": "cliffhanger",
                "sad": "crash", "action": "caught", "twist": "cliffhanger", "drama": "happy"}
-MOOD_TIME = {"sad": "night", "romantic": "dusk", "happy": "day", "action": "dusk"}
+MOOD_TIME = {"sad": "night", "romantic": "dusk", "happy": "day", "action": "dusk", "dark": "night"}
 
 SYSTEM = """You write episodes of a short animated comedy-drama series for YouTube Shorts and Instagram Reels.
 The show is made in a blocky 3D city game (everything is cubes, like Minecraft or Roblox).
@@ -182,6 +182,61 @@ ANSWER with one JSON object only:
  "upload": {"titles": ["3 catchy titles, max 60 chars, 1-2 emojis"], "description": "2 short lines",
             "hashtags": ["#shorts", "..."]}}
 Keep "names" as BABU and SHONA unless the idea asks for other names (then put the new names there, in capitals)."""
+
+
+NEVER = """Never (hard rules, even if the idea asks for it):
+- no suicide or self-harm, not even as a joke or a threat
+- no sexual content or jokes about sexual violence; nothing involving children in danger
+- no real tragedies, disasters, wars, terror attacks, accidents or real people (alive or dead)
+- no jokes about religion, caste, region, skin colour, gender, body shape, illness or disability
+- no slurs, gaali or abuse; no drugs, alcohol or smoking shown as cool
+- no realistic violence, blood or weapons; fights stay cartoon (DHISHUM!, knocked out, stars)
+- no mocking the poor or the helpless: punch up (the villain, the boss, the system, themselves),
+  never down
+If the idea needs something on this list, keep the dark tone but swap in a safe target."""
+
+DARK_MODE = """
+
+DARK HUMOR MODE (this episode's mood is "dark")
+Tone: dark, deadpan comedy. Terrible things happen and the characters react with calm, petty or
+absurd logic instead of panic. The laugh comes from the gap between how bad it is and how casually
+they take it. Still a cartoon: blocky characters, nobody really gets hurt, and the couple still love
+each other underneath.
+Techniques to use:
+- Deadpan: the worse the situation, the calmer the line ("Car gayi, phone gaya... chalo, EMI toh bachi").
+- Misplaced priorities: in a disaster they worry about something tiny (the pizza, the parking ticket,
+  the Wi-Fi password, "last seen").
+- Escalation: each attempt to fix things makes it worse; the last beat is the worst, said calmly.
+- Brutal honesty: a character says out loud what everybody thinks ("Main tumhe bachane nahi, apni
+  gaadi ki EMI bachane aaya hoon").
+- Karma and irony: the plan backfires on whoever made it; the villain's own trick catches him.
+- Morbid exaggeration about everyday things: meeting her papa is like going to war ("Will likh ke aaya
+  hoon"), a Monday is a funeral.
+- Savage but loving roasts between Babu and Shona; the last line can be a sting, not a hug.
+Good endings for dark mode: "crash" or "cliffhanger" with a deadpan last line, or a happy ending that is
+ruined in the very last line.
+""" + NEVER
+
+REVIEW = """You are the standards editor of a dark comedy series for YouTube Shorts and Instagram Reels.
+Below is an episode as JSON. Check every line ("sub" and "tts") and every action against these rules:
+""" + NEVER + """
+If something breaks a rule, rewrite only that part so the joke keeps its dark, deadpan tone but uses a
+safe target. Keep everything else exactly as it is: the same keys, beats, order and wording.
+Answer with the full episode JSON only."""
+
+# words that never go out, in any mood (Roman Hinglish, English and Devanagari)
+UNSAFE = re.compile(
+    r"suicide|khudkushi|khud ?kushi|atmahatya|aatmhatya|self[- ]?harm|kill (my|him|her)self|"
+    r"\brape|balatkar|molest|\bbombs?\b|terroris|aatankwad|"
+    r"drugs?\b|ganja|charas|cocaine|heroin|"
+    r"chutiy|madarchod|ma+dar ?chod|behen ?chod|bhen ?chod|bhosd|gaa?ndu|randi|"
+    r"आत्महत्या|खुदकुशी|बलात्कार|आतंक|गांजा|चरस|चूतिय|मादरचोद|बहनचोद|भोसड|गांडू|रंडी",
+    re.IGNORECASE)
+
+
+def unsafe_words(ai):
+    """The banned words that appear anywhere in the model's answer."""
+    return sorted({m.group(0).lower() for m in UNSAFE.finditer(json.dumps(ai, ensure_ascii=False))})
 
 
 def clip(text, n):
@@ -664,7 +719,8 @@ def main():
                   f"Language: {a.language}.\n"
                   + (f"Episode number: {a.episode}.\n" if a.episode else "")
                   + f"Suggested ending for this mood: {MOOD_ENDING.get(mood, 'your choice')}."
-                  + (f"\nUse this recipe: {TEMPLATES[a.template]}" if a.template in TEMPLATES else ""))
+                  + (f"\nUse this recipe: {TEMPLATES[a.template]}" if a.template in TEMPLATES else "")
+                  + (DARK_MODE if mood == "dark" else ""))
         feedback = ""
         for attempt in range(2):
             try:
@@ -674,10 +730,27 @@ def main():
                 break
             with open(os.path.join(out_dir, f"ai_answer_{attempt + 1}.json"), "w", encoding="utf-8") as f:
                 json.dump(ai, f, ensure_ascii=False, indent=1)
+            if mood == "dark" and isinstance(ai, dict):
+                # dark humour is where the platforms' rules bite: a second read against the rules
+                try:
+                    fixed, _ = gemini.write_json(REVIEW + "\n\n" + json.dumps(ai, ensure_ascii=False), temperature=0.3)
+                    if isinstance(fixed, dict) and fixed.get("beats"):
+                        changed = json.dumps(fixed, sort_keys=True) != json.dumps(ai, sort_keys=True)
+                        print(f"standards review: {'rewrote some lines' if changed else 'no changes'}")
+                        ai = fixed
+                except Exception as e:
+                    print(f"::warning::standards review failed ({e}): keeping the draft")
             cand, problems = clean(ai if isinstance(ai, dict) else {}, base, mood)
+            bad = unsafe_words(ai)
+            if bad:
+                problems.append("unsafe words: " + ", ".join(bad))
             lines = sum(1 for b in cand["beats"] if "say" in b)
             print(f"{model}: {lines} lines, problems: {problems or 'none'}")
             serious = [p for p in problems if p.startswith("only") or p == "no ending"]
+            if bad:
+                feedback = ("\n\nYour last answer used words that can never go out (" + ", ".join(bad)
+                            + "). Write the episode again without them, keeping the tone. Answer with the full JSON.")
+                continue           # never used, even on the last try: the saved episode is safer
             if not serious or (attempt == 1 and lines >= 6):
                 sp, used = cand, model
                 break

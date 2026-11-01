@@ -18,7 +18,7 @@ on:
       story_type:
         description: "Mood of the episode"
         type: choice
-        options: [funny, romantic, cringe, happy, sad, action, twist, drama]
+        options: [funny, romantic, cringe, happy, sad, action, twist, drama, dark]
         default: funny
       idea:
         description: "Your idea in a few words (blank = AI decides). Example: Shona's birthday, Babu forgot the cake"
@@ -46,7 +46,7 @@ on:
       music:
         description: "Background music (made from scratch, free to use). auto = to suit the episode's mood"
         type: choice
-        options: [auto, none, romantic, happy, funny, cringe, sad, action, twist]
+        options: [auto, none, romantic, happy, funny, cringe, sad, action, twist, dark]
         default: auto
       orientation:
         description: "vertical = Shorts / Reels (1080x1920), horizontal = normal video"

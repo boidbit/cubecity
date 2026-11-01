@@ -91,6 +91,11 @@ Episodes are no longer only a couple in a car:
   fights get punches and a bonk on the knock-out. Everything is made from scratch (nothing to license).
   Screenplays can ask for a change with `{"music": "tension"}` or an effect with `{"sfx": "ding"}`. Every
   run also gives `story_nomusic.mp4`, to put a trending sound under it in Instagram or YouTube.
+- **Dark humour:** the `dark` mood asks the AI writer for deadpan dark comedy (terrible things taken
+  absurdly calmly, misplaced priorities, karma, savage but loving roasts), with a hard list of topics
+  it never touches. A second Gemini pass reads the draft against that list and rewrites what breaks it,
+  and a word check (for every mood) never lets a banned word out: the saved episode is used instead.
+  Its own music (a sly minor-key tiptoe) and a pale, high-contrast grade.
 - **Templates:** the workflow's `template` input (kidnap_rescue, jealous_reveal, date, proposal) gives the AI
   writer a recipe; `ep5_kidnap` and `ep6_cousin` are saved examples.
 
