@@ -529,16 +529,17 @@
         });
         row.append(c);
       }
+    } else if (rel) {
+      // the video is on the page (a failed run may have been published afterwards)
+      const w = el("button", "primary", "▶ Watch");
+      w.type = "button";
+      w.addEventListener("click", () => {
+        const card = document.getElementById(`v-${rel.tag_name}`);
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      row.append(w);
     } else if (run.conclusion === "success") {
-      if (rel) {
-        const w = el("button", "primary", "▶ Watch");
-        w.type = "button";
-        w.addEventListener("click", () => {
-          const card = document.getElementById(`v-${rel.tag_name}`);
-          if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-        row.append(w);
-      } else if (fl.prefix) {
+      if (fl.prefix) {
         if (token) row.append(publishButton(run));
         row.append(link(`${run.html_url}#artifacts`, "Files on GitHub ↗", "button"));
       }
