@@ -132,15 +132,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          NAME: cubecity-${{ inputs.mode }}-${{ inputs.orientation }}-${{ github.run_number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           SETTINGS: ${{ toJSON(inputs) }}
-        run: |
-          tag="chase-$GITHUB_RUN_ID"
-          files=("video/$NAME.mp4" "video/$NAME-upload.txt")
-          if [ -f "video/$NAME-thumbnail.jpg" ]; then files+=("video/$NAME-thumbnail.jpg"); fi
-          export FILES="{\"video\": \"$NAME.mp4\", \"thumbnail\": \"$NAME-thumbnail.jpg\", \"upload\": \"$NAME-upload.txt\"}"
-          title=$(python3 tools/release_notes.py "video/$NAME.json" "video/$NAME-upload.txt" video/notes.md)
-          gh release create "$tag" --target "$GITHUB_SHA" --prerelease --latest=false \
-            --title "$title" --notes-file video/notes.md "${files[@]}"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**On the studio page:** $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"
+        run: tools/publish.sh chase video "$GITHUB_RUN_ID"

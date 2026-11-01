@@ -28,7 +28,8 @@ def data(sp, log, upload_text, env):
         if "say" in b:
             who = cast.get(b["say"], {}).get("name") or str(b["say"])
             lines.append({"who": str(who).title(), "emotion": b.get("emotion", "neutral"), "text": b.get("sub", "")})
-    run_id = env.get("GITHUB_RUN_ID", "")
+    settings = {k: env.get(v, "") for k, v in SETTINGS.items()}
+    run_id = env.get("VIDEO_RUN_ID") or env.get("GITHUB_RUN_ID", "")
     server = env.get("GITHUB_SERVER_URL", "https://github.com")
     repo = env.get("GITHUB_REPOSITORY", "")
     return {
@@ -46,8 +47,8 @@ def data(sp, log, upload_text, env):
         "hashtags": tags,
         "upload": upload_text,
         "lines": lines,
-        "settings": {k: env.get(v, "") for k, v in SETTINGS.items()},
-        "run": {"id": run_id, "number": env.get("GITHUB_RUN_NUMBER", ""),
+        "settings": settings if any(settings.values()) else {},
+        "run": {"id": run_id, "number": env.get("VIDEO_RUN_NUMBER") or env.get("GITHUB_RUN_NUMBER", ""),
                 "url": f"{server}/{repo}/actions/runs/{run_id}" if repo and run_id else ""},
     }
 

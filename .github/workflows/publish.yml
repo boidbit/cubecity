@@ -1,0 +1,52 @@
+name: Publish a video to the studio page
+
+# Puts the video of an earlier story or chase run on the studio page (as a release): a run from
+# before the page existed, or one whose own publish step failed. Nothing is recorded again and no
+# Gemini quota is used: it takes the run's uploaded files (story runs keep them 14 days, chase
+# runs 30). The studio page has a button for it on each run; or Actions -> this -> Run workflow.
+run-name: Publish run ${{ inputs.run_id }} to the studio page
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The run's id: the number at the end of its address (.../actions/runs/<id>)"
+        type: string
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      RUN_IN: ${{ inputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish
+        run: |
+          run="${RUN_IN//[^0-9]/}"
+          if [ -z "$run" ]; then echo "::error::run_id has to be a number"; exit 1; fi
+          read -r path number < <(gh api "repos/$GH_REPO/actions/runs/$run" --jq '"\(.path) \(.run_number)"')
+          case "$path" in
+            .github/workflows/story.yml) kind=story; pattern='story-video-*' ;;
+            .github/workflows/record.yml) kind=chase; pattern='video-*' ;;
+            *) echo "::error::run $run is not a story or chase video run ($path)"; exit 1 ;;
+          esac
+          if ! gh run download "$run" --pattern "$pattern" --dir dl; then
+            echo "::error::run $run has no video files left (they are kept 14 days for story runs, 30 for chase runs)"
+            exit 1
+          fi
+          if [ "$kind" = story ]; then
+            video=$(find dl -path '*/video/story.mp4' | head -1)
+            dir=$(dirname "$(dirname "$video")")
+          else
+            video=$(find dl -name '*.mp4' | head -1)
+            dir=$(dirname "$video")
+          fi
+          if [ -z "$video" ]; then echo "::error::no video in run $run's files"; exit 1; fi
+          RUN_NUMBER="$number" tools/publish.sh "$kind" "$dir" "$run"

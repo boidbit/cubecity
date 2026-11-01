@@ -116,8 +116,11 @@ Episodes are no longer only a couple in a car:
   copy buttons, the lines, downloads, "same settings" to make another one, and delete. Every run
   started by hand is published as a pre-release, `story-<run id>` with the MP4s, thumbnail, upload
   text and screenplay (`tools/story/release.py` writes its notes) or `chase-<run id>` with the best
-  take, its thumbnail and upload text (`tools/release_notes.py`); releases of a public repository
-  are public.
+  take, its thumbnail and upload text (`tools/release_notes.py`), by `tools/publish.sh`; releases
+  of a public repository are public. A run whose video is not on the page (an older run, or one whose
+  publish step failed) gets a "📤 Put on this page" button: the "Publish a video to the studio page"
+  workflow (`publish.yml`) takes that run's uploaded files, so nothing is recorded again and no
+  Gemini quota is used (story runs keep their files 14 days, chase runs 30).
   - One-time setup: Settings -> Pages -> Build and deployment -> Source: **GitHub Actions**; the
     "Studio page" workflow (`.github/workflows/pages.yml`) then puts it at
     `https://<owner>.github.io/<repo>/` on every push to main that changes it.
