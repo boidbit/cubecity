@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data: https:; media-src https:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark light">
+<title>Cube City Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span aria-hidden="true">🎬</span> Cube City Studio</div>
+  <nav class="nav">
+    <a id="apkLink" class="navlink" target="_blank" rel="noopener">Game APK</a>
+    <a id="repoLink" class="navlink" target="_blank" rel="noopener">GitHub</a>
+    <button id="keyBtn" class="pill" type="button" aria-expanded="false" aria-controls="keyBox">🔑 Add token</button>
+  </nav>
+</header>
+
+<main class="wrap">
+  <section id="keyBox" class="card" hidden>
+    <h2>Your GitHub token</h2>
+    <p>Starting a video needs a token. Watching and downloading videos does not.</p>
+    <ol class="steps">
+      <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub → new fine-grained token</a>.</li>
+      <li><b>Repository access</b>: Only select repositories → <b id="repoName">this repository</b>.</li>
+      <li><b>Permissions</b> → Repository permissions: <b>Actions: Read and write</b>. Add <b>Contents: Read and write</b> too if you want to delete videos from here.</li>
+      <li>Pick an expiry, press <b>Generate token</b>, copy it and paste it below.</li>
+    </ol>
+    <form id="keyForm" class="keyform" autocomplete="off">
+      <input id="keyInput" type="password" spellcheck="false" placeholder="github_pat_…" aria-label="GitHub token">
+      <label class="check"><input type="checkbox" id="keyRemember"> Remember on this device</label>
+      <div class="row">
+        <button class="primary" type="submit">Save token</button>
+        <button id="keyForget" type="button">Forget token</button>
+      </div>
+    </form>
+    <p id="keyMsg" class="msg" role="status"></p>
+    <p class="fine">The token stays in this browser and is only sent to api.github.com. Without "Remember" it is gone when you close the tab.</p>
+  </section>
+
+  <section class="card" id="newCard">
+    <h2>New video</h2>
+    <form id="runForm" novalidate>
+      <div id="fields" class="fields"></div>
+      <details id="more" class="more">
+        <summary>More options</summary>
+        <div id="moreFields" class="fields"></div>
+      </details>
+      <div class="row submit">
+        <button id="runBtn" class="primary big" type="submit">🎬 Make video</button>
+        <button id="resetBtn" type="button">Reset</button>
+      </div>
+      <p id="runMsg" class="msg" role="status"></p>
+    </form>
+  </section>
+
+  <section class="card" id="runsCard">
+    <div class="head">
+      <h2>Runs</h2>
+      <button id="refreshBtn" type="button" aria-label="Refresh runs and videos">↻ Refresh</button>
+    </div>
+    <p id="runsNote" class="fine"></p>
+    <ul id="runs" class="runs" aria-live="polite"></ul>
+  </section>
+
+  <section id="videosCard">
+    <div class="head"><h2>Videos</h2></div>
+    <div id="videos" class="grid"></div>
+    <div class="row center"><button id="moreVideos" type="button" hidden>Load more videos</button></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>Videos are releases of <a id="footRepo" target="_blank" rel="noopener">the repository</a>, so anyone can see them.</span>
+  <span id="rate"></span>
+</footer>
+
+<template id="videoTpl">
+  <article class="card video">
+    <div class="player">
+      <video controls playsinline preload="none"></video>
+    </div>
+    <div class="vbody">
+      <div class="switch" role="group" aria-label="Sound">
+        <button type="button" class="on" data-v="music" aria-pressed="true">With music</button>
+        <button type="button" data-v="nomusic" aria-pressed="false">No music</button>
+      </div>
+      <h3 class="vtitle"></h3>
+      <p class="vmeta"></p>
+      <div class="block titles">
+        <h4>Titles <small>tap one to copy</small></h4>
+        <ol></ol>
+      </div>
+      <div class="block desc">
+        <h4>Description</h4>
+        <p class="dtext"></p>
+        <p class="tags"></p>
+      </div>
+      <div class="row">
+        <button type="button" class="copyAll primary">📋 Copy upload text</button>
+        <button type="button" class="copyDesc">Copy description + hashtags</button>
+      </div>
+      <details class="lines">
+        <summary>Lines</summary>
+        <ul></ul>
+      </details>
+      <div class="row downloads"></div>
+      <div class="row tools">
+        <button type="button" class="remix">↺ Same settings</button>
+        <a class="gh navlink" target="_blank" rel="noopener">GitHub ↗</a>
+        <button type="button" class="del danger" hidden>🗑 Delete</button>
+      </div>
+    </div>
+  </article>
+</template>
+</body>
+</html>

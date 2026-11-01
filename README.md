@@ -103,6 +103,22 @@ Episodes are no longer only a couple in a car:
   (funny, romantic, cringe, happy, sad, action, twist), type an idea if you have one, and Gemini
   writes the episode, the characters get Gemini voices, the game stages it, and the run attaches
   the MP4, a thumbnail, the upload text and the screenplay. The run page shows the script.
+- **Studio page** (`site/`, on GitHub Pages): a web page to do all of this from the phone. It shows the
+  workflow's options as a form (read from `story.yml` when the page is built, so it stays in step),
+  starts the run, follows it step by step (cancel, "why did it fail?", run again), and lists the
+  finished videos with a player (with or without music), the titles, description and hashtags with
+  copy buttons, the lines, downloads, "same settings" to make another one, and delete. Every run
+  started by hand is published as a pre-release `story-<run id>` with the MP4s, thumbnail, upload
+  text and screenplay (`tools/story/release.py` writes its notes); releases of a public repository
+  are public.
+  - One-time setup: Settings -> Pages -> Build and deployment -> Source: **GitHub Actions**; the
+    "Studio page" workflow (`.github/workflows/pages.yml`) then puts it at
+    `https://<owner>.github.io/<repo>/` on every push to main that changes it.
+  - Starting videos needs a fine-grained token for this repository with **Actions: Read and write**
+    (and **Contents: Read and write** to delete videos). The page keeps it in the browser (only for
+    the tab, unless you tick "Remember") and sends it only to api.github.com. Watching and
+    downloading need no token.
+  - Build it locally: `pip install pyyaml && tools/site/build.py _site`, then serve `_site/`.
 - **Gemini keys:** add them as repository secrets `GEMINI_API_KEY` or `GEMINI_API_KEY_1` ... `_5`
   (Settings -> Secrets and variables -> Actions); when one runs out of quota the next is used.
   Without a key the saved episode and the free Edge voices are used.
@@ -163,4 +179,5 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade, ground, car and debris shaders |
 | `story/` | Story lab: blocky characters, the open-top car, the story scheduler, screenplays |
+| `site/` | The studio page (GitHub Pages): start story videos, follow the runs, watch and download the videos |
 | `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |

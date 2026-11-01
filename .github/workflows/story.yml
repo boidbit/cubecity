@@ -12,6 +12,12 @@ name: Story video (experiment)
 # runs out) for the AI writer and the Gemini voices. Without them the saved episode and the
 # free Edge voices are used.
 # On every push to story-lab it makes a small, quick preview of the saved episode instead.
+# Each run started by hand is also published as a release (tag story-<run id>) with the MP4s,
+# thumbnail and upload text, which the studio page (site/, on GitHub Pages) plays and downloads.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('{0} · {1} · {2}', inputs.story_type, inputs.script, inputs.idea || 'AI decides the idea')
+      || 'Preview of the saved episode' }}
 on:
   workflow_dispatch:
     inputs:
@@ -78,6 +84,8 @@ jobs:
   story:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    permissions:
+      contents: write   # publish the video as a release for the studio page
     env:
       PREVIEW: ${{ github.event_name == 'push' }}
       # Gemini keys: when one runs out of quota the next one is used
@@ -149,6 +157,7 @@ jobs:
           export SEED="${SEED_IN//[^0-9]/}"
           [ -n "$SEED" ] || SEED=$(( RANDOM * 7 + RANDOM ))
           export SEED
+          echo "SEED_USED=$SEED" >> "$GITHUB_ENV"
           if [ "$PREVIEW" = true ]; then export SCALE=0.5 FPS=30; fi
           export EXTRA_ARGS="--story=$PWD/story-out/timed.json --story_log=$PWD/take/story_log.json"
           mkdir -p take
@@ -191,3 +200,19 @@ jobs:
             take/audio.png
             take/godot.log
           retention-days: 14
+      - name: Publish to the studio page
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="story-$GITHUB_RUN_ID"
+          title=$(python3 tools/story/release.py story-out/timed.json take/story_log.json video/upload.txt video/notes.md)
+          files=(video/story.mp4 video/thumbnail.jpg video/upload.txt video/screenplay.json)
+          for f in video/story_nomusic.mp4 video/story_score.txt; do
+            if [ -f "$f" ]; then files+=("$f"); fi
+          done
+          gh release create "$tag" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "$title" --notes-file video/notes.md "${files[@]}"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**On the studio page:** $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"

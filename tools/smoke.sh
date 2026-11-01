@@ -127,6 +127,22 @@ print('music: all moods, effects and the score ok')
     echo "::error::the music generator failed"
     status=1
   fi
+  # the studio page reads the hidden data block in each video's release notes
+  if ! python3 - "$OUT/story_drama.out" <<'PY'
+import json, re, subprocess, sys
+r = subprocess.run([sys.executable, "tools/story/text.py", "story/screenplays/ep6_cousin.json"], capture_output=True, text=True, check=True)
+open("/tmp/smoke_upload.txt", "w").write(r.stdout)
+t = subprocess.run([sys.executable, "tools/story/release.py", "story/screenplays/ep6_cousin.json", sys.argv[1],
+                    "/tmp/smoke_upload.txt", "/tmp/smoke_notes.md"], capture_output=True, text=True, check=True).stdout.strip()
+m = re.search(r"<!--\s*studio-data\s*([\s\S]*?)-->", open("/tmp/smoke_notes.md", encoding="utf-8").read())
+d = json.loads(m.group(1))
+assert t.startswith("🎬") and d["titles"] and len(d["lines"]) >= 10 and d["upload"].startswith("TITLES"), d
+print(f"release notes: {t!r}, {len(d['lines'])} lines, {len(d['titles'])} titles")
+PY
+  then
+    echo "::error::the release notes for the studio page are broken"
+    status=1
+  fi
 fi
 python3 tools/report.py "$OUT"/*.json || status=1
 exit $status
