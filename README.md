@@ -30,6 +30,10 @@ Steering feel is tuned by the `STEER_*` constants at the top of `car.gd`.
 
 An automatic driver can play the game while Godot's Movie Maker records it, for YouTube Shorts or normal videos.
 
+The easy way is the studio page (`https://<owner>.github.io/<repo>/`, see *Studio page* under Story lab):
+pick **🚓 Chase & action**, choose the options, press the button; the finished video, its thumbnail and
+upload text show up on the same page. Or from GitHub:
+
 1. Open the repository's **Actions** tab, choose **Record video**, then **Run workflow**.
 2. Pick the options:
    - **mode**:
@@ -103,13 +107,16 @@ Episodes are no longer only a couple in a car:
   (funny, romantic, cringe, happy, sad, action, twist), type an idea if you have one, and Gemini
   writes the episode, the characters get Gemini voices, the game stages it, and the run attaches
   the MP4, a thumbnail, the upload text and the screenplay. The run page shows the script.
-- **Studio page** (`site/`, on GitHub Pages): a web page to do all of this from the phone. It shows the
-  workflow's options as a form (read from `story.yml` when the page is built, so it stays in step),
+- **Studio page** (`site/`, on GitHub Pages): a web page to do all of this from the phone, for both
+  kinds of video: a **Story** (this workflow) or a **Chase & action** video (the "Record video"
+  workflow: chase, helicopter, rush hour, stunts, destroy, survive). It shows the
+  workflow's options as a form (read from `story.yml` / `record.yml` when the page is built, so it stays in step),
   starts the run, follows it step by step (cancel, "why did it fail?", run again), and lists the
   finished videos with a player (with or without music), the titles, description and hashtags with
   copy buttons, the lines, downloads, "same settings" to make another one, and delete. Every run
-  started by hand is published as a pre-release `story-<run id>` with the MP4s, thumbnail, upload
-  text and screenplay (`tools/story/release.py` writes its notes); releases of a public repository
+  started by hand is published as a pre-release, `story-<run id>` with the MP4s, thumbnail, upload
+  text and screenplay (`tools/story/release.py` writes its notes) or `chase-<run id>` with the best
+  take, its thumbnail and upload text (`tools/release_notes.py`); releases of a public repository
   are public.
   - One-time setup: Settings -> Pages -> Build and deployment -> Source: **GitHub Actions**; the
     "Studio page" workflow (`.github/workflows/pages.yml`) then puts it at

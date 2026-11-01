@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Builds the studio page (site/) into a folder ready for GitHub Pages.
 
-Copies the page's files and writes studio.json: the repository, the story workflow and its
-inputs, read from .github/workflows/story.yml. So the page's form always matches the workflow:
-add an option there and it shows up on the page with the next build.
+Copies the page's files and writes studio.json: the repository and the workflows the page can
+start (the story video and the chase / action video) with their inputs, read from the workflow
+files. So the page's forms always match the workflows: add an option there and it shows up on the
+page with the next build.
 
 Usage: tools/site/build.py OUT_DIR [--repo owner/name] [--branch main]
 Needs PyYAML (pip install pyyaml).
@@ -17,7 +18,8 @@ import sys
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-WORKFLOW = "story.yml"
+# key, workflow file, label on the page, release tag prefix of its videos
+WORKFLOWS = [("story", "story.yml", "🎭 Story", "story-"), ("chase", "record.yml", "🚓 Chase & action", "chase-")]
 FILES = ["index.html", "app.js", "style.css"]
 
 
@@ -42,7 +44,7 @@ def inputs(path):
             if item["default"] not in item["options"] and item["options"]:
                 item["default"] = item["options"][0]
         out.append(item)
-    return str(doc.get("name", WORKFLOW)), out
+    return str(doc.get("name", os.path.basename(path))), out
 
 
 def main(argv):
@@ -51,17 +53,20 @@ def main(argv):
     ap.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "boidbit/cubecity"))
     ap.add_argument("--branch", default="main")
     a = ap.parse_args(argv)
-    name, fields = inputs(os.path.join(ROOT, ".github", "workflows", WORKFLOW))
-    if not fields:
-        sys.exit(f"{WORKFLOW} has no workflow_dispatch inputs")
+    flows = []
+    for key, file, label, prefix in WORKFLOWS:
+        name, fields = inputs(os.path.join(ROOT, ".github", "workflows", file))
+        if not fields:
+            sys.exit(f"{file} has no workflow_dispatch inputs")
+        flows.append({"key": key, "file": file, "label": label, "prefix": prefix, "name": name, "inputs": fields})
     os.makedirs(a.out, exist_ok=True)
     for f in FILES:
         shutil.copy(os.path.join(ROOT, "site", f), os.path.join(a.out, f))
-    cfg = {"repo": a.repo, "branch": a.branch, "workflow": WORKFLOW, "workflow_name": name, "inputs": fields,
-           "built": os.environ.get("GITHUB_SHA", "")[:7]}
+    cfg = {"repo": a.repo, "branch": a.branch, "workflows": flows, "built": os.environ.get("GITHUB_SHA", "")[:7]}
     with open(os.path.join(a.out, "studio.json"), "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=1)
-    print(f"studio page -> {a.out} ({len(fields)} inputs: {', '.join(i['name'] for i in fields)})")
+    for f in flows:
+        print(f"studio page -> {a.out}: {f['file']} ({len(f['inputs'])} inputs: {', '.join(i['name'] for i in f['inputs'])})")
     return 0
 
 

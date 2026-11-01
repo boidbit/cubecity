@@ -1,21 +1,30 @@
-// Cube City Studio: start the story workflow, follow the run, watch and download the videos.
-// Everything talks straight to api.github.com from this browser. Videos are the story-<run id>
-// releases the story workflow publishes; their notes end with a JSON block this page reads.
+// Cube City Studio: start a story video or a chase / action video, follow the run, watch and
+// download the videos. Everything talks straight to api.github.com from this browser. Videos are
+// the releases the workflows publish (story-<run id>, chase-<run id>); their notes end with a JSON
+// block this page reads.
 "use strict";
 (() => {
   const API = "https://api.github.com";
   const TOKEN_KEY = "cubecity.studio.token";
   const FORM_KEY = "cubecity.studio.form";
+  const KIND_KEY = "cubecity.studio.kind";
   const PAGE = 30;
-  const MAIN = ["story_type", "idea", "script", "template"];
+  // the inputs shown before "More options", per workflow
+  const MAIN = {
+    story: ["story_type", "idea", "script", "template"],
+    chase: ["mode", "orientation", "duration", "title"],
+  };
   const LABELS = {
     story_type: "Mood", idea: "Your idea", template: "Story recipe", script: "Script", language: "Language",
     voice: "Voices", music: "Music", orientation: "Shape", fps: "Frame rate", time: "Time of day", seed: "City seed",
-    _ref: "Branch",
+    mode: "Mode", duration: "Length (seconds)", takes: "Takes", teaser: "Teaser hook (flash-forward at the start)",
+    title: "Hook text on screen", _ref: "Branch",
   };
   const EMOJI = {
     funny: "😂", romantic: "💕", cringe: "😬", happy: "😄", sad: "😢", action: "💥", twist: "🌀", drama: "🎭", dark: "🖤",
+    chase: "🚓", heli: "🚁", rush: "🚗", stunt: "🤸", destroy: "💥", survive: "⭐",
   };
+  const CHIP_EMOJI = ["story_type", "mode"];
   const STEPS = {
     "Write the episode": "✍️ Writing the story",
     "Voices": "🎙️ Making the voices",
@@ -23,14 +32,18 @@
     "Mix voices and write the upload text": "🎚️ Mixing sound and music",
     "Publish to the studio page": "📤 Putting the video here",
     "Install tools": "🧰 Getting ready",
+    "Install Godot and recording tools": "🧰 Getting ready",
+    "Pick the best take": "🏆 Picking the best take",
   };
-  const FILES = [
-    ["story.mp4", "⬇ Video"], ["story_nomusic.mp4", "⬇ No-music video"], ["thumbnail.jpg", "⬇ Thumbnail"],
-    ["upload.txt", "⬇ Upload text"], ["screenplay.json", "⬇ Screenplay"],
+  // what each file of a video is, in the order the download buttons are shown
+  const ROLES = [
+    ["video", "⬇ Video"], ["nomusic", "⬇ No-music video"], ["thumbnail", "⬇ Thumbnail"],
+    ["upload", "⬇ Upload text"], ["screenplay", "⬇ Screenplay"],
   ];
 
   const $ = (sel, root = document) => root.querySelector(sel);
   let cfg = null;
+  let flow = null; // the workflow the form is for
   let token = "";
   let pollTimer = 0;
   let videosPage = 1;
@@ -200,15 +213,27 @@
   }
 
   // ---------- the form ----------
+  // "chase = text | heli = text | ..." in a description becomes a hint for the chosen option
+  function optionHelp(desc, opts) {
+    if (!desc || !desc.includes("|")) return null;
+    const map = {};
+    for (const part of desc.split("|")) {
+      const m = /^\s*([\w-]+)\s*=\s*(.+?)\s*$/.exec(part);
+      if (m) map[m[1]] = m[2];
+    }
+    return opts.every((o) => map[o]) ? map : null;
+  }
   function field(inp, value) {
     const id = `f_${inp.name}`;
     const label = LABELS[inp.name] || nice(inp.name);
     let v = value !== undefined && value !== null ? String(value) : inp.default || "";
     let box;
+    let hint = inp.description;
     if (inp.type === "choice") {
       const opts = inp.options || [];
       if (!opts.includes(v)) v = inp.default;
-      if (inp.name === "story_type" || opts.length <= 4) {
+      const fancy = CHIP_EMOJI.includes(inp.name);
+      if (fancy || opts.length <= 4) {
         box = el("fieldset", "field");
         const legend = el("legend", "label", label);
         box.append(legend);
@@ -220,12 +245,19 @@
           r.name = inp.name;
           r.value = o;
           r.checked = o === v;
-          const s = el("span", "", (inp.name === "story_type" && EMOJI[o] ? EMOJI[o] + " " : "") + o);
+          const s = el("span", "", (fancy && EMOJI[o] ? EMOJI[o] + " " : "") + o);
           c.append(r, s);
           chips.append(c);
         }
         box.append(chips);
-        if (inp.name === "story_type") box.classList.add("wide");
+        if (fancy) box.classList.add("wide");
+        const help = optionHelp(inp.description, opts);
+        if (help) {
+          const p = el("p", "hint", `${v}: ${help[v]}`);
+          chips.addEventListener("change", (ev) => { p.textContent = `${ev.target.value}: ${help[ev.target.value]}`; });
+          box.append(p);
+          hint = "";
+        }
       } else {
         box = el("div", "field");
         const l = el("label", "label", label);
@@ -261,31 +293,58 @@
       t.name = inp.name;
       t.value = v;
       t.maxLength = 300;
-      if (inp.name === "seed") t.inputMode = "numeric";
+      if (inp.name === "seed" || inp.name === "duration") t.inputMode = "numeric";
       box.append(l, t);
       if (inp.name === "idea") box.classList.add("wide");
     }
-    if (inp.description) box.append(el("p", "hint", inp.description));
+    if (hint) box.append(el("p", "hint", hint));
     return box;
   }
-  function savedForm() {
-    try { return JSON.parse(readKey(window.localStorage, FORM_KEY) || "{}") || {}; } catch (e) { return {}; }
+  function formKey(f) { return `${FORM_KEY}.${(f || flow).key}`; }
+  function savedForm(f) {
+    try { return JSON.parse(readKey(window.localStorage, formKey(f)) || "{}") || {}; } catch (e) { return {}; }
   }
+  function saveForm() { writeKey(window.localStorage, formKey(), JSON.stringify(formValues())); }
   function buildForm(values) {
     const main = $("#fields");
     const more = $("#moreFields");
     main.replaceChildren();
     more.replaceChildren();
-    for (const inp of cfg.inputs) {
-      (MAIN.includes(inp.name) ? main : more).append(field(inp, values[inp.name]));
+    const first = MAIN[flow.key] || [];
+    for (const inp of flow.inputs) {
+      (first.includes(inp.name) ? main : more).append(field(inp, values[inp.name]));
     }
     more.append(field({ name: "_ref", type: "string", default: cfg.branch,
       description: `Branch the workflow runs from (usually ${cfg.branch})` }, values._ref));
   }
+  function buildKinds() {
+    const box = $("#kinds");
+    box.replaceChildren();
+    for (const w of cfg.workflows) {
+      const b = el("button", "", w.label);
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.dataset.key = w.key;
+      b.addEventListener("click", () => { if (w !== flow) selectFlow(w.key); });
+      box.append(b);
+    }
+  }
+  function selectFlow(key, values) {
+    flow = cfg.workflows.find((w) => w.key === key) || cfg.workflows[0];
+    writeKey(window.localStorage, KIND_KEY, flow.key);
+    for (const b of $("#kinds").children) {
+      const on = b.dataset.key === flow.key;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-selected", String(on));
+    }
+    buildForm(values || savedForm());
+    $("#runBtn").textContent = flow.key === "chase" ? "🚓 Make chase video" : "🎬 Make story video";
+    say($("#runMsg"), "");
+  }
   function formValues() {
     const form = $("#runForm");
     const out = {};
-    for (const inp of cfg.inputs) {
+    for (const inp of flow.inputs) {
       const e = form.elements[inp.name];
       if (!e) continue;
       if (inp.type === "boolean") out[inp.name] = e.checked ? "true" : "false";
@@ -302,7 +361,15 @@
       if (e.type === "checkbox") e.checked = String(v) === "true";
       else e.value = String(v);
     }
-    writeKey(window.localStorage, FORM_KEY, JSON.stringify(formValues()));
+    // a chip's hint follows its choice
+    for (const inp of flow.inputs) {
+      const e = form.elements[inp.name];
+      if (e && e instanceof RadioNodeList) {
+        const r = [...e].find((x) => x.checked);
+        if (r) r.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+    saveForm();
   }
 
   async function makeVideo(ev) {
@@ -313,12 +380,16 @@
       return;
     }
     const values = formValues();
-    writeKey(window.localStorage, FORM_KEY, JSON.stringify(values));
+    saveForm();
     const ref = values._ref;
     const inputs = {};
-    for (const inp of cfg.inputs) inputs[inp.name] = values[inp.name] ?? "";
+    for (const inp of flow.inputs) inputs[inp.name] = values[inp.name] ?? "";
     if (inputs.seed && !/^\d*$/.test(inputs.seed)) {
       say(msg, "The city seed has to be a number (or blank).", "bad");
+      return;
+    }
+    if ("duration" in inputs && !(/^\d+$/.test(inputs.duration) && +inputs.duration >= 15 && +inputs.duration <= 300)) {
+      say(msg, "The length has to be a number of seconds between 15 and 300.", "bad");
       return;
     }
     const btn = $("#runBtn");
@@ -327,7 +398,7 @@
     try {
       let known = new Set();
       try { known = new Set((await listRuns()).map((r) => r.id)); } catch (e) { /* still start it */ }
-      const res = await gh(`/repos/${cfg.repo}/actions/workflows/${cfg.workflow}/dispatches`, {
+      const res = await gh(`/repos/${cfg.repo}/actions/workflows/${flow.file}/dispatches`, {
         method: "POST", body: { ref, inputs },
       });
       pending = { known, since: Date.now() };
@@ -343,9 +414,13 @@
   }
 
   // ---------- runs ----------
+  function flowOfRun(run) {
+    const path = String(run.path || "").split("@")[0];
+    return cfg.workflows.find((w) => path === `.github/workflows/${w.file}`);
+  }
   async function listRuns() {
-    const data = await gh(`/repos/${cfg.repo}/actions/workflows/${cfg.workflow}/runs?per_page=8&event=workflow_dispatch`);
-    return (data && data.workflow_runs) || [];
+    const data = await gh(`/repos/${cfg.repo}/actions/runs?per_page=40&event=workflow_dispatch`);
+    return ((data && data.workflow_runs) || []).filter(flowOfRun).slice(0, 10);
   }
   function icon(run) {
     if (run.status !== "completed") return run.status === "in_progress" ? "🔄" : "⏳";
@@ -376,9 +451,18 @@
       const steps = jobs.flatMap((j) => j.steps || []);
       if (!steps.length) return;
       const done = steps.filter((s) => s.status === "completed").length;
-      const now = steps.find((s) => s.status === "in_progress") || steps.find((s) => s.status !== "completed");
       fill.style.width = `${Math.round((100 * done) / steps.length)}%`;
-      if (now) detail.textContent = `${STEPS[now.name] || now.name} (step ${Math.min(done + 1, steps.length)} of ${steps.length})`;
+      // a chase video records its takes side by side, one job each
+      const job = jobs.find((j) => j.status === "in_progress") || jobs.find((j) => j.status !== "completed");
+      const js = (job && job.steps) || [];
+      const now = js.find((s) => s.status === "in_progress") || js.find((s) => s.status !== "completed");
+      const together = jobs.filter((j) => j.status === "in_progress").length;
+      if (now) {
+        detail.textContent = `${STEPS[now.name] || now.name} ` +
+          (together > 1 ? `(${together} takes at once)` : `(step ${Math.min(done + 1, steps.length)} of ${steps.length})`);
+      } else if (job) {
+        detail.textContent = "Waiting for a GitHub machine…";
+      }
     } catch (e) { /* the bar stays empty */ }
   }
   async function showFailure(run, body, btn) {
@@ -406,9 +490,10 @@
     const li = el("li", "run");
     if (run.id === newRunId) li.classList.add("new");
     const body = el("div", "rbody");
-    body.append(el("div", "rtitle", run.display_title || run.name), el("div", "rmeta", runLine(run)));
+    const fl = flowOfRun(run) || cfg.workflows[0];
+    body.append(el("div", "rtitle", `${fl.label.split(" ")[0]} ${run.display_title || run.name}`), el("div", "rmeta", runLine(run)));
     const row = el("div", "row");
-    const rel = releases.get(`story-${run.id}`);
+    const rel = releases.get(`${fl.prefix}${run.id}`);
     if (run.status !== "completed") {
       if (token) {
         const c = el("button", "", "Cancel");
@@ -482,15 +567,35 @@
     if (!m) return {};
     try { return JSON.parse(m[1]) || {}; } catch (e) { return {}; }
   }
+  // which file of a release is the video, the no-music video, the thumbnail ...
+  function roles(rel, d) {
+    const all = rel.assets || [];
+    const by = Object.fromEntries(all.map((a) => [a.name, a]));
+    const f = d.files || {};
+    const mp4 = all.filter((a) => a.name.endsWith(".mp4"));
+    return {
+      video: by[f.video] || by["story.mp4"] || mp4.find((a) => !a.name.includes("nomusic")),
+      nomusic: by["story_nomusic.mp4"] || mp4.find((a) => a.name.includes("nomusic")),
+      thumbnail: by[f.thumbnail] || by["thumbnail.jpg"] || all.find((a) => /\.jpe?g$/.test(a.name)),
+      upload: by[f.upload] || by["upload.txt"] || all.find((a) => /upload.*\.txt$/.test(a.name)),
+      screenplay: by["screenplay.json"],
+    };
+  }
+  function kindOf(rel, d) {
+    if (d.kind) return d.kind;
+    const w = cfg.workflows.find((x) => rel.tag_name.startsWith(x.prefix));
+    return w ? w.key : "story";
+  }
   function renderVideo(rel) {
     const d = parseData(rel.body);
+    const kind = kindOf(rel, d);
     const node = $("#videoTpl").content.firstElementChild.cloneNode(true);
     node.id = `v-${rel.tag_name}`;
-    const assets = Object.fromEntries((rel.assets || []).map((a) => [a.name, a]));
+    const files = roles(rel, d);
     const video = $("video", node);
-    const main = assets["story.mp4"];
-    const quiet = assets["story_nomusic.mp4"];
-    if (assets["thumbnail.jpg"]) video.poster = assets["thumbnail.jpg"].browser_download_url;
+    const main = files.video;
+    const quiet = files.nomusic;
+    if (files.thumbnail) video.poster = files.thumbnail.browser_download_url;
     if ((d.settings && d.settings.orientation) === "horizontal") video.classList.add("wide");
     if (main) video.src = main.browser_download_url;
     video.addEventListener("error", () => {
@@ -516,10 +621,18 @@
 
     $(".vtitle", node).textContent = d.episode || rel.name || rel.tag_name;
     const meta = [];
-    if (d.mood) meta.push(`${EMOJI[d.mood] || ""} ${d.mood}`.trim());
-    if (d.seconds) meta.push(`${Math.round(d.seconds)} s`);
-    meta.push(ago(rel.created_at));
-    if (d.writer) meta.push(d.writer === "saved episode" ? "saved episode" : `written by ${d.writer}`);
+    if (kind === "chase") {
+      meta.push(d.mode_label || `${EMOJI[d.mood] || ""} ${d.mood || "chase"}`.trim());
+      if (d.title) meta.push(`hook "${d.title}"`);
+      if (d.seconds) meta.push(`${Math.round(d.seconds)} s`);
+      meta.push(ago(rel.created_at));
+      for (const [k, v] of d.stats || []) meta.push(`${k} ${v}`);
+    } else {
+      if (d.mood) meta.push(`${EMOJI[d.mood] || ""} ${d.mood}`.trim());
+      if (d.seconds) meta.push(`${Math.round(d.seconds)} s`);
+      meta.push(ago(rel.created_at));
+      if (d.writer) meta.push(d.writer === "saved episode" ? "saved episode" : `written by ${d.writer}`);
+    }
     $(".vmeta", node).textContent = meta.join(" · ");
 
     const titles = d.titles || [];
@@ -542,6 +655,9 @@
     $(".copyDesc", node).addEventListener("click", () => copy(descText, "Description"));
     const full = d.upload || rel.body || "";
     $(".copyAll", node).addEventListener("click", () => copy(full, "Upload text"));
+    const ytTags = $(".copyTags", node);
+    ytTags.hidden = !d.yt_tags;
+    ytTags.addEventListener("click", () => copy(d.yt_tags, "YouTube tags"));
 
     const lines = d.lines || [];
     const ul = $(".lines ul", node);
@@ -553,19 +669,22 @@
     $(".lines", node).hidden = !lines.length;
 
     const dl = $(".downloads", node);
-    const named = new Set(FILES.map((f) => f[0]));
-    for (const [name, label] of FILES) {
-      const a = assets[name];
-      if (a) dl.append(link(a.browser_download_url, `${label} (${mb(a.size)})`, "button"));
+    const shown = new Set();
+    for (const [role, label] of ROLES) {
+      const a = files[role];
+      if (!a || shown.has(a.name)) continue;
+      shown.add(a.name);
+      dl.append(link(a.browser_download_url, `${label} (${mb(a.size)})`, "button"));
     }
     for (const a of rel.assets || []) {
-      if (!named.has(a.name)) dl.append(link(a.browser_download_url, `⬇ ${a.name}`, "button"));
+      if (!shown.has(a.name)) dl.append(link(a.browser_download_url, `⬇ ${a.name}`, "button"));
     }
 
     $(".gh", node).href = rel.html_url;
     const remix = $(".remix", node);
     if (!d.settings) remix.hidden = true;
     remix.addEventListener("click", () => {
+      if (!flow || flow.key !== kind) selectFlow(kind);
       const s = Object.assign({}, d.settings, { seed: "" });
       setValues(s);
       $("#more").open = true;
@@ -604,7 +723,8 @@
     if (reset) box.replaceChildren();
     if (box.firstElementChild && box.firstElementChild.classList.contains("empty")) box.replaceChildren();
     for (const rel of list || []) {
-      if (!rel.tag_name.startsWith("story-") || rel.draft || releases.has(rel.tag_name)) continue;
+      const ours = cfg.workflows.some((w) => rel.tag_name.startsWith(w.prefix));
+      if (!ours || rel.draft || releases.has(rel.tag_name)) continue;
       releases.set(rel.tag_name, rel);
       box.append(renderVideo(rel));
     }
@@ -662,12 +782,13 @@
     $("#apkLink").href = `${repoUrl}/releases/tag/latest`;
     $("#repoName").textContent = cfg.repo;
 
-    buildForm(savedForm());
+    buildKinds();
+    selectFlow(readKey(window.localStorage, KIND_KEY) || cfg.workflows[0].key);
     const form = $("#runForm");
     form.addEventListener("submit", makeVideo);
-    form.addEventListener("change", () => writeKey(window.localStorage, FORM_KEY, JSON.stringify(formValues())));
+    form.addEventListener("change", saveForm);
     $("#resetBtn").addEventListener("click", () => {
-      writeKey(window.localStorage, FORM_KEY, "");
+      writeKey(window.localStorage, formKey(), "");
       buildForm({});
       say($("#runMsg"), "");
     });

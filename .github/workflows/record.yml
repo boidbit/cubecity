@@ -1,7 +1,11 @@
 name: Record video
 
-# Actions tab -> "Record video" -> Run workflow. Records one or more takes of an automatic
-# run, keeps the most exciting one and attaches it (MP4 + thumbnail + upload text) to the run.
+# Actions tab -> "Record video" -> Run workflow (or the studio page, site/). Records one or more
+# takes of an automatic run, keeps the most exciting one and attaches it (MP4 + thumbnail + upload
+# text) to the run. It is also published as a release (tag chase-<run id>) for the studio page.
+run-name: >-
+  ${{ format('{0} · {1} · {2} s{3}', inputs.mode, inputs.orientation, inputs.duration,
+      inputs.title && format(' · {0}', inputs.title) || '') }}
 on:
   workflow_dispatch:
     inputs:
@@ -103,6 +107,8 @@ jobs:
     needs: record
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # publish the video as a release for the studio page
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -122,3 +128,19 @@ jobs:
           name: video-${{ inputs.mode }}-${{ inputs.orientation }}-${{ github.run_number }}
           path: video/
           retention-days: 30
+      - name: Publish to the studio page
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NAME: cubecity-${{ inputs.mode }}-${{ inputs.orientation }}-${{ github.run_number }}
+          SETTINGS: ${{ toJSON(inputs) }}
+        run: |
+          tag="chase-$GITHUB_RUN_ID"
+          files=("video/$NAME.mp4" "video/$NAME-upload.txt")
+          if [ -f "video/$NAME-thumbnail.jpg" ]; then files+=("video/$NAME-thumbnail.jpg"); fi
+          export FILES="{\"video\": \"$NAME.mp4\", \"thumbnail\": \"$NAME-thumbnail.jpg\", \"upload\": \"$NAME-upload.txt\"}"
+          title=$(python3 tools/release_notes.py "video/$NAME.json" "video/$NAME-upload.txt" video/notes.md)
+          gh release create "$tag" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "$title" --notes-file video/notes.md "${files[@]}"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**On the studio page:** $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"

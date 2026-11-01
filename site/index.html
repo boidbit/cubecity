@@ -45,6 +45,7 @@
 
   <section class="card" id="newCard">
     <h2>New video</h2>
+    <div id="kinds" class="kinds" role="tablist" aria-label="Kind of video"></div>
     <form id="runForm" novalidate>
       <div id="fields" class="fields"></div>
       <details id="more" class="more">
@@ -104,6 +105,7 @@
       <div class="row">
         <button type="button" class="copyAll primary">📋 Copy upload text</button>
         <button type="button" class="copyDesc">Copy description + hashtags</button>
+        <button type="button" class="copyTags" hidden>Copy YouTube tags</button>
       </div>
       <details class="lines">
         <summary>Lines</summary>
