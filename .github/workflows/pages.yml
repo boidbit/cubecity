@@ -1,0 +1,52 @@
+name: Studio page
+
+# The studio page (site/): start a story video, follow the run, watch and download the videos
+# with their upload text. Built from site/ plus the story workflow's inputs, put on GitHub Pages.
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+# Then the page is at https://<owner>.github.io/<repo>/
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "tools/site/**", ".github/workflows/story.yml", ".github/workflows/pages.yml"]
+  pull_request:
+    paths: ["site/**", "tools/site/**", ".github/workflows/story.yml", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the page
+        run: |
+          pip install --quiet pyyaml
+          python3 tools/site/build.py _site --repo "$GITHUB_REPOSITORY" --branch "${{ github.event.repository.default_branch }}"
+          node --check _site/app.js
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

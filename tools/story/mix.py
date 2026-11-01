@@ -4,9 +4,10 @@
 The game wrote story_log.json with the real start time of every line (reactions fire when
 the chase produces an event, so the times are only known after the recording). Each
 voice clip is placed at its start time, cut short if the line was interrupted, and the
-game's own sound is ducked while somebody talks. Background music for the episode's mood
-(tools/story/music.py) plays underneath, dips under the voices and comes up for the end
-card. The result gets one steady loudness.
+game's own sound is ducked while somebody talks. The score (tools/story/score.py) puts music
+under it that changes with the story (it dips under the voices and comes up for the end card)
+and sound effects on the moments that need them. The result gets one steady loudness; a copy
+without the music (<out>_nomusic.mp4) is made too, to put a trending sound under in the app.
 
 Usage: tools/story/mix.py video.mp4 story_log.json timed.json out.mp4 [--music auto|none|MOOD]
        (voice paths in timed.json are relative to timed.json; auto = the screenplay's mood)
@@ -23,6 +24,7 @@ sys.path.insert(0, HERE)
 VOICE_GAIN = 1.8
 MUSIC_GAIN = 0.45       # under the talking (it dips further while somebody speaks)
 MUSIC_END_GAIN = 0.95   # for the end card
+SFX_GAIN = 0.9
 
 
 def run(cmd):
@@ -87,59 +89,72 @@ def main(video, log_path, timed_path, out, music="auto"):
         ins = "".join(f"[v{i}]" for i in range(1, n + 1))
         parts.append(f"{ins}amix=inputs={n}:normalize=0:dropout_transition=0[vb]" if n > 1 else "[v1]anull[vb]")
     has_music = mood != "none"
+    secs = duration(video)
+    import music as music_mod
+    import score as score_mod
+    seed = music_mod.seed_of(str(sp.get("title", "")) + str(sp.get("episode", "")))
+    # the score: music that follows the story, and the sound effects on its moments
+    score_mood = mood if has_music else str(sp.get("mood") or "romantic")
+    mtrack, fxtrack, report = score_mod.build(sp, log, score_mood, secs, seed)
+    print(f"score: {score_mood} ({secs:.1f}s, seed {seed})" + ("" if has_music else ", music off"))
+    for r in report:
+        if has_music or "sfx" in r:
+            print("  " + r)
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    with open(os.path.splitext(out)[0] + "_score.txt", "w") as f:
+        f.write("\n".join(report) + "\n")
+    k = n + 1
     if has_music:
-        import music as music_mod
-        secs = duration(video)
-        seed = music_mod.seed_of(str(sp.get("title", "")) + str(sp.get("episode", "")))
         mpath = os.path.join(tmp, "music.wav")
-        music_mod.write_wav(mpath, music_mod.make(mood, secs, seed))
+        music_mod.write_wav(mpath, mtrack)
         cmd += ["-i", mpath]
         end = float(log.get("end", -1.0))
         end = end if end > 0 else secs - 3.0
         # louder for the end card, then the music's own fade-out
-        parts.append(f"[{n + 1}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
-                     f"volume='{MUSIC_GAIN}+{MUSIC_END_GAIN - MUSIC_GAIN}*min(max((t-{end:.2f})/1.2,0),1)':eval=frame[m0]")
-        print(f"music: {mood} ({secs:.1f}s, seed {seed})")
-        # the dramatic sting on every shock zoom
-        stings = [float(a["t"]) for a in log.get("actions", []) if a.get("do") == "shot" and a.get("type") == "zoom"]
-        if stings:
-            spath = os.path.join(tmp, "sting.wav")
-            music_mod.write_wav(spath, music_mod.sting())
-            for j, st in enumerate(stings):
-                cmd += ["-i", spath]
-                ms = int(st * 1000)
-                parts.append(f"[{n + 2 + j}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
-                             f"volume=0.9,adelay={ms}|{ms}[s{j}]")
-            ins = "".join(f"[s{j}]" for j in range(len(stings)))
-            parts.append(f"[m0]{ins}amix=inputs={len(stings) + 1}:normalize=0:duration=first[m]")
-            print(f"stings at {', '.join(f'{x:.1f}s' for x in stings)}")
-        else:
-            parts.append("[m0]anull[m]")
+        parts.append(f"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
+                     f"volume='{MUSIC_GAIN}+{MUSIC_END_GAIN - MUSIC_GAIN}*min(max((t-{end:.2f})/1.2,0),1)':eval=frame[m]")
+        k += 1
+    fpath = os.path.join(tmp, "sfx.wav")
+    music_mod.write_wav(fpath, fxtrack)
+    cmd += ["-i", fpath]
+    parts.append(f"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume={SFX_GAIN},asplit=2[fx1][fx2]")
     parts += [
         # padded with silence: a sidechain stops when its key input does, and the voices end
         # before the end card
-        "[vb]apad,asplit=3[vb1][vb2][vb3]" if has_music else "[vb]apad,asplit=2[vb1][vb2]",
+        "[vb]apad,asplit=4[vb1][vb2][vb3][vb4]",
         # the game's sound sinks while a voice is on
-        "[g][vb1]sidechaincompress=threshold=0.015:ratio=10:attack=8:release=350:makeup=1[gd]",
+        "[g][vb1]sidechaincompress=threshold=0.015:ratio=10:attack=8:release=350:makeup=1,asplit=2[gd1][gd2]",
     ]
     if has_music:
         parts += [
             # the music dips under the voices too, more gently
             "[m][vb3]sidechaincompress=threshold=0.02:ratio=4:attack=20:release=600:makeup=1[md]",
-            "[gd][vb2][md]amix=inputs=3:normalize=0:duration=first[mix]",
+            "[gd1][vb2][md][fx1]amix=inputs=4:normalize=0:duration=first[mix]",
+            # and a version without the music, to put a trending sound under it in the app
+            "[gd2][vb4][fx2]amix=inputs=3:normalize=0:duration=first[bare]",
         ]
     else:
-        parts.append("[gd][vb2]amix=inputs=2:normalize=0:duration=first[mix]")
+        parts += ["[gd1][vb2][fx1]amix=inputs=3:normalize=0:duration=first[mix]",
+                  "[gd2]anullsink", "[vb3]anullsink", "[vb4]anullsink", "[fx2]anullsink"]
     with tmp_dir:
         mix = os.path.join(tmp, "mix.wav")
-        run(cmd + ["-filter_complex", ";".join(parts), "-map", "[mix]", "-ar", "48000", mix])
-        af = run([sys.executable, os.path.join(HERE, "..", "loudnorm.py"), mix]).stdout.strip()
-        print("loudness filter:", af or "none")
-        enc = ["ffmpeg", "-y", "-loglevel", "error", "-i", video, "-i", mix, "-map", "0:v", "-map", "1:a"]
-        if af:
-            enc += ["-af", af]
-        run(enc + ["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", out])
-    print(f"mixed {n} voice clips{' and the music' if has_music else ''} into {out}")
+        bare = os.path.join(tmp, "bare.wav")
+        maps = ["-map", "[mix]", "-ar", "48000", mix]
+        if has_music:
+            maps += ["-map", "[bare]", "-ar", "48000", bare]
+        run(cmd + ["-filter_complex", ";".join(parts)] + maps)
+        outs = [(mix, out)]
+        if has_music:
+            outs.append((bare, os.path.splitext(out)[0] + "_nomusic.mp4"))
+        for wav, dst in outs:
+            af = run([sys.executable, os.path.join(HERE, "..", "loudnorm.py"), wav]).stdout.strip()
+            print("loudness filter:", af or "none")
+            enc = ["ffmpeg", "-y", "-loglevel", "error", "-i", video, "-i", wav, "-map", "0:v", "-map", "1:a"]
+            if af:
+                enc += ["-af", af]
+            run(enc + ["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", dst])
+    print(f"mixed {n} voice clips{', the music' if has_music else ''} and the sound effects into {out}"
+          + (" (and a copy without the music)" if has_music else ""))
     return 0
 
 

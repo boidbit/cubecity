@@ -83,6 +83,19 @@ Episodes are no longer only a couple in a car:
   camera eases in and out on springs, moves in slowly on emotional lines, holds on the listener's
   reaction after a big line (with a beat before the next one), and each mood gets its own colour grade
   and vignette (`story/grade.gd`).
+- **Music and sound effects** (`tools/story/score.py`, `tools/story/sfx.py`): after the recording, the score
+  follows the story from the game's log: the episode's music, then romance for love, tension when things
+  go wrong, action for a chase or a fight, a dropout before a shock, silence under the punchline and a
+  finale for the end card. Comedy gets its effects on the moment: a boing when somebody falls, the sad
+  trombone, a record scratch on a shock, crickets after an awkward line, a rimshot after the punchline;
+  fights get punches and a bonk on the knock-out. Everything is made from scratch (nothing to license).
+  Screenplays can ask for a change with `{"music": "tension"}` or an effect with `{"sfx": "ding"}`. Every
+  run also gives `story_nomusic.mp4`, to put a trending sound under it in Instagram or YouTube.
+- **Dark humour:** the `dark` mood asks the AI writer for deadpan dark comedy (terrible things taken
+  absurdly calmly, misplaced priorities, karma, savage but loving roasts), with a hard list of topics
+  it never touches. A second Gemini pass reads the draft against that list and rewrites what breaks it,
+  and a word check (for every mood) never lets a banned word out: the saved episode is used instead.
+  Its own music (a sly minor-key tiptoe) and a pale, high-contrast grade.
 - **Templates:** the workflow's `template` input (kidnap_rescue, jealous_reveal, date, proposal) gives the AI
   writer a recipe; `ep5_kidnap` and `ep6_cousin` are saved examples.
 
@@ -90,6 +103,22 @@ Episodes are no longer only a couple in a car:
   (funny, romantic, cringe, happy, sad, action, twist), type an idea if you have one, and Gemini
   writes the episode, the characters get Gemini voices, the game stages it, and the run attaches
   the MP4, a thumbnail, the upload text and the screenplay. The run page shows the script.
+- **Studio page** (`site/`, on GitHub Pages): a web page to do all of this from the phone. It shows the
+  workflow's options as a form (read from `story.yml` when the page is built, so it stays in step),
+  starts the run, follows it step by step (cancel, "why did it fail?", run again), and lists the
+  finished videos with a player (with or without music), the titles, description and hashtags with
+  copy buttons, the lines, downloads, "same settings" to make another one, and delete. Every run
+  started by hand is published as a pre-release `story-<run id>` with the MP4s, thumbnail, upload
+  text and screenplay (`tools/story/release.py` writes its notes); releases of a public repository
+  are public.
+  - One-time setup: Settings -> Pages -> Build and deployment -> Source: **GitHub Actions**; the
+    "Studio page" workflow (`.github/workflows/pages.yml`) then puts it at
+    `https://<owner>.github.io/<repo>/` on every push to main that changes it.
+  - Starting videos needs a fine-grained token for this repository with **Actions: Read and write**
+    (and **Contents: Read and write** to delete videos). The page keeps it in the browser (only for
+    the tab, unless you tick "Remember") and sends it only to api.github.com. Watching and
+    downloading need no token.
+  - Build it locally: `pip install pyyaml && tools/site/build.py _site`, then serve `_site/`.
 - **Gemini keys:** add them as repository secrets `GEMINI_API_KEY` or `GEMINI_API_KEY_1` ... `_5`
   (Settings -> Secrets and variables -> Actions); when one runs out of quota the next is used.
   Without a key the saved episode and the free Edge voices are used.
@@ -150,4 +179,5 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade, ground, car and debris shaders |
 | `story/` | Story lab: blocky characters, the open-top car, the story scheduler, screenplays |
+| `site/` | The studio page (GitHub Pages): start story videos, follow the runs, watch and download the videos |
 | `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |

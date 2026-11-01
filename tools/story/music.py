@@ -33,6 +33,14 @@ MOODS = {
                  "bass": 1.0, "drums": 3, "tune": "", "swing": 0.0},
     "twist":    {"root": 55, "minor": True, "bpm": 92, "prog": [0, 5, 3, 4], "keys": "pluck", "pad": 0.55,
                  "bass": 0.6, "drums": 1, "tune": "bell", "swing": 0.0},
+    # cues the score switches to inside an episode (tools/story/score.py)
+    "tension":  {"root": 50, "minor": True, "bpm": 92, "prog": [0, 0, 5, 1], "keys": "ostinato", "pad": 0.55,
+                 "bass": 0.9, "drums": -1, "tune": "", "swing": 0.0},
+    "calm":     {"root": 62, "minor": False, "bpm": 84, "prog": [0, 3, 5, 4], "keys": "pluck", "pad": 0.4,
+                 "bass": 0.4, "drums": 0, "tune": "", "swing": 0.0},
+    # dark comedy: a sly minor-key tiptoe with a swing (the "something is very wrong but fine" tune)
+    "dark":     {"root": 57, "minor": True, "bpm": 104, "prog": [0, 5, 3, 4], "keys": "staccato", "pad": 0.2,
+                 "bass": 0.8, "drums": 1, "tune": "marimba", "swing": 0.22},
 }
 MAJOR = [0, 2, 4, 5, 7, 9, 11]
 MINOR = [0, 2, 3, 5, 7, 8, 10]
@@ -160,7 +168,8 @@ def chord_notes(m, degree, octave=0):
     return [root + scale[(degree + i) % 7] + 12 * ((degree + i) // 7) for i in (0, 2, 4)]
 
 
-def make(mood, seconds, seed=0, intro=2.6):
+def make(mood, seconds, seed=0, intro=2.6, rms=0.0):
+    """rms > 0: scale to that loudness (so cues of one score match) instead of to a peak."""
     m = MOODS.get({"drama": "twist"}.get(mood, mood), MOODS["romantic"])
     rng = np.random.default_rng(seed)
     beat = 60.0 / m["bpm"]
@@ -224,6 +233,12 @@ def make(mood, seconds, seed=0, intro=2.6):
             add(low, m["bass"] * 0.4 * bass(r * 1.5, beat * 1.5), start + beat * 2.5)
         # drums
         lvl = m["drums"]
+        if lvl == -1:
+            # a heartbeat pulse: lub-dub every bar
+            add(drums, 0.6 * kick(rng), start)
+            add(drums, 0.4 * kick(rng), start + beat * 0.45)
+            add(drums, 0.5 * kick(rng), start + beat * 2.0)
+            add(drums, 0.32 * kick(rng), start + beat * 2.45)
         if lvl >= 1:
             for i in range(4):
                 if i % 2 == 0:
@@ -250,6 +265,10 @@ def make(mood, seconds, seed=0, intro=2.6):
     mix = mix[:int(seconds * SR)]
     # fade in under the title, fade out at the very end
     mix *= env(len(mix), 1.5, 2.0)
+    if rms > 0:
+        now = np.sqrt(np.mean(mix[int(intro * SR):] ** 2)) or 1.0
+        mix = mix * (rms / now)
+        return np.clip(mix, -0.95, 0.95).astype(np.float32)
     peak = np.max(np.abs(mix)) or 1.0
     return (mix / peak * 0.7).astype(np.float32)
 

@@ -114,9 +114,33 @@ import music
 for m in music.MOODS:
     x = music.make(m, 8.0, 1)
     assert len(x) == 8 * music.SR and abs(x).max() > 0.3, m
-print('music: all moods ok')
+import sfx, score, json
+for n in sfx.NAMES:
+    assert abs(sfx.make(n)).max() > 0.1, n
+sp = json.load(open('story/screenplays/ep5_kidnap.json'))
+log = {'lines': [{'id': b['id'], 't': 3.0 + 2.5 * i} for i, b in enumerate(x for x in sp['beats'] if 'say' in x)],
+       'actions': [{'do': 'chase', 't': 12.0}, {'do': 'fall', 't': 15.0}], 'events': [{'type': 'hit', 't': 20.0}], 'end': 28.0, 'ending': 'happy'}
+m, f, rep = score.build(sp, log, 'action', 32.0, 1)
+assert len(m) == 32 * music.SR and abs(m).max() > 0.05 and abs(f).max() > 0.05 and rep
+print('music: all moods, effects and the score ok')
 "; then
     echo "::error::the music generator failed"
+    status=1
+  fi
+  # the studio page reads the hidden data block in each video's release notes
+  if ! python3 - "$OUT/story_drama.out" <<'PY'
+import json, re, subprocess, sys
+r = subprocess.run([sys.executable, "tools/story/text.py", "story/screenplays/ep6_cousin.json"], capture_output=True, text=True, check=True)
+open("/tmp/smoke_upload.txt", "w").write(r.stdout)
+t = subprocess.run([sys.executable, "tools/story/release.py", "story/screenplays/ep6_cousin.json", sys.argv[1],
+                    "/tmp/smoke_upload.txt", "/tmp/smoke_notes.md"], capture_output=True, text=True, check=True).stdout.strip()
+m = re.search(r"<!--\s*studio-data\s*([\s\S]*?)-->", open("/tmp/smoke_notes.md", encoding="utf-8").read())
+d = json.loads(m.group(1))
+assert t.startswith("🎬") and d["titles"] and len(d["lines"]) >= 10 and d["upload"].startswith("TITLES"), d
+print(f"release notes: {t!r}, {len(d['lines'])} lines, {len(d['titles'])} titles")
+PY
+  then
+    echo "::error::the release notes for the studio page are broken"
     status=1
   fi
 fi
