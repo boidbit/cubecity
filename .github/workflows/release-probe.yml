@@ -26,15 +26,10 @@ jobs:
           echo "hello" > probe.txt
           printf '## probe\n\n<!-- studio-data\n{"a": 1}\n-->\n' > notes.md
           try() { name="$1"; shift; if out=$("$@" 2>&1); then echo "OK   $name"; else echo "FAIL $name: $out"; fi; }
-          try "A plain"          gh release create "probe-a-$GITHUB_RUN_ID" --target "$main" --prerelease --title "probe a" --notes "probe"
-          try "B latest=false"   gh release create "probe-b-$GITHUB_RUN_ID" --target "$main" --prerelease --latest=false --title "probe b" --notes "probe"
-          try "C asset"          gh release create "probe-c-$GITHUB_RUN_ID" --target "$main" --prerelease --title "probe c" --notes "probe" probe.txt
-          try "D emoji+notes"    gh release create "probe-d-$GITHUB_RUN_ID" --target "$main" --prerelease --title "🎬 probe d · x" --notes-file notes.md probe.txt
-          try "E story- tag"     gh release create "story-probe-$GITHUB_RUN_ID" --target "$main" --prerelease --title "probe e" --notes "probe"
-          try "F like story.yml" gh release create "story-probe-f-$GITHUB_RUN_ID" --target "$main" --prerelease --latest=false --title "🎬 probe f · dark" --notes-file notes.md probe.txt
-          try "G api, no target" gh api -X POST "repos/$GH_REPO/releases" -f tag_name="probe-g-$GITHUB_RUN_ID" -F prerelease=true -f name="probe g" -f body="probe"
+          try "H old main commit" gh release create "probe-h-$GITHUB_RUN_ID" --target 63674a6d6f51a694879968b48d13a7917e59a3a2 --prerelease --title "probe h" --notes "probe"
+          try "I branch name"     gh release create "probe-i-$GITHUB_RUN_ID" --target main --prerelease --latest=false --title "probe i" --notes "probe" probe.txt
           echo "--- clean up"
-          for t in probe-a probe-b probe-c probe-d story-probe probe-g story-probe-f; do
+          for t in probe-h probe-i; do
             gh release delete "$t-$GITHUB_RUN_ID" --yes --cleanup-tag 2>&1 | tail -1 || true
           done
           gh api "repos/$GH_REPO/releases?per_page=50" --jq '.[] | select(.tag_name | test("probe")) | "LEFT: \(.tag_name) draft=\(.draft)"' || true
