@@ -33,6 +33,7 @@ def data(sp, log, upload_text, env):
     repo = env.get("GITHUB_REPOSITORY", "")
     return {
         "v": 1,
+        "kind": "story",
         "title": sp.get("title", ""),
         "episode": sp.get("episode", ""),
         "mood": sp.get("mood", ""),
@@ -70,10 +71,15 @@ def notes(d):
             "`upload.txt` is the full text to paste.", ""]
     if d["run"]["url"]:
         out += [f"Made by [run #{d['run']['number']}]({d['run']['url']}).", ""]
+    out += [block(d), ""]
+    return "\n".join(out)
+
+
+def block(d):
+    """The data for the studio page, hidden in an HTML comment at the end of the notes."""
     # "-->" would end the comment early; > is the same character inside a JSON string
     blob = json.dumps(d, ensure_ascii=False, indent=1).replace("-->", "--\\u003e")
-    out += [f"<!-- {MARK}", blob, "-->", ""]
-    return "\n".join(out)
+    return f"<!-- {MARK}\n{blob}\n-->"
 
 
 def title(d):

@@ -129,7 +129,7 @@ print('music: all moods, effects and the score ok')
   fi
   # the studio page reads the hidden data block in each video's release notes
   if ! python3 - "$OUT/story_drama.out" <<'PY'
-import json, re, subprocess, sys
+import json, os, re, subprocess, sys
 r = subprocess.run([sys.executable, "tools/story/text.py", "story/screenplays/ep6_cousin.json"], capture_output=True, text=True, check=True)
 open("/tmp/smoke_upload.txt", "w").write(r.stdout)
 t = subprocess.run([sys.executable, "tools/story/release.py", "story/screenplays/ep6_cousin.json", sys.argv[1],
@@ -138,6 +138,18 @@ m = re.search(r"<!--\s*studio-data\s*([\s\S]*?)-->", open("/tmp/smoke_notes.md",
 d = json.loads(m.group(1))
 assert t.startswith("🎬") and d["titles"] and len(d["lines"]) >= 10 and d["upload"].startswith("TITLES"), d
 print(f"release notes: {t!r}, {len(d['lines'])} lines, {len(d['titles'])} titles")
+# and a chase / action video's
+s = {"mode": "heli", "orientation": "vertical", "title": "CAR vs HELI", "duration": 55.0, "end": "survived",
+     "max_cops": 8, "cops_wrecked": 5, "heli_down": 1, "events": [{"type": "heli_down", "t": 40.0}]}
+json.dump(s, open("/tmp/smoke_summary.json", "w"))
+open("/tmp/smoke_chase_upload.txt", "w").write("TITLE (pick one)\n")
+t = subprocess.run([sys.executable, "tools/release_notes.py", "/tmp/smoke_summary.json", "/tmp/smoke_chase_upload.txt",
+                    "/tmp/smoke_chase_notes.md"], capture_output=True, text=True, check=True,
+                   env=dict(os.environ, SETTINGS='{"mode": "heli", "teaser": true}')).stdout.strip()
+m = re.search(r"<!--\s*studio-data\s*([\s\S]*?)-->", open("/tmp/smoke_chase_notes.md", encoding="utf-8").read())
+d = json.loads(m.group(1))
+assert d["kind"] == "chase" and d["titles"] and d["settings"]["teaser"] == "true" and d["stats"], d
+print(f"chase release notes: {t!r}, stats {d['stats']}")
 PY
   then
     echo "::error::the release notes for the studio page are broken"

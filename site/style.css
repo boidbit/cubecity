@@ -127,6 +127,11 @@ input[type="text"], input[type="password"], select, textarea {
 textarea { min-height: 70px; resize: vertical; }
 .check { display: flex; gap: 8px; align-items: center; font-size: .92rem; }
 
+/* story / chase switch */
+.kinds { display: flex; gap: 6px; margin: 0 0 16px; padding: 4px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
+.kinds button { flex: 1; justify-content: center; border: 0; background: transparent; font-weight: 600; padding: 10px 8px; }
+.kinds button.on { background: var(--accent); color: var(--accent-ink); }
+
 /* the form */
 .fields { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .field { display: grid; gap: 6px; min-width: 0; align-content: start; }
