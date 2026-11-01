@@ -16,7 +16,7 @@ name: Story video (experiment)
 # thumbnail and upload text, which the studio page (site/, on GitHub Pages) plays and downloads.
 run-name: >-
   ${{ github.event_name == 'workflow_dispatch'
-      && format('{0} · {1} · {2}', inputs.story_type, inputs.script, inputs.idea || 'AI decides the idea')
+      && format('{0} · {1}{2}', inputs.story_type, inputs.script, inputs.idea && format(' · {0}', inputs.idea) || '')
       || 'Preview of the saved episode' }}
 on:
   workflow_dispatch:
@@ -76,8 +76,9 @@ on:
     branches: [story-lab]
     paths: ["story/**", "tools/story/**", ".github/workflows/story.yml", "director.gd", "stunts.gd"]
 
+# a new push cancels the older preview; videos started by hand never cancel each other
 concurrency:
-  group: story-${{ github.ref }}-${{ github.event_name }}
+  group: story-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:

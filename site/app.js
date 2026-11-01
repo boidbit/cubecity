@@ -332,7 +332,7 @@
       });
       pending = { known, since: Date.now() };
       if (res && res.workflow_run_id) newRunId = res.workflow_run_id;
-      say(msg, "Started! A video takes about 10 to 25 minutes. Follow it under Runs; it shows up under Videos when it is done.", "ok");
+      say(msg, "Started! A video takes about 10 to 25 minutes. Follow it under Runs; it shows up under Videos when it is done. You can start more meanwhile.", "ok");
       $("#runsCard").scrollIntoView({ behavior: "smooth", block: "start" });
       setTimeout(() => tick(), 2500);
     } catch (e) {
