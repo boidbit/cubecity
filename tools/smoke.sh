@@ -114,7 +114,15 @@ import music
 for m in music.MOODS:
     x = music.make(m, 8.0, 1)
     assert len(x) == 8 * music.SR and abs(x).max() > 0.3, m
-print('music: all moods ok')
+import sfx, score, json
+for n in sfx.NAMES:
+    assert abs(sfx.make(n)).max() > 0.1, n
+sp = json.load(open('story/screenplays/ep5_kidnap.json'))
+log = {'lines': [{'id': b['id'], 't': 3.0 + 2.5 * i} for i, b in enumerate(x for x in sp['beats'] if 'say' in x)],
+       'actions': [{'do': 'chase', 't': 12.0}, {'do': 'fall', 't': 15.0}], 'events': [{'type': 'hit', 't': 20.0}], 'end': 28.0, 'ending': 'happy'}
+m, f, rep = score.build(sp, log, 'action', 32.0, 1)
+assert len(m) == 32 * music.SR and abs(m).max() > 0.05 and abs(f).max() > 0.05 and rep
+print('music: all moods, effects and the score ok')
 "; then
     echo "::error::the music generator failed"
     status=1

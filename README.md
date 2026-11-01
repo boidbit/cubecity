@@ -83,6 +83,14 @@ Episodes are no longer only a couple in a car:
   camera eases in and out on springs, moves in slowly on emotional lines, holds on the listener's
   reaction after a big line (with a beat before the next one), and each mood gets its own colour grade
   and vignette (`story/grade.gd`).
+- **Music and sound effects** (`tools/story/score.py`, `tools/story/sfx.py`): after the recording, the score
+  follows the story from the game's log: the episode's music, then romance for love, tension when things
+  go wrong, action for a chase or a fight, a dropout before a shock, silence under the punchline and a
+  finale for the end card. Comedy gets its effects on the moment: a boing when somebody falls, the sad
+  trombone, a record scratch on a shock, crickets after an awkward line, a rimshot after the punchline;
+  fights get punches and a bonk on the knock-out. Everything is made from scratch (nothing to license).
+  Screenplays can ask for a change with `{"music": "tension"}` or an effect with `{"sfx": "ding"}`. Every
+  run also gives `story_nomusic.mp4`, to put a trending sound under it in Instagram or YouTube.
 - **Templates:** the workflow's `template` input (kidnap_rescue, jealous_reveal, date, proposal) gives the AI
   writer a recipe; `ep5_kidnap` and `ep6_cousin` are saved examples.
 

@@ -532,6 +532,7 @@ func _outside(at: Vector3) -> Vector3:
 
 
 func _hit(r, ko: bool, t: float) -> void:
+	_event("ko" if ko else "hit", t)          # the score puts a punch (and a bonk) here
 	r.set_pose("ko" if ko else "hit")
 	r.set_state("shock" if not ko else "sad", "idle", false)
 	var at: Vector3 = r.head.global_position + Vector3(0, 0.5, 0)

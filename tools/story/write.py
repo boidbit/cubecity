@@ -35,6 +35,9 @@ EVENTS = ["takeoff", "big_air", "prop_fly", "near_miss", "cop_wrecked", "roadblo
           "parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won"]
 WAIT_FOR = ["parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won"]
 SHOTS = ["zoom", "pov", "wide"]
+MUSIC_CUES = ["calm", "romantic", "happy", "comic", "sad", "tension", "action", "silence"]
+SFX_NAMES = ["boing", "wahwah", "rimshot", "scratch", "crickets", "whoosh", "riser", "heartbeat", "sparkle",
+             "ding", "slide_up", "slide_down"]
 # side characters: looks the game can build, and Gemini voices by gender
 STYLES = ["boy", "girl", "man", "woman", "oldman", "oldwoman", "kid"]
 HAIR_STYLES = ["short", "long", "bald", "spiky", "bun", "ponytail"]
@@ -128,9 +131,15 @@ WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
    IN THE HAND (in the car or on foot): hold (add "who": "babu" | "shona", "prop": P: they hold it in their hand;
    food gets eaten), give (add "who": the giver, "to": "babu" | "shona" | "both", optional "prop": P: hands it
    over; the vendor gives what he sells, e.g. {"do": "give", "who": "vendor", "to": "both"}).
-3. {"wait": seconds} (at most 3), or {"wait_for": "exited" | "arrived" | "seated"}: wait until they are out of the
+3. MUSIC AND SOUND (optional: the editor already changes the music with the story and adds effects on
+   falls, hits, shocks, sad lines and the punchline): {"music": "calm" | "romantic" | "happy" | "comic" | "sad" |
+   "tension" | "action" | "silence"} switches the music right there; {"sfx": "boing" | "wahwah" | "rimshot" |
+   "scratch" | "crickets" | "whoosh" | "riser" | "heartbeat" | "sparkle" | "ding" | "slide_up" | "slide_down"}
+   plays a sound effect. Use them only for a moment that needs it (a "silence" before a big reveal, crickets
+   after an awkward line, a "ding" when somebody gets an idea).
+4. {"wait": seconds} (at most 3), or {"wait_for": "exited" | "arrived" | "seated"}: wait until they are out of the
    car / have reached where they walked or ran to / are back in their seats. A line can wait with "on": "parked".
-4. Exactly one ending: {"end": "happy" | "caught" | "crash" | "cliffhanger"}
+5. Exactly one ending: {"end": "happy" | "caught" | "crash" | "cliffhanger"}
    happy = the police leave, the car stops, sunset and hearts; caught = police surround the stopped car;
    crash = the car spins out and stops with smoke (sad); cliffhanger = everything freezes in slow motion.
    If they are out of the car at the end, use happy (a slow closing shot of the two of them) or cliffhanger.
@@ -584,6 +593,11 @@ def clean(ai, base, mood):
                         d["dist"] = 8.0
             if not endings:
                 stage.do(d)
+        elif "music" in b or "sfx" in b:
+            if b.get("music") in MUSIC_CUES:
+                beats.append({"music": b["music"]})
+            elif b.get("sfx") in SFX_NAMES:
+                beats.append({"sfx": b["sfx"]})
         elif "wait_for" in b:
             if b["wait_for"] in WAIT_FOR and not endings:
                 stage.wait_for(b["wait_for"])

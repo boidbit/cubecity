@@ -28,6 +28,10 @@ extends Node
 # or off screen until "appear". "cars": {"van": {"color"}} are the cars the story drives.
 # "start_on_foot": true (and "start_spot") starts the episode parked, everybody on the pavement.
 #   {"wait": seconds}  {"wait_for": event, "max_wait": s}
+#   {"music": calm | romantic | happy | comic | sad | tension | action | silence}
+#   {"sfx": boing | wahwah | rimshot | scratch | crickets | whoosh | riser | heartbeat | sparkle | ...}
+#                         marks for the score (tools/story/score.py), which also places music
+#                         changes and effects by itself from the lines, actions and events
 #   {"end": "happy" | "caught" | "crash" | "cliffhanger"}   the ending; lines after it play
 #                         once the ending scene is set (the car has stopped ...)
 # "dur" and "env" (voice length, loudness curve for the mouth) are filled in by
@@ -453,6 +457,11 @@ func _schedule(t: float) -> void:
 		elif b.has("do"):
 			bi += 1
 			_do(b, t)
+		elif b.has("music") or b.has("sfx"):
+			# for the score (tools/story/score.py): a music change or a sound effect right here
+			bi += 1
+			var k := "music" if b.has("music") else "sfx"
+			acted.append({"do": k, "t": snappedf(t, 0.01), "type": str(b[k])})
 		elif b.has("wait"):
 			bi += 1
 			wait_until = t + clampf(float(b["wait"]), 0.0, 8.0)

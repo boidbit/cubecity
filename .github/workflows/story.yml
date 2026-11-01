@@ -162,7 +162,7 @@ jobs:
           ffmpeg -y -loglevel error -ss "$t" -i video/story.mp4 -frames:v 1 -q:v 2 video/thumbnail.jpg
           cp story-out/screenplay.json video/screenplay.json
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
+          import json, os
           sp = json.load(open("story-out/timed.json", encoding="utf-8"))
           log = json.load(open("take/story_log.json"))
           print(f"### {sp.get('title')} / {sp.get('episode')}")
@@ -173,6 +173,12 @@ jobs:
                   print(f"- **{b['say']}** ({b.get('emotion', 'neutral')}): {b['sub']}")
               else:
                   print(f"- _{json.dumps(b, ensure_ascii=False)}_")
+          if os.path.exists("video/story_score.txt"):
+              print("\n#### Music and sound effects\n")
+              print("```")
+              print(open("video/story_score.txt").read().strip())
+              print("```")
+              print("\n`story_nomusic.mp4` has no music: put a trending sound under it in the app.")
           PY
       - uses: actions/upload-artifact@v4
         with:
