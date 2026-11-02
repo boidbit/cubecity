@@ -1540,7 +1540,8 @@ func _train_tick(t: float) -> void:
 			# past the crossing, on the sidewalk, looking back at the car coming over
 			train_cam = true
 			var dirv := Vector3(0, 0, train_dirz)
-			main.cam_anchor = Vector3(train_x, 0.0, zr) + dirv * 15.0 + Vector3(8.6 * (1.0 if randf() < 0.5 else -1.0), 2.6, 0.0)
+			# high enough to see over the train to the police meeting it on the other side
+			main.cam_anchor = Vector3(train_x, 0.0, zr) + dirv * 21.0 + Vector3(10.0 * (1.0 if randf() < 0.5 else -1.0), 8.5, 0.0)
 			main.cam_mode = "anchor"
 			main.cam_cut = true
 			pass_until = t + 30.0
