@@ -8,13 +8,14 @@ extends RefCounted
 #   air    after take-off: hands off until the wheels touch down
 #   smash  straight through a block, ploughing any building in the way
 #   hit    straight at a target (gas pump)
+#   garage slow and straight into a safehouse garage, then stop inside
 # The director (director.gd) decides which kind of leg comes next.
 
 const LOOK_MIN := 10.0          # pure-pursuit look-ahead (m)
 const LOOK_MAX := 26.0
 const BRAKE_DECEL := 7.0        # m/s² the planner assumes when slowing for a corner
 const CORNER_SPEED := 15.0      # m/s through a 90 degree turn
-const SPECIAL := ["ramp", "air", "smash", "hit"]
+const SPECIAL := ["ramp", "air", "smash", "hit", "garage"]
 
 var main
 var car: Car
@@ -46,6 +47,9 @@ var external := false     # the story steers the plan (a chase): nobody else rep
 var halt := false         # the story wants the car stopped right here: brake and hold
 var dist_sum := 0.0
 var time_sum := 0.0
+var ram_until := 0.0      # director: straight through whatever is ahead (shielded) until then
+var steady_until := 0.0   # director: hold the lane (no swerving for traffic) until then
+var booth_ok_until := 0.0 # director: lined up with a spray booth, drive between its walls
 
 
 func setup(main_node) -> void:
@@ -76,6 +80,10 @@ func drive(dt: float) -> void:
 		return
 	_advance()
 	if idx >= pts.size():
+		if plan_name == "garage":
+			# parked inside the safehouse: stop and stay
+			halt = true
+			return
 		replan_needed = true
 		_apply(0.4, 0.0, 0.0, false)
 		return
@@ -110,12 +118,16 @@ func drive(dt: float) -> void:
 		want = minf(want, _corner_limit(p))
 	if absf(alpha) > 0.9:
 		want = minf(want, 12.0)
-	if kind == "road":
+	if kind == "garage":
+		# ease in through the door and stop at the back wall
+		var left := p.distance_to(_flat(pts[pts.size() - 1]))
+		want = minf(minf(want, 11.0), sqrt(2.0 * 4.5 * maxf(left - 1.0, 0.0)) + 0.5)
+	if kind == "road" and main.clock >= ram_until and main.clock >= steady_until:
 		var av: Array = _avoid(f, st, want)
 		st = av[0]
 		want = av[1]
 	var gas := clampf((want - car.fwd_speed) * 0.4, -1.0, 1.0)
-	if full:
+	if full or main.clock < ram_until:
 		gas = 1.0
 
 	var hb := 0.0
@@ -273,6 +285,9 @@ func _avoid(f: Vector3, st: float, want: float) -> Array:
 		# loose debris and parts are not worth swerving for
 		if col is RigidBody3D and not (col is VehicleBody3D) and not (col is CivCar) and not (col as RigidBody3D).freeze:
 			continue
+		# a spray booth: the lane is lined up with it, so drive between its walls
+		if col is Node and (col as Node).has_meta("booth") and main.clock < booth_ok_until:
+			continue
 		var hd := o.distance_to(r["position"])
 		var close := 1.0 - hd / reach
 		var k := 0.6 if (col is StaticBody3D and col.has_meta("bld")) else 1.2
@@ -325,12 +340,13 @@ func _record_trail() -> void:
 func debug_line(t: float) -> String:
 	var p := car.global_position
 	var kind := kinds[idx] if idx < kinds.size() else "-"
-	return "TRACE t=%5.1f plan=%s kind=%s wp=%d/%d v=%d pos=(%d,%d) stuck=%d rev=%.1f air=%.1f" % [
-		t, plan_name, kind, idx, pts.size(), int(car.speed * 3.6), int(p.x), int(p.z), stuck_count, reverse_t, car.airtime]
+	return "TRACE t=%5.1f plan=%s kind=%s wp=%d/%d v=%d pos=(%d,%d) stuck=%d rev=%.1f air=%.1f lane=%.1f" % [
+		t, plan_name, kind, idx, pts.size(), int(car.speed * 3.6), int(p.x), int(p.z), stuck_count, reverse_t, car.airtime, lane]
 
 
 func needs_plan() -> bool:
-	return pts.size() - idx < 2
+	# plan the next stretch a node early, on the straight, not in the middle of the last turn
+	return pts.size() - idx < (2 if plan_name in ["garage", "train", "spray"] else 3)
 
 
 # True while a ramp, smash or target is still ahead in the current plan.
@@ -495,6 +511,7 @@ func _commit(nodes: Array[Vector2i], extra_p: Array = [], extra_k: Array = [], n
 	kinds.clear()
 	idx = 0
 	drift_node = -1
+	lane = 0.0
 	for n in nodes:
 		pts.append(world.node_pos(n))
 		kinds.append("road")

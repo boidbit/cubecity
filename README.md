@@ -15,6 +15,20 @@ A mobile car-chase and destruction game made in Godot 4. The city, cars, buildin
 - Chain explosions from barrels, parked cars and gas stations.
 - Slow motion on big moments and a cinematic camera when a tower collapses.
 - Day/night cycle, rain, minimap and touch controls.
+- The escape kit (`gadgets.gd`, `rail.gd`):
+  - **Railway**: a track across the middle of the city with a level crossing (flashing lights, barrier
+    arms) on every road. A train comes out of a tunnel in one edge wall and goes into the other; the gates
+    come down a few seconds before it. Beat it across and the police behind you meet the train; drive
+    through a lowered arm and it snaps off.
+  - **Spray shops**: drive-through booths over one lane. New paint, the dents gone, two stars less, and
+    the police lose you for a few seconds.
+  - **Safehouses**: a garage in each corner of the city. Drive in, the door comes down behind you: escaped.
+  - **Spike strips**: from two stars the police lay them across the road ahead. Drive over one and you
+    are on flat tyres (sparks, less grip, lower top speed) until a repair; police cars spin out on them too.
+  - **Pickups**: EMP (every police car near you stalls), oil slick (dropped behind you; police spin out),
+    shield (a few seconds of no damage and no BUSTED, police bounce off), and cash (in the air over every
+    ramp, on every level crossing, around the city). The TOOL button (or T) uses the EMP or oil you carry.
+  - **Combo**: cash, near misses, drifts, jumps, wrecks, train hits and spin-outs in a row multiply the points.
 
 ## Run
 
@@ -37,6 +51,9 @@ upload text show up on the same page. Or from GitHub:
 1. Open the repository's **Actions** tab, choose **Record video**, then **Run workflow**.
 2. Pick the options:
    - **mode**:
+     - `escape` (the default): the escape kit in one run: a line of cash, a train timed to cross just behind
+       the car (the police meet it), a spike strip the car slips past and the police drive into, the EMP, the
+       spray shop, an oil slick, a shield through a roadblock, and as the finale the safehouse door coming down.
      - `chase`: 1 car vs a growing pack of police that come from behind, side streets and head-on; finale is a barrel trap for them.
      - `heli`: a police helicopter chases at street level; the finale is the car jumping off a tower top into it.
      - `rush`: dense traffic and cross traffic timed to pass just ahead of and behind the car; counts near misses.
@@ -45,6 +62,8 @@ upload text show up on the same page. Or from GitHub:
      - `survive`: 5 stars from the first second.
    - **orientation**: `vertical` (1080x1920, Shorts) or `horizontal` (1920x1080).
    - **duration**, **fps**, **takes** (records several runs and keeps the most exciting), **teaser** (opens with a flash-forward of the biggest moment, then "EARLIER..."), **time** of day, the on-screen **title**, and an optional **seed**.
+   - **overlay**: `clean` (the default) keeps only the hook title on screen: no "SWAT TRUCK INCOMING"-style
+     pop-ups, no wanted stars, no stats line, BUSTED meter, health bar or minimap. `full` shows them all.
 3. When the run finishes, download the `video-...` artifact from the run page: the MP4, a thumbnail, the run's stats and `...-upload.txt` with ready-to-paste YouTube title options, description, tags, hashtags and a pinned comment, filled in with that run's numbers. The same text is shown on the run's summary page. Replace the Play Store link placeholder before posting.
 
 GitHub's machines have no graphics card, so frames are drawn on the CPU. The video is still smooth, but a 55 second clip takes a while to record.
@@ -184,6 +203,8 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `world.gd` | City generation, chunk streaming, ramps, flyovers, debris, routing |
 | `building.gd` | Destructible building data, meshes and collapse |
 | `props.gd` | Trees, lamps, barrels, gas stations, pickups, rooftop props |
+| `gadgets.gd` | Spray shops, safehouses, spike strips, EMP, oil slick, shield, cash and the combo |
+| `rail.gd` | The railway: track, level crossings with lights and barrier arms, the train |
 | `fx.gd` | Particles, skid marks, sound (recorded files from `audio/` with synthesized fallbacks) |
 | `audio/` | Sound effects (Ogg Vorbis): siren and rotor loops, crashes, boom, tyre screech |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |

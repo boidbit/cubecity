@@ -18,11 +18,11 @@
     story_type: "Mood", idea: "Your idea", template: "Story recipe", script: "Script", language: "Language",
     voice: "Voices", music: "Music", orientation: "Shape", fps: "Frame rate", time: "Time of day", seed: "City seed",
     mode: "Mode", duration: "Length (seconds)", takes: "Takes", teaser: "Teaser hook (flash-forward at the start)",
-    title: "Hook text on screen", _ref: "Branch",
+    title: "Hook text on screen", overlay: "Text on screen", _ref: "Branch",
   };
   const EMOJI = {
     funny: "😂", romantic: "💕", cringe: "😬", happy: "😄", sad: "😢", action: "💥", twist: "🌀", drama: "🎭", dark: "🖤",
-    chase: "🚓", heli: "🚁", rush: "🚗", stunt: "🤸", destroy: "💥", survive: "⭐",
+    chase: "🚓", heli: "🚁", rush: "🚗", stunt: "🤸", destroy: "💥", survive: "⭐", escape: "🏁",
   };
   const CHIP_EMOJI = ["story_type", "mode"];
   const STEPS = {

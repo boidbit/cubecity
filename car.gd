@@ -82,6 +82,11 @@ var vis_roll := 0.0
 var vis_pitch := 0.0
 var tail_mats: Array[StandardMaterial3D] = []
 var hold := false          # set by main: too many police are on the player, so shadow instead of ramming
+var flat_until := 0.0      # spike strip: flat tyres until then (less grip, lower top speed)
+var slip_until := 0.0      # oil slick: almost no grip until then
+var stall_until := 0.0     # EMP: engine and lights dead until then (police)
+var assist_k := 1.0        # how much of the arcade grip assist is left (oil, flat tyres)
+var reckless_until := 0.0  # director: this police car does not brake for what is ahead until then
 
 
 func build(color: Color, player: bool, k: String = "") -> void:
@@ -358,6 +363,8 @@ func rpm() -> float:
 func hurt(amount: float) -> void:
 	if dead or amount <= 0.0:
 		return
+	if is_player and main.gadgets != null and main.gadgets.shielded():
+		return
 	hp -= amount * dmg_scale
 	if is_player and main.protect:
 		hp = maxf(hp, 4.0)      # video runs: a clip never ends on a wreck
@@ -472,14 +479,18 @@ func _physics_process(delta: float) -> void:
 	steering = move_toward(steering, steer_smooth * max_steer, (4.0 if is_player else 2.6) * delta)
 
 	hb_smooth = move_toward(hb_smooth, input_hb, 6.0 * delta)
-	var gm: float = main.grip_mult
+	var now: float = main.clock
+	var flat := now < flat_until
+	var slip := now < slip_until
+	assist_k = (0.12 if slip else 1.0) * (0.6 if flat else 1.0)
+	var gm: float = main.grip_mult * (0.15 if slip else 1.0) * (0.55 if flat else 1.0)
 	for w in wheels:
 		if w.position.z < 0.0:
 			w.wheel_friction_slip = grip_front * gm * (1.0 - 0.1 * hb_smooth)
 		else:
 			w.wheel_friction_slip = grip_rear * gm * lerpf(1.0, 0.55, hb_smooth)
 
-	var top := vmax + (12.0 if nitro_active else 0.0)
+	var top := (vmax + (12.0 if nitro_active else 0.0)) * (0.7 if flat else 1.0)
 	var gas := input_gas
 	var brake_f := 0.0
 	var eng := 0.0
@@ -566,7 +577,7 @@ func _assists(delta: float, grounded: int, fwd: Vector3) -> void:
 		var grip_k := lerpf(5.0, 0.9, hb_smooth)
 		if slip > 0.7:
 			grip_k = maxf(grip_k, 2.5)
-		apply_central_force(-right * lat * mass * grip_k)
+		apply_central_force(-right * lat * mass * grip_k * assist_k)
 		if hb_smooth > 0.3 and speed > 6.0 and input_gas > 0.0:
 			apply_central_force(linear_velocity.normalized() * mass * 4.0 * input_gas)
 		if fwd_speed > 5.0:
@@ -689,6 +700,13 @@ func _player_plow() -> void:
 func _siren(delta: float) -> void:
 	siren_t += delta
 	var on := sin(siren_t * 14.0) > 0.0
+	if main.clock < stall_until:
+		# EMP: the lights die, with the odd flicker
+		var fl := randf() < 0.06
+		siren_a.emission_energy_multiplier = 1.5 if fl else 0.05
+		siren_b.emission_energy_multiplier = 0.05
+		siren_light.visible = fl
+		return
 	siren_a.emission_energy_multiplier = 4.0 if on else 0.2
 	siren_b.emission_energy_multiplier = 0.2 if on else 4.0
 	siren_light.light_color = Color(1, 0.1, 0.1) if on else Color(0.2, 0.4, 1.0)
@@ -696,6 +714,13 @@ func _siren(delta: float) -> void:
 
 
 func _ai(delta: float) -> void:
+	if main.clock < stall_until:
+		# EMP: engine dead, rolling to a stop
+		input_gas = 0.0
+		input_steer = 0.0
+		input_hb = 0.6
+		siren_want = false
+		return
 	if target == null or target.dead or main.game_over:
 		input_gas = 0.0
 		input_steer = 0.0
@@ -775,6 +800,9 @@ func _ai(delta: float) -> void:
 			st -= signf(dd.dot(left)) * (1.0 - l / 8.0) * 0.9
 			if dd.dot(f) > 0.0 and l < 5.0:
 				blocked = true
+	if main.clock < flat_until:
+		# flat tyres: the car wanders and cannot hold its line
+		st += sin(main.clock * 6.0 + float(get_instance_id() % 97)) * 0.7
 	input_steer = clampf(st, -1.0, 1.0)
 
 	var want := top_speed
@@ -782,7 +810,7 @@ func _ai(delta: float) -> void:
 		want = 9.0
 	elif absf(diff) > 0.45:
 		want = top_speed * 0.6
-	if blocked:
+	if blocked and main.clock >= reckless_until:
 		want = minf(want, 8.0)
 	input_gas = clampf((want - fwd_speed) * 0.35, -1.0, 1.0)
 	if hold and dist < 26.0:

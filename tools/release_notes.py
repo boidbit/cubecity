@@ -14,19 +14,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "sto
 import release as story_release  # noqa: E402
 import upload_text  # noqa: E402
 
-MODES = {"chase": "🚓 Police chase", "heli": "🚁 Helicopter", "rush": "🚗 Rush hour", "stunt": "🤸 Stunts",
+MODES = {"escape": "🏁 Escape", "chase": "🚓 Police chase", "heli": "🚁 Helicopter", "rush": "🚗 Rush hour", "stunt": "🤸 Stunts",
          "destroy": "💥 Destroy the city", "survive": "⭐ Survive 5 stars"}
 
 
 def stats(s):
     out = [("🚓 police", s.get("max_cops", 0)), ("💥 wrecked", s.get("cops_wrecked", 0))]
     for key, label in (("collapses", "🏢 buildings down"), ("near_miss", "😳 near misses"), ("big_air", "🛫 jumps"),
-                       ("heli_down", "🚁 helicopter down"), ("mega_jump", "🏙️ tower jumps")):
+                       ("heli_down", "🚁 helicopter down"), ("mega_jump", "🏙️ tower jumps"), ("train_hits", "🚂 train hits"),
+                       ("emp_hits", "⚡ EMP"), ("spike_cops", "📌 spiked"), ("oil_spins", "🛢️ spun out"), ("cash", "💰 cash")):
         if s.get(key):
             out.append((label, s[key]))
     if s.get("mode") == "destroy" and s.get("cubes"):
         out.append(("🧱 cubes", f"{int(s['cubes']):,}"))
-    out.append(("🏁", "escaped" if s.get("end") == "survived" else str(s.get("end", ""))))
+    out.append(("🏁", "safehouse" if s.get("safehouse") else ("escaped" if s.get("end") == "survived" else str(s.get("end", "")))))
     return [[k, str(v)] for k, v in out if str(v) not in ("", "0")]
 
 

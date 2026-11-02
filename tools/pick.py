@@ -16,7 +16,7 @@ import compose
 import upload_text
 
 # first event of these kinds (in this order) makes the thumbnail
-MOMENTS = ["collapse", "trap", "gas", "chain", "swat_down", "cop_wrecked", "big_air", "smash"]
+MOMENTS = ["train_hit", "collapse", "trap", "emp", "gas", "chain", "spike_cop", "swat_down", "safehouse", "cop_wrecked", "big_air", "smash"]
 
 
 def moment(s):

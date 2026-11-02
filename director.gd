@@ -11,9 +11,14 @@ extends Node
 #   chase    1 car vs a growing pack of police; finale is a barrel trap for them
 #   destroy  smash as much of the city as possible; finale is a tall tower
 #   survive  5 stars from the first second; just stay alive
+#   escape   the escape kit: cash, a spike strip, the train, EMP, a shield through a
+#            roadblock, an oil slick, a spray shop, and a safehouse garage as the finale
 
 const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "ONE CAR vs THE CITY", "survive": "SURVIVE 5 STARS",
-	"stunt": "THE STUNT SHOW", "heli": "ONE CAR vs A HELICOPTER", "rush": "RUSH HOUR vs ONE CAR"}
+	"stunt": "THE STUNT SHOW", "heli": "ONE CAR vs A HELICOPTER", "rush": "RUSH HOUR vs ONE CAR",
+	"escape": "CAN HE ESCAPE?"}
+# The escape show tries these in order, moving on when one cannot be placed from here.
+const ESCAPE_ORDER := ["spikes", "cash", "train", "emp", "spray", "oil", "shield", "cash", "train", "emp", "oil"]
 # The stunt show runs these in order, moving on as soon as one is done (or cannot be placed).
 const STUNT_ORDER := ["corridor", "mega", "tower", "ramp", "mega", "gas", "tower", "corridor"]
 # Story lines shown in the middle of the screen when these events happen (once each).
@@ -22,10 +27,13 @@ const EVENT_CAPTIONS := {
 	"big_air": "SEND IT!", "mega_jump": "NO WAY...", "trap_set": "ONE LAST TRICK...", "trap": "BOOM.",
 	"collapse": "TIMBER!", "gas": "GAS STATION = BOMB", "chain": "CHAIN REACTION!", "near_miss": "TOO CLOSE!",
 	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!",
+	"train_hit": "THE TRAIN DIDN'T STOP", "emp": "LIGHTS OUT.", "spray": "NEW CAR. WHO DIS?", "safehouse": "SAFE.",
+	"spike_cop": "OWN SPIKES!", "oil_spin": "SLIPPERY!", "gate_smash": "NO TIME TO WAIT", "shield": "UNTOUCHABLE",
 }
 const START_CAPTIONS := {
 	"chase": "ONE CAR. NO BRAKES.", "survive": "5 STARS. NO ESCAPE.", "destroy": "HOW MUCH CAN IT BREAK?",
 	"heli": "THEY SENT A HELICOPTER.", "rush": "RUSH HOUR. NO RULES.", "stunt": "NO RAMP IS TOO BIG.",
+	"escape": "ESCAPE THE CITY.",
 }
 const PRIORITY := ["trap", "heli_down", "mega_jump", "collapse", "gas"]
 const FINALE := 12.0      # seconds before the end when the protection lifts and the finale starts
@@ -80,6 +88,34 @@ var scripted := false
 var heat_cap := 100.0
 var calm_at := -1.0
 var still := false        # the story has stopped the car on purpose (an ending): no breaking free
+# escape show
+var esc_i := 0
+var esc_wait := 1.2
+var esc_tries := 0.0
+var esc_low := -1.0       # heat floor after the spray shop
+var route_beat := ""      # "train", "spray" or "house" while the bot drives a route for it
+var route_t := 0.0
+var train_x := 0.0
+var train_dirz := 1.0
+var train_called := false
+var train_passed := -1.0
+var train_cam := false
+var train_victim := false
+var train_hold := false   # stopped short of the crossing to let the train by
+var booth := {}
+var spray_dirz := 1.0
+var spray_lane := false
+var spray_cam := false
+var spray_t := -1.0
+var house := {}
+var house_cam := false
+var house_t := -1.0
+var tool_after := 0.0
+var tool_due := ""         # a tool pickup put on the road for the bot ...
+var tool_due_t := 0.0      # ... which it gets anyway by then
+var ram := {}             # the roadblock the shielded car drives through: c, dir
+var ram_cam := false
+var spikes := {}
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -114,6 +150,9 @@ func setup(main_node, cfg: Dictionary) -> void:
 		"rush":
 			bot.cruise = 30.0
 			start_heat = 40.0
+		"escape":
+			bot.cruise = 30.0
+			start_heat = 14.0
 		_:
 			bot.cruise = 31.0
 			start_heat = 14.0
@@ -186,6 +225,12 @@ func start() -> void:
 			main.traffic_cap = 30
 			main.traffic_ahead = true
 			_opening_police(2)
+		"escape":
+			# fewer cars than a chase: a pack that swarms the car at every corner leaves no room
+			# for the set pieces (the train, the spray shop, the safehouse)
+			main.cap_bonus = 0
+			main.spawn_gap = Vector2(2.4, 3.8)
+			_opening_police(3)
 		_:
 			main.spawn_gap = Vector2(2.5, 4.0)
 	bot.plan_flee(_away_point())
@@ -305,7 +350,7 @@ func _opening_police(n: int) -> void:
 func spawn_police() -> bool:
 	if scripted:
 		# story runs: the police come from behind, where the camera sees them follow
-		return _spawn_behind(randf_range(45.0, 75.0))
+		return _spawn_behind(randf_range(45.0, 75.0)) != null
 	if mode == "destroy" or main.cam_mode in ["front", "anchor"]:
 		return false
 	# a mix of directions: out of side streets, head-on from ahead, from behind.
@@ -319,7 +364,7 @@ func spawn_police() -> bool:
 		return _spawn_ahead()
 	if r < 0.65:
 		return false
-	return _spawn_behind(randf_range(55.0, 80.0))
+	return _spawn_behind(randf_range(55.0, 80.0)) != null
 
 
 # Out of the next side street, timed to reach the road just behind the bot.
@@ -361,19 +406,18 @@ func _spawn_ahead() -> bool:
 	return true
 
 
-func _spawn_behind(back: float) -> bool:
+func _spawn_behind(back: float, min_d: float = 40.0) -> Car:
 	var tp: Dictionary = bot.trail_point(back)
 	if tp.is_empty():
-		return false
+		return null
 	var pos: Vector3 = tp["pos"]
-	if pos.distance_to(main.player.global_position) < 40.0:
-		return false
+	if pos.distance_to(main.player.global_position) < min_d:
+		return null
 	for c in main.police:
 		if is_instance_valid(c) and c.global_position.distance_to(pos) < 8.0:
-			return false
+			return null
 	var dirv: Vector3 = tp["dir"]
-	main.spawn_police_at(pos, atan2(-dirv.x, -dirv.z), 24.0)
-	return true
+	return main.spawn_police_at(pos, atan2(-dirv.x, -dirv.z), 24.0)
 
 
 func _away_point() -> Vector3:
@@ -397,7 +441,10 @@ func tick(dt: float) -> void:
 		return
 	if t >= duration - 2.5 and not end_card and not main.game_over:
 		end_card = true
-		main.hud.show_over(end_text("HELICOPTER DOWN" if main.stats["heli_down"] > 0 else "SURVIVED"))
+		var head := "HELICOPTER DOWN" if main.stats["heli_down"] > 0 else "SURVIVED"
+		if main.stats["safehouse"] > 0:
+			head = "ESCAPED"
+		main.hud.show_over(end_text(head))
 		main.log_event("survived")
 	if main.game_over:
 		return
@@ -409,8 +456,14 @@ func tick(dt: float) -> void:
 		pl.hp = 15.0
 	if trace and t >= next_trace:
 		next_trace = t + 1.0
-		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)],
-			(" heli=%s d=%.0f jump_stage=%d" % [main.heli.state, main.heli.global_position.distance_to(pl.global_position), jump_stage]) if mode == "heli" else "")
+		var extra := ""
+		if mode == "heli":
+			extra = " heli=%s d=%.0f jump_stage=%d" % [main.heli.state, main.heli.global_position.distance_to(pl.global_position), jump_stage]
+		elif mode == "escape":
+			var r: Rail = main.rail
+			extra = " beat=%s esc=%d train=%s front=%.0f v=%.0f eta=%.1f tool=%s" % [route_beat, esc_i, str(r.running), r.front, r.speed,
+				r.eta(train_x) if route_beat == "train" else -1.0, main.gadgets.tool]
+		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)], extra)
 	if scripted:
 		_scripted_heat(t)
 	else:
@@ -424,9 +477,18 @@ func tick(dt: float) -> void:
 	_tower_tick(t)
 	if not scripted:
 		_story(t)
+	_use_tools(t)
+	if mode == "escape":
+		_train_tick(t)
+		_spray_tick(t)
+		_ram_tick(t)
+		_spike_tick(t)
+		_house_tick(t)
 	_camera(t)
 	_break_free(dt)
 	_stunt_jam(dt)
+	_rescue(t)
+	_unwedge(dt)
 	_jump_moment()
 	if (bot.replan_needed or bot.needs_plan()) and not bot.external:
 		bot.plan_flee(_away_point())
@@ -474,12 +536,17 @@ func _heat(t: float) -> void:
 			heat_floor = 32.0 if f < 0.5 else 45.0
 		"rush":
 			heat_floor = 40.0 if f < 0.5 else 62.0
+		"escape":
+			heat_floor = esc_low if esc_low >= 0.0 else (14.0 if f < 0.45 else 32.0)
 		_:
 			heat_floor = 90.0
 
 
 func _beats(t: float) -> void:
 	var f := t / duration
+	if mode == "escape":
+		_escape_show(t)
+		return
 	if mode == "stunt":
 		_stunt_show(t)
 		return
@@ -875,6 +942,7 @@ func _camera(t: float) -> void:
 	if main.cam_mode == "anchor":
 		if t < pass_until:
 			return
+		main.cam_look_w = 0.0
 		main.cam_mode = "chase"
 		main.cam_cut = true
 		main.cam_focus_heli = false
@@ -1029,12 +1097,16 @@ func overlay_line() -> String:
 			return "NEAR MISSES %d   COPS %d" % [nm_count, cops]
 		"stunt":
 			return "JUMPS %d   BOOMS %d   COPS %d" % [main.stats["big_air"], main.stats["chains"] + main.stats["gas"] + main.stats["collapses"], cops]
+		"escape":
+			return "CASH %d   COPS %d   COMBO x%d" % [main.gadgets.cash, cops, main.gadgets.combo]
 	return "COPS %d   %s   %d KM/H" % [cops, clock_s, int(absf(main.player.fwd_speed) * 3.6)]
 
 
 func end_text(kind: String) -> String:
-	var lines := PackedStringArray([kind + ("!" if kind in ["SURVIVED", "HELICOPTER DOWN"] else ""), ""])
+	var lines := PackedStringArray([kind + ("!" if kind in ["SURVIVED", "HELICOPTER DOWN", "ESCAPED"] else ""), ""])
 	lines.append("COPS WRECKED  %d" % main.wrecked)
+	if mode == "escape":
+		lines.append("CASH  %d" % main.gadgets.cash)
 	if mode == "destroy":
 		lines.append("CUBES SMASHED  %s" % _thousands(main.cells_down))
 		lines.append("BUILDINGS DOWN  %d" % main.stats["collapses"])
@@ -1064,6 +1136,14 @@ func summary() -> Dictionary:
 		"mega_jump": st["mega_jump"],
 		"near_miss": st["near_miss"],
 		"heli_down": st["heli_down"],
+		"train_hits": st["train_hits"],
+		"emp_hits": st["emp_hits"],
+		"oil_spins": st["oil_spins"],
+		"spike_cops": st["spike_cops"],
+		"cash": st["cash"],
+		"sprays": st["sprays"],
+		"safehouse": st["safehouse"],
+		"combo_best": main.gadgets.combo_best,
 		"busted_peak": snappedf(main.busted_peak, 0.01),
 		"stuck": bot.stuck_count,
 		"avg_kmh": int(bot.dist_sum / maxf(bot.time_sum, 0.1) * 3.6),
@@ -1075,6 +1155,8 @@ func summary() -> Dictionary:
 	var e: float = 4.0 * main.wrecked + 8.0 * st["collapses"] + 5.0 * st["chains"] + 6.0 * st["gas"]
 	e += 4.0 * st["big_air"] + 1.5 * st["drifts"] + 1.5 * st["smash"] + 0.5 * st["max_cops"]
 	e += 7.0 * st["mega_jump"] + 2.0 * st["near_miss"] + 12.0 * st["heli_down"]
+	e += 10.0 * st["train_hits"] + 3.0 * st["emp_hits"] + 4.0 * st["oil_spins"] + 4.0 * st["spike_cops"]
+	e += 1.0 * st["cash"] + 6.0 * st["sprays"] + 15.0 * st["safehouse"]
 	if main.busted_peak > 0.6:
 		e += 4.0
 	if done.has("trap_boom"):
@@ -1107,3 +1189,658 @@ func _finish() -> void:
 		if fa != null:
 			fa.store_string(js)
 			fa.close()
+
+
+# ------------------------------------------------------------ the escape show
+
+# One beat after another: cash, a spike strip, the train, the EMP, a shield through a
+# roadblock, an oil slick, the spray shop; and in time for the end of the clip, the safehouse.
+func _escape_show(t: float) -> void:
+	if house_t >= 0.0:
+		return
+	var committed := (route_beat == "train" and train_passed < 0.0) or (route_beat == "spray" and spray_t < 0.0)
+	if route_beat != "house" and not committed and t > duration * 0.45:
+		# head for the safehouse in time; a train or spray run under way finishes first
+		var est := _house_eta()
+		var late := 0.0 if route_beat in ["train", "spray"] else 6.0
+		if est > 0.0 and t + est >= duration - late and _plan_house():
+			return
+	if route_beat == "house":
+		# on the way there the smaller beats go on, until the door is near
+		if (house["door"] as Vector3).distance_to(main.player.global_position) < 160.0:
+			return
+	elif route_beat != "":
+		if t - route_t > 28.0:
+			route_beat = ""
+		return
+	if t < esc_wait:
+		return
+	var kind: String = ESCAPE_ORDER[esc_i % ESCAPE_ORDER.size()]
+	if route_beat == "house" and kind in ["train", "spray"]:
+		esc_i += 1
+		return
+	if esc_tries == 0.0:
+		esc_tries = t
+	var ok := false
+	match kind:
+		"cash":
+			ok = _cash_line()
+		"spikes":
+			ok = _escape_spikes()
+		"train":
+			ok = _plan_train()
+		"emp", "oil":
+			ok = _hand_tool(kind)
+		"shield":
+			ok = _shield_block()
+		"spray":
+			ok = _plan_spray()
+	if ok:
+		done[kind + str(esc_i)] = t
+		esc_i += 1
+		esc_tries = 0.0
+		esc_wait = t + 4.0
+	elif t - esc_tries > 7.0:
+		esc_i += 1      # cannot be placed from here: on to the next one
+		esc_tries = 0.0
+		esc_wait = t + 0.5
+
+
+func _flat(v: Vector3) -> Vector3:
+	return Vector3(v.x, 0.0, v.z)
+
+
+# A line of cash down the middle of the road ahead.
+func _cash_line() -> bool:
+	if bot.busy() or bot.straight_ahead() < 140.0:
+		return false
+	for i in 5:
+		var pa: Dictionary = bot.point_ahead(45.0 + i * 14.0)
+		main.world.props.add_pickup(_flat(pa["pos"]), "cash", true)
+	return true
+
+
+# A spike strip across most of the road ahead. The car goes through the gap; once it is past,
+# the strip is pulled right across, into the path of the police behind it.
+func _escape_spikes() -> bool:
+	if bot.busy() or bot.straight_ahead() < 180.0:
+		return false
+	var pa: Dictionary = bot.point_ahead(120.0)
+	var c: Vector3 = pa["pos"]
+	var dirv: Vector3 = pa["dir"]
+	var gap_left := randf() < 0.5
+	var d: Dictionary = main.gadgets.drop_spikes(c, dirv, 9.5, 2.25 if gap_left else -2.25)
+	d["road_c"] = _flat(c)
+	bot.dodge(c + dirv * 10.0, dirv, 4.75 if gap_left else -4.75)
+	spikes = d
+	_spawn_behind(28.0, 20.0)
+	return true
+
+
+func _spike_tick(t: float) -> void:
+	if spikes.is_empty():
+		return
+	if not main.gadgets.strips.has(spikes):
+		spikes = {}
+		return
+	var rel: Vector3 = main.player.global_position - (spikes["p"] as Vector3)
+	var along: float = rel.dot(spikes["dir"])
+	if along > -60.0 and along < 4.0:
+		bot.steady_until = t + 0.3     # hold the gap: no swerving back into the strip for traffic
+	if along > 4.0:
+		main.gadgets.widen_strip(spikes)
+		spikes["born"] = t
+		spikes["life"] = 9.0
+		spikes = {}
+
+
+# A pickup (EMP or oil) on the road ahead; the bot uses it when the moment is right.
+func _hand_tool(kind: String) -> bool:
+	if bot.busy() or bot.straight_ahead() < 120.0 or main.gadgets.tool != "":
+		return false
+	var pa: Dictionary = bot.point_ahead(50.0)
+	main.world.props.add_pickup(_flat(pa["pos"]), kind, true)
+	tool_after = main.clock + 2.5
+	tool_due = kind
+	tool_due_t = main.clock + 5.0
+	return true
+
+
+# Any mode: a bot carrying a tool uses it when it pays off. EMP when the police are close
+# around it; oil when one is right behind, lined up.
+func _use_tools(t: float) -> void:
+	if scripted:
+		return
+	var g: Gadgets = main.gadgets
+	if tool_due != "" and t >= tool_due_t:
+		# the bot drove past the pickup: it has it anyway
+		if g.tool == "":
+			g.tool = tool_due
+		tool_due = ""
+	if g.tool != "" and g.tool == tool_due:
+		tool_due = ""
+	if g.tool == "" or t < tool_after or main.game_over or house_t >= 0.0:
+		return
+	# not while a train is due: the police behind should meet it, not stall short of it
+	if route_beat == "train":
+		return
+	var pl: Car = main.player
+	if g.tool == "emp":
+		var near := 0
+		for c in main.police:
+			if is_instance_valid(c) and not c.dead and t >= c.stall_until and c.global_position.distance_to(pl.global_position) < 26.0:
+				near += 1
+		if near >= 2 or (near >= 1 and (main.busted > 0.15 or t - tool_after > 3.0)):
+			main.cam_mode = "heli"
+			main.cam_cut = true
+			shot_end = t + 2.6
+			g.use_tool()
+			main.slowmo(1.1, 0.4)
+		elif t - tool_after > 3.0 and near == 0:
+			_spawn_behind(22.0, 15.0)
+			_spawn_behind(34.0, 25.0)
+			tool_after = t + 1.5
+		return
+	if g.tool == "oil":
+		var f := -pl.global_transform.basis.z
+		f.y = 0.0
+		f = f.normalized()
+		var side := f.cross(Vector3.UP)
+		for c in main.police:
+			if not is_instance_valid(c) or c.dead:
+				continue
+			var rel: Vector3 = c.global_position - pl.global_position
+			var behind := -rel.dot(f)
+			if behind > 5.0 and behind < 30.0 and absf(rel.dot(side)) < 5.5 and pl.speed > 12.0:
+				main.cam_mode = "front"
+				main.cam_cut = true
+				shot_end = t + 3.0
+				g.use_tool()
+				return
+		if t - tool_after > 4.0:
+			_spawn_behind(18.0, 12.0)
+			_spawn_behind(30.0, 22.0)
+			tool_after = t + 1.5
+
+
+# A shield on the road ahead, and a roadblock beyond it to drive straight through.
+func _shield_block() -> bool:
+	if bot.busy() or bot.straight_ahead() < 230.0:
+		return false
+	var pa: Dictionary = bot.point_ahead(55.0)
+	main.world.props.add_pickup(_flat(pa["pos"]), "shield", true)
+	var pb: Dictionary = bot.point_ahead(170.0)
+	var c: Vector3 = pb["pos"]
+	var dirv: Vector3 = pb["dir"]
+	c.y = 0.9
+	main.spawn_roadblock_at(c, atan2(-dirv.x, -dirv.z))
+	main.log_event("roadblock")
+	ram = {"c": _flat(c), "dir": dirv}
+	ram_cam = false
+	return true
+
+
+func _ram_tick(t: float) -> void:
+	if ram.is_empty():
+		return
+	var pl: Car = main.player
+	var c: Vector3 = ram["c"]
+	var dirv: Vector3 = ram["dir"]
+	var along := (c - _flat(pl.global_position)).dot(dirv)
+	if along < -25.0 or along > 260.0:
+		ram = {}
+		return
+	if main.gadgets.shielded() and along < 70.0 and along > -4.0:
+		bot.ram_until = t + 0.6
+		bot.lane = 0.0
+		if not ram_cam and along > 30.0:
+			# from beside the roadblock: the car comes straight at it and through
+			ram_cam = true
+			main.cam_anchor = c + dirv * 14.0 + dirv.cross(Vector3.UP) * 8.5 + Vector3(0, 2.4, 0)
+			main.cam_mode = "anchor"
+			main.cam_cut = true
+			pass_until = t + 4.5
+
+
+# Route to a level crossing, timed with a train: the car goes over a second before the
+# train arrives, and the police behind it meet the train.
+func _plan_train() -> bool:
+	if bot.busy() or not main.rail.enabled or (main.rail.running and route_beat != "train"):
+		return false
+	var zr: float = main.world.rail_z()
+	var a := bot.node_ahead()
+	var h := bot._grid_dir()
+	var north: bool = main.player.global_position.z < zr
+	var rr0 := World.RAIL_ROW
+	var dz := 1 if north else -1
+	var best: Array[Vector2i] = []
+	var best_s := INF
+	var best_k := -1
+	for k in range(2, World.N - 1):
+		if k == 4 or k == 11:
+			continue
+		var before := Vector2i(k, rr0 if north else rr0 + 1)
+		var pre := before - Vector2i(0, dz)
+		var after := before + Vector2i(0, dz)
+		var beyond := after + Vector2i(0, dz)
+		if not bot._inside(pre) or not bot._inside(beyond) or bot._blocked(before) or bot._blocked(after) or bot._blocked(beyond):
+			continue
+		for xf in [true, false]:
+			var r: Array[Vector2i] = bot._route(a, before, h, xf)
+			if r.size() < 2 or r[r.size() - 1] - r[r.size() - 2] != Vector2i(0, dz):
+				continue
+			var lenm: float = float(r.size() - 1) * World.PITCH + main.player.global_position.distance_to(main.world.node_pos(a))
+			if lenm < 140.0 or lenm > 560.0:
+				continue
+			var sc := absf(lenm - 240.0) + randf() * 40.0
+			if sc < best_s:
+				best_s = sc
+				r.append(after)
+				r.append(beyond)
+				best = r
+				best_k = k
+			break
+	if best.is_empty():
+		return false
+	var pts: Array = []
+	var kinds: Array = []
+	for n in best:
+		pts.append(main.world.node_pos(n))
+		kinds.append("road")
+	bot.set_plan(pts, kinds, "train")
+	route_beat = "train"
+	route_t = main.clock
+	train_x = main.world.line(best_k)
+	train_dirz = float(dz)
+	train_called = false
+	train_passed = -1.0
+	train_cam = false
+	train_victim = false
+	return true
+
+
+func _train_tick(t: float) -> void:
+	if route_beat != "train":
+		return
+	var pl: Vector3 = main.player.global_position
+	var zr: float = main.world.rail_z()
+	var rail: Rail = main.rail
+	var to_go := (zr - pl.z) * train_dirz
+	var on_road := absf(pl.x - train_x) < 10.0
+	if train_passed < 0.0 and (bot.replan_needed or bot.plan_name != "train"):
+		# knocked off the route (a crash, a pile-up): a new route to a crossing if there is one
+		if bot.replan_needed and _plan_train():
+			return
+		route_beat = ""
+		rail.timed = {}
+		if train_hold:
+			train_hold = false
+			bot.halt = false
+		if train_cam:
+			train_cam = false
+			pass_until = main.clock
+		return
+	if train_passed < 0.0:
+		if on_road and to_go < -2.0:
+			train_passed = t
+			rail.after_speed = 42.0
+			if rail.eta(train_x) < 2.6:
+				main.log_event("train_close")
+				main.slowmo(0.9, 0.45)
+				# a police car right on the car's tail, so the train has someone to meet
+				var close := false
+				for c in main.police:
+					if is_instance_valid(c) and not c.dead and absf(c.global_position.x - train_x) < 8.0:
+						var behind: float = (c.global_position.z - zr) * -train_dirz
+						if behind > 0.0 and behind < 45.0:
+							close = true
+				if not close:
+					_spawn_behind(30.0, 22.0)
+				if trace:
+					var info := []
+					for c in main.police:
+						if is_instance_valid(c) and not c.dead:
+							info.append("(%.0f,%.0f v%.0f)" % [c.global_position.x - train_x, (c.global_position.z - zr) * -train_dirz, c.speed])
+					print("TRAIN PASS t=%.1f eta=%.2f cops rel=%s" % [t, rail.eta(train_x), " ".join(info)])
+				# the police behind do not see the train coming in time
+				for c in main.police:
+					if is_instance_valid(c) and not c.dead and absf(c.global_position.x - train_x) < 10.0:
+						c.reckless_until = t + 3.0
+			return
+		# safety: if the train will be there first after all, stop short of the crossing
+		if on_road and to_go > 0.0 and to_go < 70.0:
+			var car_eta: float = to_go / maxf(main.player.speed, 3.0)
+			var tr_eta: float = rail.eta(train_x)
+			if (tr_eta < car_eta + 0.7 and tr_eta < 3.5) or rail.occupied(train_x, 6.0):
+				if to_go > 9.0 and not train_hold:
+					train_hold = true
+					bot.halt = true
+					for c in main.police:
+						if is_instance_valid(c):
+							c.reckless_until = 0.0
+		if train_hold:
+			if not rail.occupied(train_x, 8.0) and rail.eta(train_x) == INF:
+				train_hold = false
+				bot.halt = false
+			return
+		var rem: float = (to_go if on_road else absf(pl.x - train_x) + absf(pl.z - zr))
+		var eta: float = maxf(rem, 0.0) / maxf(main.player.speed, 14.0)
+		var at := t + eta + 1.35
+		if not train_called:
+			train_called = rail.call_train(train_x, at)
+		elif eta > 0.4:
+			rail.retime(at)
+		if train_called and on_road and to_go < 90.0 and to_go > 30.0 and not train_victim:
+			# a police car right on the car's tail: it follows it over, and meets the train
+			train_victim = true
+			var cop := _spawn_behind(26.0, 18.0)
+			if cop != null:
+				cop.reckless_until = t + 7.0
+		if train_called and on_road and to_go < 75.0 and to_go > 8.0 and not train_cam:
+			# past the crossing, on the sidewalk, looking back at the car coming over
+			train_cam = true
+			var dirv := Vector3(0, 0, train_dirz)
+			main.cam_anchor = Vector3(train_x, 0.0, zr) + dirv * 15.0 + Vector3(8.6 * (1.0 if randf() < 0.5 else -1.0), 2.6, 0.0)
+			main.cam_mode = "anchor"
+			main.cam_cut = true
+			pass_until = t + 30.0
+			main.cam_look = Vector3(train_x, 1.6, zr)
+			main.cam_look_w = 0.0
+	else:
+		var since := t - train_passed
+		if train_cam:
+			# once the car is over, the camera turns to the crossing: the train and the police
+			main.cam_look_w = clampf(since / 0.8, 0.0, 0.75)
+		if since > 4.0 or not rail.running:
+			route_beat = ""
+			train_cam = false
+			pass_until = t
+			main.cam_look_w = 0.0
+
+
+# Route along the road with a spray booth on it, lined up with the booth's lane.
+func _plan_spray() -> bool:
+	if bot.busy():
+		return false
+	var a := bot.node_ahead()
+	var h := bot._grid_dir()
+	var best: Array[Vector2i] = []
+	var best_b := {}
+	var best_dz := 1.0
+	var best_s := INF
+	for b: Dictionary in main.gadgets.booths:
+		var k := roundi((float(b["road_x"]) + World.HALF) / World.PITCH)
+		var bz: float = (b["p"] as Vector3).z
+		var m := int(floor((bz + World.HALF) / World.PITCH))
+		for dz in [1, -1]:
+			var before := Vector2i(k, m) if dz > 0 else Vector2i(k, m + 1)
+			var pre := before - Vector2i(0, dz)
+			var after := before + Vector2i(0, dz)
+			if not bot._inside(pre) or not bot._inside(after) or bot._blocked(before) or bot._blocked(after):
+				continue
+			var man := absi(pre.x - a.x) + absi(pre.y - a.y)
+			if man > 8:
+				continue
+			for xf in [true, false]:
+				var r: Array[Vector2i] = bot._route(a, before, h, xf)
+				if r.size() < 2 or r[r.size() - 1] - r[r.size() - 2] != Vector2i(0, dz):
+					continue
+				var sc := float(r.size()) + randf()
+				if sc < best_s:
+					best_s = sc
+					r.append(after)
+					# one node more, so the plan does not run out just before the booth
+					if bot._inside(after + Vector2i(0, dz)) and not bot._blocked(after + Vector2i(0, dz)):
+						r.append(after + Vector2i(0, dz))
+					best = r
+					best_b = b
+					best_dz = float(dz)
+				break
+	if best.is_empty():
+		return false
+	var pts: Array = []
+	var kinds: Array = []
+	for n in best:
+		pts.append(main.world.node_pos(n))
+		kinds.append("road")
+	bot.set_plan(pts, kinds, "spray")
+	booth = best_b
+	spray_dirz = best_dz
+	spray_lane = false
+	spray_cam = false
+	route_beat = "spray"
+	route_t = main.clock
+	return true
+
+
+func _spray_tick(t: float) -> void:
+	if route_beat != "spray" or booth.is_empty():
+		return
+	if spray_t < 0.0 and bot.plan_name != "spray":
+		route_beat = ""
+		booth = {}
+		return
+	var pl: Vector3 = main.player.global_position
+	var bp: Vector3 = booth["p"]
+	var road_x: float = booth["road_x"]
+	var to_b := (bp.z - pl.z) * spray_dirz
+	var on_road := absf(pl.x - road_x) < 9.0
+	var dirv := Vector3(0, 0, spray_dirz)
+	if spray_t >= 0.0 and t - spray_t > 2.5:
+		route_beat = ""
+		booth = {}
+		pass_until = t
+		return
+	if not on_road:
+		return
+	if not spray_lane and to_b < 95.0 and to_b > 10.0:
+		spray_lane = true
+		var left := Vector3.UP.cross(dirv)
+		bot.dodge(bp + dirv * 9.0, dirv, (bp.x - road_x) * left.x)
+	if spray_lane and to_b > -8.0:
+		bot.booth_ok_until = t + 0.3      # lined up: drive between the booth's walls
+	if not spray_cam and to_b < 55.0 and to_b > 12.0:
+		# just past the booth's exit, on its far side: the car comes out in new paint
+		spray_cam = true
+		var side := signf(bp.x - road_x)
+		main.cam_anchor = Vector3(road_x + side * 9.2, 2.3, bp.z + spray_dirz * 15.0)
+		main.cam_mode = "anchor"
+		main.cam_cut = true
+		pass_until = t + 6.0
+	if to_b < -12.0 and spray_t < 0.0:
+		route_beat = ""       # went past without a respray (cooldown): carry on
+		booth = {}
+
+
+func on_spray(nl: int) -> void:
+	spray_t = main.clock
+	esc_low = (float(main.LEVEL_HEAT[nl - 1]) + 0.5) if nl > 0 else 0.0
+	heat_floor = esc_low
+	done["spray"] = main.clock
+
+
+# Rough seconds to the nearest safehouse from here.
+func _house_eta() -> float:
+	var h: Dictionary = main.gadgets.nearest_house(main.player.global_position)
+	if h.is_empty():
+		return -1.0
+	var d: Vector3 = (h["door"] as Vector3) - main.player.global_position
+	return (absf(d.x) + absf(d.z)) / 20.0 + 5.0
+
+
+# Finale: drive to the safehouse, turn in through the door and stop inside.
+func _plan_house() -> bool:
+	var a := bot.node_ahead()
+	var h := bot._grid_dir()
+	var hs: Array = main.gadgets.houses.duplicate()
+	var pp: Vector3 = main.player.global_position
+	hs.sort_custom(func(x, y): return (x["door"] as Vector3).distance_to(pp) < (y["door"] as Vector3).distance_to(pp))
+	for hh: Dictionary in hs:
+		var bk: Vector2i = hh["block"]
+		var door: Vector3 = hh["door"]
+		var rx: float = main.world.line(bk.x)
+		# from the south (heading north) there is a longer straight run up to the door
+		for dz in [-1, 1]:
+			var before := Vector2i(bk.x, bk.y + 1) if dz < 0 else Vector2i(bk.x, bk.y)
+			var pre := before - Vector2i(0, dz)
+			if not bot._inside(pre) or bot._blocked(before):
+				continue
+			var route: Array[Vector2i] = []
+			for xf in [true, false]:
+				var r: Array[Vector2i] = bot._route(a, before, h, xf)
+				if r.size() >= 2 and r[r.size() - 1] - r[r.size() - 2] == Vector2i(0, dz):
+					route = r
+					break
+				if r.size() == 1 and h == Vector2i(0, dz):
+					route = r
+					break
+			if route.is_empty():
+				continue
+			var pts: Array = []
+			var kinds: Array = []
+			for n in route:
+				pts.append(main.world.node_pos(n))
+				kinds.append("road")
+			var fz := float(dz)
+			pts.append(Vector3(rx - 1.5, 0.9, door.z - fz * 14.0))
+			kinds.append("road")
+			pts.append(Vector3(rx + 4.0, 0.9, door.z - fz * 1.0))
+			kinds.append("garage")
+			pts.append(Vector3(door.x - 1.0, 0.9, door.z))
+			kinds.append("garage")
+			pts.append(Vector3(door.x + 9.0, 0.9, door.z))
+			kinds.append("garage")
+			bot.set_plan(pts, kinds, "garage")
+			bot.external = true
+			house = hh
+			house_cam = false
+			route_beat = "house"
+			route_t = main.clock
+			return true
+	return false
+
+
+func _house_tick(t: float) -> void:
+	if route_beat != "house" or house.is_empty():
+		return
+	if house_t >= 0.0:
+		return
+	if bot.replan_needed:
+		bot.external = false
+		route_beat = ""
+		if not _plan_house():
+			bot.plan_flee(_away_point())
+		return
+	var door: Vector3 = house["door"]
+	var pl: Vector3 = main.player.global_position
+	if not house_cam and pl.distance_to(door) < 75.0:
+		# across the road from the door: the car turns in and the door comes down
+		house_cam = true
+		var bk: Vector2i = house["block"]
+		var rx: float = main.world.line(bk.x)
+		var dz := signf(pl.z - door.z)
+		main.cam_anchor = Vector3(rx - 8.5, 3.0, door.z + dz * 13.0)
+		main.cam_mode = "anchor"
+		main.cam_cut = true
+		pass_until = t + 60.0
+		main.cam_look = door + Vector3(2.0, 1.6, 0)
+		main.cam_look_w = 0.35
+
+
+func on_safehouse(_h: Dictionary) -> void:
+	house_t = main.clock
+	still = true
+	bot.external = true
+	main.cam_look_w = 0.6
+	# a few seconds of the door coming down and the police outside, then the end
+	duration = minf(duration, main.clock + 4.5)
+	climax_t = minf(climax_t, duration)
+
+
+# Last resort for a video: the car has not got anywhere for several seconds (wedged on a ramp
+# edge, inside a block, in a heap of cars). Cut to a new shot with it back on the nearest road.
+var prog_p := Vector3.ZERO
+var prog_t := 0.0
+
+
+func _rescue(t: float) -> void:
+	var pl: Car = main.player
+	var p := pl.global_position
+	if bot.halt or house_t >= 0.0 or scripted or main.cine_t > 0.0:
+		prog_p = p
+		prog_t = t
+		return
+	if p.distance_to(prog_p) > 9.0:
+		prog_p = p
+		prog_t = t
+		return
+	if t - prog_t < 6.0:
+		return
+	prog_p = p
+	prog_t = t
+	var kx := clampi(roundi((p.x + World.HALF) / World.PITCH), 1, World.N - 1)
+	var kz := clampi(roundi((p.z + World.HALF) / World.PITCH), 1, World.N - 1)
+	var lx: float = main.world.line(kx)
+	var lz: float = main.world.line(kz)
+	var q := Vector3.ZERO
+	var dirv := Vector3.ZERO
+	var away := _away_point()
+	if absf(p.x - lx) < absf(p.z - lz):
+		q = Vector3(lx, 0.9, clampf(p.z, -World.HALF + 20.0, World.HALF - 20.0))
+		dirv = Vector3(0, 0, 1.0 if q.z > away.z else -1.0)
+	else:
+		q = Vector3(clampf(p.x, -World.HALF + 20.0, World.HALF - 20.0), 0.9, lz)
+		dirv = Vector3(1.0 if q.x > away.x else -1.0, 0, 0)
+	# off the railway and out of the way of any car right there
+	if absf(q.z - main.world.rail_z()) < 8.0:
+		q.z += 12.0 * signf(dirv.z if dirv.z != 0.0 else 1.0)
+	for c in main.cars_near(q, 6.0):
+		if not c.is_player:
+			c.global_position += Vector3(0, 0, 9.0) if dirv.x != 0.0 else Vector3(9.0, 0, 0)
+	pl.global_transform = Transform3D(Basis(Vector3.UP, atan2(-dirv.x, -dirv.z)), q)
+	pl.linear_velocity = dirv * 14.0
+	pl.angular_velocity = Vector3.ZERO
+	main.cam_mode = "chase"
+	main.cam_cut = true
+	main.cam_dir = dirv
+	main.cam_look_w = 0.0
+	pass_until = t
+	main.busted = 0.0
+	if route_beat == "house":
+		bot.external = false
+		route_beat = ""
+	elif route_beat != "":
+		route_beat = ""
+		main.rail.timed = {}
+	bot.replan_needed = true
+	main.log_event("rescue")
+
+
+# Sitting on top of another car (a police car rammed in underneath): the wheels touch nothing,
+# so neither driving nor reversing helps. Slide the car off and shove the others away.
+var wedge_t := 0.0
+
+
+func _unwedge(dt: float) -> void:
+	var pl: Car = main.player
+	if pl.airtime > 0.6 and pl.speed < 3.0 and not bot.halt:
+		wedge_t += dt
+	else:
+		wedge_t = 0.0
+	if wedge_t < 0.8:
+		return
+	wedge_t = 0.0
+	var f := -pl.global_transform.basis.z
+	f.y = 0.0
+	f = f.normalized()
+	for c in main.cars_near(pl.global_position, 7.0):
+		if c.is_player:
+			continue
+		var away: Vector3 = c.global_position - pl.global_position
+		away.y = 0.0
+		c.apply_central_impulse((away.normalized() * 7.0 + Vector3(0, 2.0, 0)) * c.mass)
+	pl.linear_velocity = f * 7.0 + Vector3(0, 3.0, 0)
+	pl.angular_velocity = Vector3.ZERO
+	var yaw := atan2(-f.x, -f.z)
+	pl.global_transform = Transform3D(Basis(Vector3.UP, yaw), pl.global_position + Vector3(0, 0.6, 0))
+	main.log_event("broke_free")

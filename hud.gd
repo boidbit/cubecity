@@ -107,6 +107,10 @@ class SpeedLines extends Control:
 
 var main
 var video := false
+var clean := false         # video runs: only the hook title, no gameplay text (the default)
+var lbl_combo: Label
+var tool_pad: Panel
+var tool_was := false
 var speed_lines: SpeedLines
 var progress: ColorRect
 var progress_bg: ColorRect
@@ -225,11 +229,17 @@ func setup(main_node) -> void:
 	main = main_node
 	layer = 10
 	video = main.director != null
+	clean = video and str(main.cfg.get("overlay", "clean")) != "full"
 	if video:
 		_build_video()
 	else:
 		_build_play()
 	_build_common()
+	if clean:
+		# a clean video: the hook stays, the gameplay read-outs go
+		for c in [lbl_stats, stars, hp_bar, minimap]:
+			if c != null:
+				c.visible = false
 
 
 func _build_play() -> void:
@@ -274,10 +284,10 @@ func _build_play() -> void:
 	vb.add_child(lbl_info)
 	add_child(vb)
 
-	lbl_hint = _label("Arrows to steer, GAS and BRAKE on the right. Drift to fill NITRO.\nSmash buildings, hit red barrels and gas stations. Don't get boxed in by police!", 20)
+	lbl_hint = _label("Arrows to steer, GAS and BRAKE on the right. Drift to fill NITRO.\nSmash buildings, hit red barrels and gas stations. Don't get boxed in by police!\nGrab EMP and OIL (TOOL button or T), shields and cash. A SPRAY booth takes 2 stars off;\ndrive into a SAFE garage to escape. Mind the trains!", 20)
 	lbl_hint.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	lbl_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl_hint.offset_top = -330
+	lbl_hint.offset_top = -420
 	add_child(lbl_hint)
 	get_tree().create_timer(10.0).timeout.connect(func(): lbl_hint.visible = false)
 
@@ -292,6 +302,15 @@ func _build_play() -> void:
 	_pad("gas", "GAS", Vector2(1, 1), Vector2(-170, -150), Vector2(146, 130), dark, Color.WHITE)
 	_pad("hb", "DRIFT", Vector2(1, 1), Vector2(-330, -284), Vector2(146, 120), dark, Color.WHITE)
 	_pad("nitro", "NITRO", Vector2(1, 1), Vector2(-170, -284), Vector2(146, 120), Color(0.15, 0.4, 0.95, 0.8), Color.WHITE)
+	# the escape tool you are carrying (EMP or oil slick): tap it, or press T
+	tool_pad = _pad("tool", "", Vector2(1, 1), Vector2(-170, -410), Vector2(146, 110), Color(0.55, 0.25, 0.85, 0.85), Color.WHITE)
+	tool_pad.visible = false
+	lbl_combo = _label("", 40)
+	lbl_combo.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	lbl_combo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_combo.offset_top = 96
+	lbl_combo.add_theme_color_override("font_color", Color(0.45, 1.0, 0.6))
+	add_child(lbl_combo)
 
 
 # Video overlay. Text stays in the top third: YouTube Shorts covers the bottom
@@ -512,6 +531,10 @@ func _process(delta: float) -> void:
 	in_steer = st
 	in_nitro = Input.is_physical_key_pressed(KEY_N) or Input.is_physical_key_pressed(KEY_Q) or is_down("nitro")
 	in_hb = 1.0 if (Input.is_physical_key_pressed(KEY_SHIFT) or Input.is_physical_key_pressed(KEY_E) or is_down("hb")) else 0.0
+	var tool_now := Input.is_physical_key_pressed(KEY_T) or is_down("tool")
+	if tool_now and not tool_was and not main.game_over:
+		main.gadgets.use_tool()
+	tool_was = tool_now
 	for id in pads:
 		(pads[id] as Control).modulate.a = 1.0 if is_down(id) else 0.72
 
@@ -537,9 +560,19 @@ func update_hud() -> void:
 		for i in 5:
 			s += "*" if i < main.level else "-"
 		lbl_stars.text = s + ("   HELI" if main.heli != null and main.heli.visible else "")
-		lbl_info.text = "Police wrecked %d   Cubes %d" % [main.wrecked, main.cubes]
+		lbl_info.text = "Police wrecked %d   Cubes %d   Cash %d" % [main.wrecked, main.cubes, main.gadgets.cash]
 		nitro_bar.value = p.nitro
-	busted_box.visible = main.busted > 0.01 and not main.game_over
+		var g: Gadgets = main.gadgets
+		tool_pad.visible = g.tool != ""
+		if tool_pad.visible:
+			(tool_pad.get_child(0) as Label).text = "EMP" if g.tool == "emp" else "OIL"
+		var extra := ""
+		if g.shielded():
+			extra = "SHIELD %d" % ceili(g.shield_until - main.clock)
+		elif main.clock < p.flat_until:
+			extra = "FLAT TYRES"
+		lbl_combo.text = ("COMBO x%d   " % g.combo if g.combo > 1 else "") + extra
+	busted_box.visible = main.busted > 0.01 and not main.game_over and not clean
 	if busted_box.visible:
 		busted_bar.value = main.busted * 100.0
 		var flash := fmod(main.clock * 4.0, 1.0) < 0.5
@@ -547,6 +580,8 @@ func update_hud() -> void:
 
 
 func banner(text: String) -> void:
+	if clean:
+		return
 	lbl_banner.text = text
 	if banner_tw != null:
 		banner_tw.kill()
@@ -558,7 +593,7 @@ func banner(text: String) -> void:
 
 # Big story line in the middle of the screen (video runs only).
 func caption(text: String, secs: float = 1.7) -> void:
-	if lbl_caption == null:
+	if lbl_caption == null or clean:
 		return
 	lbl_caption.text = text
 	if cap_tw != null:
@@ -580,6 +615,8 @@ func hurt_flash(a: float) -> void:
 
 
 func show_over(text: String) -> void:
+	if clean:
+		return
 	lbl_over.text = text
 	over_panel.visible = true
 	over_t = 0.0
