@@ -116,6 +116,7 @@ var tool_due_t := 0.0      # ... which it gets anyway by then
 var ram := {}             # the roadblock the shielded car drives through: c, dir
 var ram_cam := false
 var spikes := {}
+var spike_cam := false
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -1271,8 +1272,10 @@ func _escape_spikes() -> bool:
 	var gap_left := randf() < 0.5
 	var d: Dictionary = main.gadgets.drop_spikes(c, dirv, 9.5, 2.25 if gap_left else -2.25)
 	d["road_c"] = _flat(c)
-	bot.dodge(c + dirv * 10.0, dirv, 4.75 if gap_left else -4.75)
+	d["gap_left"] = gap_left
+	bot.dodge(c + dirv * 10.0, dirv, 4.2 if gap_left else -4.2)
 	spikes = d
+	spike_cam = false
 	_spawn_behind(28.0, 20.0)
 	return true
 
@@ -1287,11 +1290,26 @@ func _spike_tick(t: float) -> void:
 	var along: float = rel.dot(spikes["dir"])
 	if along > -60.0 and along < 4.0:
 		bot.steady_until = t + 0.3     # hold the gap: no swerving back into the strip for traffic
+	if not spike_cam and along > -65.0 and along < -25.0:
+		# from the roadside past the strip, on the side the strip covers: the car slips by,
+		# then the strip slides across into the police
+		spike_cam = true
+		var dirv: Vector3 = spikes["dir"]
+		var right := dirv.cross(Vector3.UP)
+		var side := 1.0 if spikes["gap_left"] else -1.0
+		main.cam_anchor = (spikes["road_c"] as Vector3) + dirv * 16.0 + right * side * 9.0 + Vector3(0, 2.8, 0)
+		main.cam_mode = "anchor"
+		main.cam_cut = true
+		pass_until = t + 5.5
+		main.cam_look = (spikes["road_c"] as Vector3) + Vector3(0, 0.8, 0)
+		main.cam_look_w = 0.0
 	if along > 4.0:
 		main.gadgets.widen_strip(spikes)
 		spikes["born"] = t
 		spikes["life"] = 9.0
 		spikes = {}
+		if spike_cam:
+			main.cam_look_w = 0.55      # turn to the strip: the police are next
 
 
 # A pickup (EMP or oil) on the road ahead; the bot uses it when the moment is right.
