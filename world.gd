@@ -10,6 +10,10 @@ const N := 16
 const HALF := 576.0
 const LOAD_R := 3
 const MAX_DEBRIS := 80
+const RAIL_ROW := 7          # the railway runs east-west through the middle of this row of blocks
+const RAIL_CLEAR := 6.0      # buildings stay this far from the track (m)
+# one safehouse garage near each of these blocks (the nearest block that has room)
+const SAFEHOUSE_WANT := [Vector2i(3, 3), Vector2i(12, 3), Vector2i(3, 12), Vector2i(12, 12)]
 
 var main
 var fx
@@ -35,6 +39,7 @@ var flyovers: Array[Vector2i] = []  # (kx, jz): road x = line(kx) rises over nod
 var stunt_zones: Array = []         # [start, end] of stunt set pieces standing on the road right now
 var total_cells := 0
 var props: Props
+var safehouses: Array[Dictionary] = []   # door (on the lot edge), dir (into the garage), block, rect
 
 
 # ------------------------------------------------------------ mesh helper
@@ -186,17 +191,19 @@ func line(k: int) -> float:
 	return -HALF + k * PITCH
 
 
+func rail_z() -> float:
+	return line(RAIL_ROW) + PITCH * 0.5
+
+
 # ------------------------------------------------------------ city generation
 
 func _generate_city() -> void:
 	var noise := FastNoiseLite.new()
 	noise.seed = 77
 	noise.frequency = 0.09
+	var kinds := {}
 	for bi in N:
 		for bj in N:
-			var key := Vector2i(bi, bj)
-			var list: Array[Building] = []
-			block_buildings[key] = list
 			var cx := line(bi) + PITCH * 0.5
 			var cz := line(bj) + PITCH * 0.5
 			var dn := Vector2(cx, cz).length() / HALF
@@ -212,10 +219,41 @@ func _generate_city() -> void:
 				kind = "park"
 			elif dn > 0.35 and nv < 0.2:
 				kind = "ind"
-			props.generate_block(key, kind)
-			_fill_block(key, list, line(bi) + 10.0, line(bj) + 10.0, kind)
+			kinds[Vector2i(bi, bj)] = kind
+	_pick_safehouses(kinds)
+	for bi in N:
+		for bj in N:
+			var key := Vector2i(bi, bj)
+			var list: Array[Building] = []
+			block_buildings[key] = list
+			props.generate_block(key, kinds[key])
+			_fill_block(key, list, line(bi) + 10.0, line(bj) + 10.0, kinds[key])
 	for b in buildings:
 		total_cells += b.total_alive()
+	# keep the railway, and the drive into each safehouse, clear of street props
+	var zr := rail_z()
+	props.clear_rect(Vector3(-HALF - 30.0, 0, zr - 5.5), Vector3(HALF + 30.0, 0, zr + 5.5))
+	for sh in safehouses:
+		var door: Vector3 = sh["door"]
+		props.clear_rect(Vector3(door.x - 19.0, 0, door.z - 7.0), Vector3(door.x + 1.0, 0, door.z + 7.0))
+
+
+# A garage on the corner lot of a block with buildings, its door on the lot edge facing the
+# road to the west. The bot drives in to end an escape run.
+func _pick_safehouses(kinds: Dictionary) -> void:
+	var offs := [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1)]
+	for want: Vector2i in SAFEHOUSE_WANT:
+		for o: Vector2i in offs:
+			var key: Vector2i = want + o
+			if key.x < 1 or key.y < 1 or key.x > N - 2 or key.y > N - 2:
+				continue
+			# not on the railway row, not on a road that has a flyover
+			if key.y == RAIL_ROW or key.x == 4 or key.x == 11 or not (kinds[key] in ["mid", "sub", "down"]):
+				continue
+			var door := Vector3(line(key.x) + 10.0, 0.0, line(key.y) + 23.0)
+			safehouses.append({"door": door, "dir": Vector3(1, 0, 0), "block": key,
+				"rect": Rect2(door.x - 0.5, door.z - 6.5, 15.0, 13.0)})
+			break
 
 
 func _fill_block(key: Vector2i, list: Array[Building], x0: float, z0: float, kind: String) -> void:
@@ -227,8 +265,13 @@ func _fill_block(key: Vector2i, list: Array[Building], x0: float, z0: float, kin
 	if kind == "ind":
 		lots = 1
 	var lot_cells := 26 / lots
+	var rail := key.y == RAIL_ROW
+	var garage := Rect2()
+	for sh in safehouses:
+		if sh["block"] == key:
+			garage = sh["rect"]
 	var gas_lot := Vector2i(-1, -1)
-	if kind == "mid" and rng.randf() < 0.22:
+	if kind == "mid" and rng.randf() < 0.22 and not rail and garage.size == Vector2.ZERO:
 		gas_lot = Vector2i(rng.randi_range(0, 1), rng.randi_range(0, 1))
 	for a in lots:
 		for b in lots:
@@ -276,11 +319,25 @@ func _fill_block(key: Vector2i, list: Array[Building], x0: float, z0: float, kin
 					tint = Color(0.52, 0.52, 0.54).lerp(Color(0.62, 0.45, 0.38), rng.randf() * 0.6)
 			w = mini(w, lot_cells - 1)
 			d = mini(d, lot_cells - 1)
+			var ox := x0 + (a * lot_cells + rng.randi_range(0, lot_cells - w)) * CELL
+			var oz := z0 + (b * lot_cells + rng.randi_range(0, lot_cells - d)) * CELL
+			if rail:
+				# shorten (or move) the building so the train has room
+				var zr := rail_z()
+				if oz + d * CELL > zr - RAIL_CLEAR and oz < zr + RAIL_CLEAR:
+					if oz + d * CELL * 0.5 < zr:
+						d = int(floor((zr - RAIL_CLEAR - oz) / CELL))
+					else:
+						var nz := zr + RAIL_CLEAR
+						d = mini(d, int(floor((z0 + 26 * CELL - nz) / CELL)))
+						oz = nz
+					if d < 3:
+						continue
+			if garage.size != Vector2.ZERO and garage.intersects(Rect2(ox - 1.0, oz - 1.0, w * CELL + 2.0, d * CELL + 2.0)):
+				continue
 			while w * d * h > 1500:
 				h -= 1
 			var hs := _shape_heights(kind, w, d, h)
-			var ox := x0 + (a * lot_cells + rng.randi_range(0, lot_cells - w)) * CELL
-			var oz := z0 + (b * lot_cells + rng.randi_range(0, lot_cells - d)) * CELL
 			var bld := Building.new()
 			bld.setup(self, Vector3(ox, 0.0, oz), w, d, hs, tint, style)
 			_roof_defs(bld, kind)
@@ -345,12 +402,23 @@ func _roof_defs(b: Building, kind: String) -> void:
 
 func _make_jump_ramps() -> void:
 	var yellow := Color(0.85, 0.65, 0.12)
-	for i in 14:
+	var made := 0
+	while made < 14:
 		var k := rng.randi_range(2, N - 2)
 		var m := rng.randi_range(1, N - 2)
 		var along_z := rng.randf() < 0.5
 		var lane := (3.5 if rng.randf() < 0.5 else -3.5)
 		var sgn := (1.0 if rng.randf() < 0.5 else -1.0)
+		# not on a level crossing, not in front of a safehouse door
+		if along_z and m == RAIL_ROW:
+			continue
+		var by_door := false
+		for sh in safehouses:
+			if along_z and sh["block"] == Vector2i(k, m):
+				by_door = true
+		if by_door:
+			continue
+		made += 1
 		var mid := line(m) + PITCH * 0.5
 		var p0: Vector3
 		var p1: Vector3

@@ -23,12 +23,17 @@ FONTS = [
 # seconds to show before and after it. A jump is logged when the car lands, so it needs
 # a long lead-in to include the flight.
 MOMENTS = [
+    ("train_hit", "THE TRAIN DIDN'T STOP", 2.2, 1.6),
     ("heli_down", "HELICOPTER DOWN", 1.8, 2.0),
     ("mega_jump", "THE CAR JUMPED THE WHOLE STREET", 3.0, 0.8),
     ("trap", "THE COPS NEVER SAW THIS COMING", 0.9, 1.6),
     ("collapse", "THE WHOLE TOWER CAME DOWN", 0.9, 1.8),
     ("gas", "ONE GAS STATION. ONE CAR.", 0.9, 1.6),
     ("chain", "CHAIN REACTION", 0.9, 1.6),
+    ("emp", "ONE BUTTON. EVERY COP DOWN.", 0.6, 2.2),
+    ("spike_cop", "THEY HIT THEIR OWN SPIKES", 1.2, 1.4),
+    ("oil_spin", "SLIPPERY ROAD", 1.0, 1.6),
+    ("safehouse", "DID HE MAKE IT?", 2.4, 1.2),
     ("near_miss", "THIS WAS TOO CLOSE", 1.4, 1.0),
     ("swat_down", "THE SWAT TRUCK GOT WRECKED", 1.0, 1.4),
     ("big_air", "WAIT FOR THE JUMP", 2.0, 0.8),

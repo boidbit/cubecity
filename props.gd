@@ -152,9 +152,13 @@ func generate_block(key: Vector2i, kind: String) -> void:
 		var tt := rng.randf_range(-15.0, 15.0) + ((za + zb) * 0.5 if s2[1] else (xa + xb) * 0.5)
 		var bp := Vector3(s2[0], 0, tt) if s2[1] else Vector3(tt, 0, s2[0])
 		_add(key, {"t": "barrel", "p": bp})
-	if rng.randf() < 0.2:
+	if rng.randf() < 0.32:
 		var lane := 3.5 if rng.randf() < 0.5 else -3.5
-		_add(key, {"t": "pickup", "p": Vector3((xa + xb) * 0.5, 0, za + lane), "k": "repair" if rng.randf() < 0.6 else "nitro"})
+		var r := rng.randf()
+		var k := "repair"
+		if r > 0.26:
+			k = "nitro" if r < 0.46 else ("cash" if r < 0.7 else ("emp" if r < 0.8 else ("oil" if r < 0.9 else "shield")))
+		_add(key, {"t": "pickup", "p": Vector3((xa + xb) * 0.5, 0, za + lane), "k": k})
 	if kind == "park":
 		for i in 14:
 			_add(key, {"t": "tree", "p": Vector3(rng.randf_range(xa + 12, xb - 12), 0, rng.randf_range(za + 12, zb - 12)), "yaw": rng.randf() * TAU, "s": rng.randf_range(0.9, 1.5), "c": rng.randf()})
@@ -162,6 +166,37 @@ func generate_block(key: Vector2i, kind: String) -> void:
 
 func gas_station(key: Vector2i, c: Vector3) -> void:
 	_add(key, {"t": "gas", "p": c})
+
+
+# Removes street props (not gas stations) inside the box a..b (x and z): the railway, the
+# drive into a safehouse and the spray booths need the room.
+func clear_rect(a: Vector3, b: Vector3) -> void:
+	for key in block_props:
+		var list: Array = block_props[key]
+		for i in range(list.size() - 1, -1, -1):
+			var d: Dictionary = list[i]
+			if d["t"] == "gas":
+				continue
+			var p: Vector3 = d["p"]
+			if p.x >= a.x and p.x <= b.x and p.z >= a.z and p.z <= b.z:
+				list.remove_at(i)
+
+
+# A pickup placed after the city was made (cash over the ramps, cash lines from the
+# director). `once`: it does not come back after it is taken.
+func add_pickup(p: Vector3, k: String, once: bool = false) -> Dictionary:
+	var key: Vector2i = world.block_of(p)
+	var d := {"t": "pickup", "p": p, "k": k}
+	if once:
+		d["once"] = true
+	_add(key, d)
+	if loaded.has(key):
+		var pn := _pickup_node(k)
+		pn.position = p + Vector3(0, 1.0, 0)
+		world.chunk_root.add_child(pn)
+		d["node"] = pn
+		block_nodes[key].append(pn)
+	return d
 
 
 # ------------------------------------------------------------ streaming
@@ -301,16 +336,58 @@ func unload_block(key: Vector2i) -> void:
 func _pickup_node(k: String) -> Node3D:
 	var n := Node3D.new()
 	var g: StandardMaterial3D = glow_mats[3] if k == "repair" else glow_mats[1]
-	if k == "repair":
-		n.add_child(_box(Vector3(1.1, 0.32, 0.32), Vector3.ZERO, g))
-		n.add_child(_box(Vector3(0.32, 1.1, 0.32), Vector3.ZERO, g))
-	else:
-		var cy := CylinderMesh.new()
-		cy.top_radius = 0.3
-		cy.bottom_radius = 0.3
-		cy.height = 1.1
-		n.add_child(_mesh_node(cy, Vector3.ZERO, g))
-		n.add_child(_box(Vector3(0.22, 0.25, 0.22), Vector3(0, 0.66, 0), g))
+	match k:
+		"repair":
+			n.add_child(_box(Vector3(1.1, 0.32, 0.32), Vector3.ZERO, g))
+			n.add_child(_box(Vector3(0.32, 1.1, 0.32), Vector3.ZERO, g))
+		"cash":
+			# a big gold coin standing on its edge
+			g = glow_mats[2]
+			var coin := CylinderMesh.new()
+			coin.top_radius = 0.62
+			coin.bottom_radius = 0.62
+			coin.height = 0.16
+			coin.radial_segments = 20
+			var cn := _mesh_node(coin, Vector3.ZERO, g)
+			cn.rotation.x = PI * 0.5
+			n.add_child(cn)
+			n.add_child(_box(Vector3(0.14, 0.62, 0.2), Vector3.ZERO, _mat(Color(0.55, 0.38, 0.05))))
+		"emp":
+			# a purple orb inside a ring
+			g = glow_mats[4]
+			var orb := SphereMesh.new()
+			orb.radius = 0.36
+			orb.height = 0.72
+			n.add_child(_mesh_node(orb, Vector3.ZERO, g))
+			var ring := TorusMesh.new()
+			ring.inner_radius = 0.55
+			ring.outer_radius = 0.68
+			var rn := _mesh_node(ring, Vector3.ZERO, g)
+			rn.rotation.x = PI * 0.5
+			n.add_child(rn)
+		"oil":
+			# a black drum with an orange band
+			g = _glow_mat(Color(1.0, 0.5, 0.1))
+			var drum := CylinderMesh.new()
+			drum.top_radius = 0.38
+			drum.bottom_radius = 0.38
+			drum.height = 0.95
+			n.add_child(_mesh_node(drum, Vector3.ZERO, _mat(Color(0.06, 0.06, 0.07))))
+			n.add_child(_box(Vector3(0.8, 0.14, 0.8), Vector3(0, 0.15, 0), g))
+		"shield":
+			# a cyan crest
+			g = _glow_mat(Color(0.35, 1.0, 0.95))
+			var crest := _box(Vector3(0.8, 0.8, 0.18), Vector3.ZERO, g)
+			crest.rotation.z = PI * 0.25
+			n.add_child(crest)
+			n.add_child(_box(Vector3(0.3, 0.3, 0.22), Vector3.ZERO, _mat(Color(0.95, 0.98, 1.0))))
+		_:
+			var cy := CylinderMesh.new()
+			cy.top_radius = 0.3
+			cy.bottom_radius = 0.3
+			cy.height = 1.1
+			n.add_child(_mesh_node(cy, Vector3.ZERO, g))
+			n.add_child(_box(Vector3(0.22, 0.25, 0.22), Vector3(0, 0.66, 0), g))
 	var l := OmniLight3D.new()
 	l.light_color = g.albedo_color
 	l.omni_range = 5.0
@@ -318,6 +395,21 @@ func _pickup_node(k: String) -> Node3D:
 	n.add_child(l)
 	n.add_to_group("pickup")
 	return n
+
+
+var _glows := {}
+
+
+func _glow_mat(c: Color) -> StandardMaterial3D:
+	if not _glows.has(c):
+		var g := StandardMaterial3D.new()
+		g.albedo_color = c
+		g.emission_enabled = true
+		g.emission = c
+		g.emission_energy_multiplier = 0.4 + night * 2.2
+		_glows[c] = g
+		glow_mats.append(g)
+	return _glows[c]
 
 
 func _gas_node(d: Dictionary) -> Node3D:
@@ -547,7 +639,7 @@ func _physics_process(delta: float) -> void:
 					n.rotation.y = spin_t * 2.0
 					if (d["p"] as Vector3).distance_to(pp) < 3.2:
 						n.visible = false
-						d["respawn"] = now + 40.0
+						d["respawn"] = 1e12 if d.get("once", false) else now + 40.0
 						main.on_pickup(d["k"], d["p"])
 					continue
 				if not d["alive"]:

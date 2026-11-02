@@ -5,7 +5,7 @@
 #
 # Usage: tools/record.sh <godot> <out dir>
 # Settings come from the environment (all optional):
-#   MODE=chase|destroy|survive  ORIENTATION=vertical|horizontal  DURATION=55  FPS=60
+#   MODE=escape|chase|destroy|survive|stunt|heli|rush  ORIENTATION=vertical|horizontal  DURATION=55  FPS=60
 #   SEED=123  TIME=dusk|day|night  TITLE="..."  SCALE=1 (0.5 for a quick half-size preview)
 #   EXTRA_ARGS="--story=... --story_log=..."  more game arguments (the story lab uses this)
 set -euo pipefail

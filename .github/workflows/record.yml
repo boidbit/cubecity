@@ -10,10 +10,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "chase = 1 car vs a growing pack of police | heli = low police helicopter, ends with the car jumping into it | rush = cars from every direction, near misses | stunt = tower jumps, barrel corridors, falling towers | destroy = smash as much city as possible | survive = 5 stars from the start"
+        description: "escape = cash, spike strips, a train at the crossing, EMP, a shield through a roadblock, an oil slick, the spray shop and a safehouse garage at the end | chase = 1 car vs a growing pack of police | heli = low police helicopter, ends with the car jumping into it | rush = cars from every direction, near misses | stunt = tower jumps, barrel corridors, falling towers | destroy = smash as much city as possible | survive = 5 stars from the start"
         type: choice
-        options: [chase, heli, rush, stunt, destroy, survive]
-        default: chase
+        options: [escape, chase, heli, rush, stunt, destroy, survive]
+        default: escape
       orientation:
         description: "vertical = YouTube Shorts (1080x1920), horizontal = normal video (1920x1080)"
         type: choice
@@ -41,6 +41,11 @@ on:
         type: choice
         options: [dusk, day, night]
         default: dusk
+      overlay:
+        description: "clean = only the hook title on screen (no SWAT / WANTED pop-ups, no stars, no stats) | full = all the game text like before"
+        type: choice
+        options: [clean, full]
+        default: clean
       title:
         description: "Hook text on screen (blank = the mode's default)"
         type: string
@@ -96,6 +101,7 @@ jobs:
           TIME: ${{ inputs.time }}
           TITLE: ${{ inputs.title }}
           SEED: ${{ matrix.seed }}
+          EXTRA_ARGS: --overlay=${{ inputs.overlay || 'clean' }}
         run: tools/record.sh "$GODOT" take
       - uses: actions/upload-artifact@v4
         with:

@@ -26,6 +26,8 @@ var blocks: Array[Car] = []
 var bot: Bot = null
 var stunts: Stunts = null
 var director: Director = null
+var gadgets: Gadgets = null
+var rail: Rail = null
 var cfg := {}
 var vertical := false
 
@@ -75,11 +77,14 @@ var cine_ang := 0.0
 var boom_times: Array[float] = []
 var events: Array = []
 var stats := {"collapses": 0, "chains": 0, "gas": 0, "big_air": 0, "drifts": 0, "smash": 0,
-	"cops_spawned": 0, "max_cops": 0, "mega_jump": 0, "near_miss": 0, "heli_down": 0}
+	"cops_spawned": 0, "max_cops": 0, "mega_jump": 0, "near_miss": 0, "heli_down": 0,
+	"train_hits": 0, "emp_hits": 0, "oil_spins": 0, "spike_cops": 0, "cash": 0, "sprays": 0, "safehouse": 0}
 var cam_anchor := Vector3.ZERO
 var traffic_cap := 12          # director: rush hour has far more cars
 var traffic_ahead := false     # ... and puts them on the roads ahead of the player
 var cam_focus_heli := false   # the anchor camera looks between the car and the helicopter
+var cam_look := Vector3.ZERO  # director: the anchor camera turns toward this point ...
+var cam_look_w := 0.0         # ... by this much (0 = the car, 1 = the point)
 
 
 func _ready() -> void:
@@ -98,6 +103,13 @@ func _ready() -> void:
 	world = World.new()
 	add_child(world)
 	world.setup(self, fx)
+	# the escape kit (spray shops, safehouses, pickups, spikes) and the railway
+	gadgets = Gadgets.new()
+	add_child(gadgets)
+	gadgets.setup(self)
+	rail = Rail.new()
+	add_child(rail)
+	rail.setup(self)
 	_make_player()
 	if cfg.has("bot"):
 		bot = Bot.new()
@@ -116,6 +128,12 @@ func _ready() -> void:
 	_make_rain()
 	cam.global_position = player.global_position + Vector3(0, 4, 9)
 	if director != null:
+		# video runs: no trains on their own timetable (the escape show calls its own);
+		# story runs: no trains at all
+		rail.auto = false
+		if cfg.has("story"):
+			rail.enabled = false
+			gadgets.story = true
 		director.start()
 		if cfg.has("story") and ResourceLoader.exists("res://story/story.gd"):
 			# story lab (experiment): characters in the car, only with --story
@@ -472,7 +490,8 @@ func _assign_sirens() -> void:
 	for c in police:
 		if is_instance_valid(c) and not c.dead and c.siren_snd != null:
 			c.siren_want = false
-			live.append(c)
+			if clock >= c.stall_until:
+				live.append(c)
 	live.sort_custom(func(a: Car, b: Car) -> bool: return a.global_position.distance_squared_to(pp) < b.global_position.distance_squared_to(pp))
 	for i in mini(live.size(), SIRENS_AUDIBLE):
 		if live[i].global_position.distance_squared_to(pp) < SIREN_RANGE * SIREN_RANGE:
@@ -539,6 +558,9 @@ func _call_off_police() -> void:
 # Nearly stopped with police right next to you fills the meter; driving away drains it.
 func _update_busted(dt: float) -> void:
 	var boxed := false
+	if gadgets.shielded():
+		busted = maxf(0.0, busted - dt)
+		return
 	if level > 0 and player.speed < 2.5:
 		for c in cars_near(player.global_position, 7.5):
 			if not c.is_player:
@@ -680,6 +702,8 @@ func _cam_anchor(dt: float) -> void:
 	var p := cam_anchor + Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake
 	cam.global_position = p
 	var focus := player.global_position + Vector3(0, 1.5, 0)
+	if cam_look_w > 0.0:
+		focus = focus.lerp(cam_look, cam_look_w)
 	if heli.visible and heli.state in ["crash", "wreck"]:
 		focus = heli.global_position
 	elif cam_focus_heli and heli.visible:
@@ -845,6 +869,7 @@ func on_big_air(t: float) -> void:
 	bonus += pts
 	stats["big_air"] += 1
 	log_event("big_air")
+	gadgets.add_combo(0, "")
 	if t > 0.8 and bot != null and bot.plan_name == "mega":
 		stats["mega_jump"] += 1
 		bonus += 500
@@ -860,16 +885,20 @@ func on_drift(t: float) -> void:
 		bonus += pts
 		stats["drifts"] += 1
 		log_event("drift")
+		gadgets.add_combo(0, "")
 		hud.banner("DRIFT +%d" % pts)
 
 
 func on_pickup(k: String, pos: Vector3) -> void:
 	if k == "repair":
 		player.heal(45.0)
+		player.flat_until = 0.0
 		hud.banner("REPAIRED")
-	else:
+	elif k == "nitro":
 		player.nitro = 100.0
 		hud.banner("NITRO FULL")
+	else:
+		gadgets.on_pickup(k, pos)
 	fx.sparks(pos + Vector3(0, 1, 0), 20)
 
 
@@ -908,6 +937,7 @@ func on_car_dead(car: Car) -> void:
 		wrecked += 1
 		add_heat(6.0)
 		log_event("cop_wrecked")
+		gadgets.add_combo(0, "")
 		police.erase(car)
 		blocks.erase(car)
 		if not car.is_swat:

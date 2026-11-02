@@ -362,6 +362,121 @@ func _make_sounds() -> void:
 	sounds["rumble"] = _noise_burst(0.9, 3.0, 0.05, 0.0)
 	sounds["siren"] = _siren(2.0)
 	sounds["chop"] = _chop(1.0)
+	sounds["bell"] = _bell()
+	sounds["horn"] = _horn()
+	sounds["train"] = _train_loop()
+	sounds["zap"] = _zap()
+	sounds["spray"] = _noise_burst(1.1, 2.2, 0.75, 0.0)
+	sounds["pop"] = _noise_burst(0.25, 18.0, 0.8, 140.0)
+	sounds["coin"] = _coin()
+	sounds["shield"] = _shield_hum()
+	sounds["door"] = _noise_burst(1.6, 1.6, 0.04, 38.0)
+
+
+# Crossing bell: one ding, a loop of half a second (two dings a second).
+func _bell() -> AudioStreamWAV:
+	var n := int(0.5 * MIX)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var t := float(i) / MIX
+		var e := exp(-t * 9.0)
+		s[i] = (sin(TAU * 1480.0 * t) * 0.5 + sin(TAU * 2960.0 * t) * 0.2 + sin(TAU * 3940.0 * t) * 0.12) * e * 0.8
+	var w := _wav(s)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_begin = 0
+	w.loop_end = n
+	return w
+
+
+# Train horn: a two-note chord, slightly rough, with a quick swell and fade.
+func _horn() -> AudioStreamWAV:
+	var dur := 1.8
+	var n := int(dur * MIX)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var ph: Array[float] = [0.0, 0.0, 0.0]
+	var fr: Array[float] = [277.0, 349.0, 415.0]
+	var y := 0.0
+	for i in n:
+		var t := float(i) / MIX
+		var env := clampf(t / 0.08, 0.0, 1.0) * clampf((dur - t) / 0.35, 0.0, 1.0)
+		var v := 0.0
+		for k in 3:
+			ph[k] = fmod(ph[k] + fr[k] / MIX, 1.0)
+			v += (ph[k] * 2.0 - 1.0) * 0.33
+		y += 0.18 * (v - y)
+		s[i] = y * env * 1.4
+	return _wav(s)
+
+
+# Train rumble: low noise with the clack of the wheels over rail joints, 2 a second.
+func _train_loop() -> AudioStreamWAV:
+	var n := int(1.0 * MIX)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 21
+	var y := 0.0
+	for i in n:
+		var t := float(i) / MIX
+		y += 0.05 * (rng.randf_range(-1.0, 1.0) - y)
+		var clack := 0.0
+		for c: float in [0.0, 0.12, 0.5, 0.62]:
+			var dt: float = t - c
+			if dt >= 0.0 and dt < 0.06:
+				clack += sin(TAU * 180.0 * dt) * exp(-dt * 70.0)
+		s[i] = y * 2.6 + sin(TAU * 46.0 * t) * 0.25 + clack * 0.55
+	var w := _wav(s)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_begin = 0
+	w.loop_end = n
+	return w
+
+
+# EMP: a falling electric zap with crackle.
+func _zap() -> AudioStreamWAV:
+	var dur := 1.2
+	var n := int(dur * MIX)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 33
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / MIX
+		ph += (1800.0 * exp(-t * 3.0) + 60.0) / MIX
+		var buzz := signf(sin(TAU * ph)) * 0.4
+		var crackle := rng.randf_range(-1.0, 1.0) * (0.6 if rng.randf() < 0.08 else 0.1)
+		s[i] = (buzz + crackle) * exp(-t * 2.2) * 0.7
+	return _wav(s)
+
+
+# Cash: two quick bright notes.
+func _coin() -> AudioStreamWAV:
+	var n := int(0.45 * MIX)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var t := float(i) / MIX
+		var f := 1318.0 if t < 0.08 else 1976.0
+		var t0 := t if t < 0.08 else t - 0.08
+		s[i] = (sin(TAU * f * t) * 0.6 + sin(TAU * f * 2.0 * t) * 0.15) * exp(-t0 * 9.0) * 0.7
+	return _wav(s)
+
+
+# Shield: a short rising hum.
+func _shield_hum() -> AudioStreamWAV:
+	var dur := 0.9
+	var n := int(dur * MIX)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / MIX
+		ph += (220.0 + 440.0 * t) / MIX
+		s[i] = (sin(TAU * ph) * 0.5 + sin(TAU * ph * 1.5) * 0.25) * sin(PI * t / dur) * 0.7
+	return _wav(s)
 
 
 # Helicopter rotor: 11 thumps a second, a low rumble under each. The loop is a whole

@@ -9,6 +9,12 @@ import sys
 
 # what each logged event looks like in a description, in the order they are listed
 MOMENTS = [
+    ("train_hit", "a train taking out a police car"),
+    ("safehouse", "a last-second escape into the safehouse"),
+    ("emp", "an EMP that kills every police car around"),
+    ("spike_cop", "police driving over their own spike strip"),
+    ("oil_spin", "an oil slick"),
+    ("spray", "a respray that shakes the police off"),
     ("heli_down", "a helicopter takedown"),
     ("mega_jump", "a tower-top to tower-top jump"),
     ("trap", "the barrel trap that blows up the police"),
@@ -27,6 +33,7 @@ TAGS = ["police chase", "car chase", "ai gameplay", "destruction game", "indie g
         "mobile game", "godot", "godot engine", "voxel destruction", "satisfying destruction",
         "wanted level", "cube city chase"]
 MODE_TAGS = {
+    "escape": ["police escape", "train crossing", "getaway"],
     "destroy": ["city destruction"],
     "heli": ["helicopter", "police helicopter"],
     "rush": ["traffic", "near miss", "rush hour"],
@@ -34,6 +41,7 @@ MODE_TAGS = {
 }
 
 HOOKS = {
+    "escape": "Spike strips, a train, an EMP and one safehouse. Can he make it before they catch him?",
     "chase": "One car, a growing pack of police, and no way out. Can it escape?",
     "destroy": "One car tries to smash the whole city. How much can it destroy before the police shut it down?",
     "survive": "Five stars from the first second. Can one car stay ahead of the whole police force?",
@@ -52,7 +60,12 @@ def titles(s):
     misses = int(s.get("near_miss", 0))
     jumps = int(s.get("big_air", 0))
     events = {e.get("type") for e in s.get("events", [])}
-    if mode == "destroy":
+    if mode == "escape":
+        trains = int(s.get("train_hits", 0))
+        out = ["Can He Escape? The Train Didn't Stop 🚂🚓" if trains else "Can He Escape the Whole Police Force? 🚓💨",
+               "He Made It to the Safehouse... Barely 😳" if s.get("safehouse") else f"{cops} Cops, 1 Car, No Way Out 🚨",
+               f"Spike Strips, EMP and {wrecked} Cops Wrecked 💥" if wrecked >= 2 else "The Police Hit Their Own Spikes 😂"]
+    elif mode == "destroy":
         out = ["Can One Car Destroy the Whole City? 🏙️💥",
                f"One Car vs The City: {falls} Buildings Down 💥" if falls >= 2 else "One Car vs The City: Smashing Everything 💥",
                "This Car Drives Straight Through Buildings 😳"]
@@ -113,7 +126,7 @@ def description(s):
 
 def hashtags(s):
     first = "#Shorts" if s.get("orientation", "vertical") == "vertical" else "#Gaming"
-    second = {"destroy": "#CityDestruction", "heli": "#Helicopter", "rush": "#CarChase", "stunt": "#Stunts"}.get(
+    second = {"destroy": "#CityDestruction", "heli": "#Helicopter", "rush": "#CarChase", "stunt": "#Stunts", "escape": "#Escape"}.get(
         s.get("mode"), "#PoliceChase")
     return [first, second, "#IndieGame"]
 
@@ -128,6 +141,7 @@ def tags(s):
 
 def pinned_comment(s):
     return {
+        "escape": "Train, EMP or the spray shop: what saved him? 👇",
         "destroy": "How many runs until it destroys 100% of the city? Guess below 👇",
         "heli": "Would you try that jump? 👇",
         "rush": "How many near misses did you count? 👇",
