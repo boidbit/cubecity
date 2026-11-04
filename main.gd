@@ -735,7 +735,7 @@ func _cam_heli(dt: float) -> void:
 	cam.fov = lerpf(cam.fov, 62.0 + fov_kick, 4.0 * dt)
 
 
-# Pulls the camera in front of any wall between it and the car.
+# Race camera cuts keep the car and train framed together.
 func _cam_race(dt: float) -> void:
 	if director == null:
 		_cam_chase(dt)
@@ -757,39 +757,37 @@ func _cam_race(dt: float) -> void:
 	var focus := forward_focus
 	var desired := player.global_position - fwd * 14.0 + Vector3(0.0, 7.0, 0.0)
 	var target_fov := 54.0
+	var finish_z: float = world.line(d.race_finish_k)
+	var finish_center := Vector3(d.race_finish_x, 2.5, (finish_z + world.rail_z()) * 0.5)
 	match d.race_cam_view:
 		"over":
 			desired = player.global_position - fwd * 25.0 + away_from_rail * 8.0 + Vector3(0.0, 13.0, 0.0)
 			focus = shared_focus if train_in_frame else car_focus + fwd * 205.0
 			target_fov = 58.0
 		"side":
-			desired = player.global_position - fwd * 5.0 + away_from_rail * 40.0 + Vector3(0.0, 15.0, 0.0)
+			desired = player.global_position - fwd * 5.0 + toward_rail * 20.0 + Vector3(0.0, 15.0, 0.0)
 			focus = shared_focus if train_in_frame else car_focus + fwd * 95.0
 			target_fov = 60.0
 		"train":
-			desired = train_focus + Vector3(d.race_dirx * 75.0, 18.0, 0.0) + away_from_rail * 42.0
+			desired = train_focus + Vector3(d.race_dirx * 75.0, 18.0, 0.0) + toward_rail * 14.0
 			focus = shared_focus if train_in_frame else train_focus
 			target_fov = 57.0
 		"detour":
-			desired = player.global_position - fwd * 7.0 + away_from_rail * 55.0 + Vector3(0.0, 24.0, 0.0)
+			desired = player.global_position - fwd * 7.0 + Vector3(0.0, 24.0, 0.0)
 			focus = shared_focus if train_in_frame else car_focus + fwd * 100.0
 			target_fov = 61.0
 		"jump":
 			focus = shared_focus if train_in_frame else car_focus + fwd * 28.0
 			if not d.race_ramp.is_empty():
 				var ramp_start: Vector3 = d.race_ramp["p0"]
-				desired = ramp_start - fwd * 12.0 + away_from_rail * 28.0 + Vector3(0.0, 18.0, 0.0)
+				desired = ramp_start - fwd * 12.0 + toward_rail * 20.0 + Vector3(0.0, 18.0, 0.0)
 			target_fov = 53.0
 		"finish":
-			var finish_z: float = world.line(d.race_finish_k)
-			var finish_center := Vector3(d.race_finish_x, 2.5, (finish_z + world.rail_z()) * 0.5)
-			desired = finish_center - Vector3(d.race_dirx * 95.0, 0.0, 0.0) + away_from_rail * 118.0 + Vector3(0.0, 48.0, 0.0)
+			desired = finish_center - Vector3(d.race_dirx * 95.0, 0.0, 0.0) + toward_rail * 70.0 + Vector3(0.0, 48.0, 0.0)
 			focus = shared_focus if train_in_frame else finish_center
 			target_fov = 52.0
 		"winner":
-			var finish_z: float = world.line(d.race_finish_k)
-			var finish_center := Vector3(d.race_finish_x, 2.5, (finish_z + world.rail_z()) * 0.5)
-			var orbit := maxf(main.clock - d.race_result_t, 0.0) * 0.18
+			var orbit := maxf(clock - d.race_result_t, 0.0) * 0.18
 			desired = finish_center + Vector3(cos(orbit) * 130.0, 42.0, sin(orbit) * 130.0)
 			focus = shared_focus if train_in_frame else finish_center
 			target_fov = 54.0
