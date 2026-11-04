@@ -633,6 +633,8 @@ func _update_cam(dt: float) -> void:
 			_cam_front(dt)
 		"heli":
 			_cam_heli(dt)
+		"race":
+			_cam_race(dt)
 		_:
 			_cam_chase(dt)
 	cam_cut = false
