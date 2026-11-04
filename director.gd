@@ -1510,6 +1510,7 @@ func _set_race_camera(view: String) -> void:
 	if race_cam_view == view:
 		return
 	race_cam_view = view
+	main.log_event("race_camera_" + view)
 	main.cam_mode = "race"
 	main.cam_cut = true
 
