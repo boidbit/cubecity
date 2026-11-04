@@ -16,7 +16,7 @@ extends Node
 
 const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "ONE CAR vs THE CITY", "survive": "SURVIVE 5 STARS",
 	"stunt": "THE STUNT SHOW", "heli": "ONE CAR vs A HELICOPTER", "rush": "RUSH HOUR vs ONE CAR",
-	"escape": "CAN HE ESCAPE?"}
+	"escape": "CAN HE ESCAPE?", "race": "CAR VS TRAIN"}
 # The escape show tries these in order, moving on when one cannot be placed from here.
 const ESCAPE_ORDER := ["spikes", "cash", "train", "emp", "spray", "oil", "shield", "cash", "train", "emp", "oil"]
 # The stunt show runs these in order, moving on as soon as one is done (or cannot be placed).
@@ -27,13 +27,13 @@ const EVENT_CAPTIONS := {
 	"big_air": "SEND IT!", "mega_jump": "NO WAY...", "trap_set": "ONE LAST TRICK...", "trap": "BOOM.",
 	"collapse": "TIMBER!", "gas": "GAS STATION = BOMB", "chain": "CHAIN REACTION!", "near_miss": "TOO CLOSE!",
 	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!",
-	"train_hit": "THE TRAIN DIDN'T STOP", "emp": "LIGHTS OUT.", "spray": "NEW CAR. WHO DIS?", "safehouse": "SAFE.",
+	"train_hit": "THE TRAIN DIDN'T STOP", "race_car_finish": "THE CAR CROSSED THE LINE!", "race_train_finish": "THE TRAIN CROSSED THE LINE!", "emp": "LIGHTS OUT.", "spray": "NEW CAR. WHO DIS?", "safehouse": "SAFE.",
 	"spike_cop": "OWN SPIKES!", "oil_spin": "SLIPPERY!", "gate_smash": "NO TIME TO WAIT", "shield": "UNTOUCHABLE",
 }
 const START_CAPTIONS := {
 	"chase": "ONE CAR. NO BRAKES.", "survive": "5 STARS. NO ESCAPE.", "destroy": "HOW MUCH CAN IT BREAK?",
 	"heli": "THEY SENT A HELICOPTER.", "rush": "RUSH HOUR. NO RULES.", "stunt": "NO RAMP IS TOO BIG.",
-	"escape": "ESCAPE THE CITY.",
+	"escape": "ESCAPE THE CITY.", "race": "CAR VS TRAIN. GO!",
 }
 const PRIORITY := ["trap", "heli_down", "mega_jump", "collapse", "gas"]
 const FINALE := 12.0      # seconds before the end when the protection lifts and the finale starts
@@ -117,6 +117,18 @@ var ram := {}             # the roadblock the shielded car drives through: c, di
 var ram_cam := false
 var spikes := {}
 var spike_cam := false
+# Car versus train race state.
+var race_ramp: Dictionary = {}
+var race_dirx := 1.0
+var race_road_k := World.RAIL_ROW
+var race_road_z := 0.0
+var race_finish_x := 0.0
+var race_train_called := false
+var race_schedule_missed := false
+var race_cam := false
+var race_car_t := -1.0
+var race_train_t := -1.0
+var race_winner := ""
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -154,13 +166,19 @@ func setup(main_node, cfg: Dictionary) -> void:
 		"escape":
 			bot.cruise = 30.0
 			start_heat = 14.0
+		"race":
+			bot.cruise = 36.0
+			start_heat = 0.0
 		_:
 			bot.cruise = 31.0
 			start_heat = 14.0
 	if scripted:
 		bot.cruise = 24.0
 		start_heat = 0.0
-	_place_start()
+	if mode == "race":
+		_place_race_start()
+	else:
+		_place_start()
 
 
 # Mid-block on a road near the edge of the city, heading in, with a long straight ahead.
@@ -188,6 +206,78 @@ func _place_start() -> void:
 	pl.global_transform = Transform3D(Basis(Vector3.UP, atan2(-f.x, -f.z)), p)
 	pl.linear_velocity = f * (12.0 if mode == "destroy" else 20.0)
 	main.cam_dir = f
+
+# Start on a road beside the railway and choose a ramp that the car can reach en route.
+func _place_race_start() -> void:
+	var best: Dictionary = {}
+	var best_score := INF
+	for r in main.world.ramps:
+		if bool(r["along_z"]) or int(r["k"]) not in [World.RAIL_ROW, World.RAIL_ROW + 1]:
+			continue
+		var d := 1.0 if float(r["sgn"]) > 0.0 else -1.0
+		var step := Vector2i(int(d), 0)
+		var k: int = int(r["k"])
+		var m: int = int(r["m"])
+		var before := Vector2i(m if d > 0.0 else m + 1, k)
+		var pre := before - step
+		var after := before + step * 2
+		var start_idx := 1 if d > 0.0 else World.N - 1
+		var a := Vector2i(start_idx + int(d), k)
+		var finish_idx := World.N - 2 if d > 0.0 else 2
+		if not bot._inside(pre) or not bot._inside(before) or not bot._inside(after) or bot._blocked(before) or bot._blocked(after):
+			continue
+		if (pre.x - a.x) * int(d) < 0 or (finish_idx - after.x) * int(d) < 0:
+			continue
+		if bot._route(a, pre, step, true).is_empty() or bot._route(after, Vector2i(finish_idx, k), step, true).is_empty():
+			continue
+		var p0: Vector3 = r["p0"]
+		var score := absf(p0.x) + randf() * 0.1
+		if score < best_score:
+			best_score = score
+			best = r
+	if best.is_empty():
+		# Random ramps can land on a blocked crossing; pick a clear railway-side road and
+		# create a deterministic jump ramp there so every race has its set piece.
+		var fallback_score := INF
+		for k in [World.RAIL_ROW, World.RAIL_ROW + 1]:
+			var direction := Vector2i(1, 0)
+			var start_node := Vector2i(2, k)
+			var finish_node := Vector2i(World.N - 2, k)
+			for m in range(4, World.N - 3):
+				var before := Vector2i(m, k)
+				var pre := before - direction
+				var after := before + direction * 2
+				if bot._blocked(before) or bot._blocked(after) or bot._route(start_node, pre, direction, true).is_empty() or bot._route(after, finish_node, direction, true).is_empty():
+					continue
+				var score := absf(float(m) - float(World.N) * 0.5) + absf(float(k) - float(World.RAIL_ROW + 1)) * 0.25
+				if score >= fallback_score:
+					continue
+				fallback_score = score
+				var mid := main.world.line(m) + World.PITCH * 0.5
+				var p0 := Vector3(mid - 6.0, 0.05, main.world.line(k) - 3.5)
+				var p1 := Vector3(mid + 6.0, 2.3, main.world.line(k) - 3.5)
+				best = {"p0": p0, "p1": p1, "k": k, "m": m, "along_z": false, "sgn": 1.0}
+		if best.is_empty():
+			_place_start()
+			return
+		var fallback_p0: Vector3 = best["p0"]
+		var fallback_p1: Vector3 = best["p1"]
+		main.world._slab(fallback_p0, fallback_p1, 5.0, 0.35, Color(0.85, 0.65, 0.12))
+		main.world.ramp_points.append((fallback_p0 + fallback_p1) * 0.5)
+		main.world.ramps.append(best)
+	race_ramp = best
+	race_dirx = 1.0 if float(race_ramp["sgn"]) > 0.0 else -1.0
+	race_road_k = int(race_ramp["k"])
+	var p0: Vector3 = race_ramp["p0"]
+	race_road_z = p0.z
+	var start_idx := 1 if race_dirx > 0.0 else World.N - 1
+	race_finish_x = main.world.line(World.N - 2 if race_dirx > 0.0 else 2)
+	var f := Vector3(race_dirx, 0.0, 0.0)
+	var p := Vector3(main.world.line(start_idx) + race_dirx * 36.0, 0.9, race_road_z)
+	main.player.global_transform = Transform3D(Basis(Vector3.UP, atan2(-f.x, -f.z)), p)
+	main.player.linear_velocity = f * 20.0
+	main.cam_dir = f
+
 
 
 func start() -> void:
@@ -232,11 +322,24 @@ func start() -> void:
 			main.cap_bonus = 0
 			main.spawn_gap = Vector2(2.4, 3.8)
 			_opening_police(3)
+		"race":
+			# Keep the route clear so the train and car stay together in the race shots.
+			main.cap_bonus = 0
+			main.spawn_t = 1e9
+			main.block_t = 1e9
+			main.traffic_cap = 0
+			main.heat = 0.0
+			main.level = 0
+			main.rail.auto = false
 		_:
 			main.spawn_gap = Vector2(2.5, 4.0)
-	bot.plan_flee(_away_point())
+	if mode == "race":
+		if not _plan_race():
+			bot.plan_flee(_away_point())
+	else:
+		bot.plan_flee(_away_point())
 	# the hook: open on the car racing at the camera with the police behind it
-	main.cam_mode = "chase" if mode == "destroy" else "front"
+	main.cam_mode = "chase" if mode in ["destroy", "race"] else "front"
 	main.cam_cut = true
 	shot_end = 3.0
 	next_shot = 9.0
@@ -445,6 +548,8 @@ func tick(dt: float) -> void:
 		var head := "HELICOPTER DOWN" if main.stats["heli_down"] > 0 else "SURVIVED"
 		if main.stats["safehouse"] > 0:
 			head = "ESCAPED"
+		if mode == "race":
+			head = race_winner.to_upper() + " WINS" if race_winner != "" else "RACE OVER"
 		main.hud.show_over(end_text(head))
 		main.log_event("survived")
 	if main.game_over:
@@ -464,6 +569,8 @@ func tick(dt: float) -> void:
 			var r: Rail = main.rail
 			extra = " beat=%s esc=%d train=%s front=%.0f v=%.0f eta=%.1f tool=%s" % [route_beat, esc_i, str(r.running), r.front, r.speed,
 				r.eta(train_x) if route_beat == "train" else -1.0, main.gadgets.tool]
+		elif mode == "race":
+			extra = " dir=%.0f finish=%.0f car_t=%.1f train_t=%.1f winner=%s" % [race_dirx, race_finish_x, race_car_t, race_train_t, race_winner]
 		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)], extra)
 	if scripted:
 		_scripted_heat(t)
@@ -485,13 +592,17 @@ func tick(dt: float) -> void:
 		_ram_tick(t)
 		_spike_tick(t)
 		_house_tick(t)
+	if mode == "race":
+		_race_tick(t)
 	_camera(t)
 	_break_free(dt)
 	_stunt_jam(dt)
 	_rescue(t)
 	_unwedge(dt)
 	_jump_moment()
-	if (bot.replan_needed or bot.needs_plan()) and not bot.external:
+	if mode == "race" and bot.replan_needed and race_car_t < 0.0:
+		_race_replan()
+	elif (bot.replan_needed or bot.needs_plan()) and not bot.external:
 		bot.plan_flee(_away_point())
 
 
@@ -539,6 +650,8 @@ func _heat(t: float) -> void:
 			heat_floor = 40.0 if f < 0.5 else 62.0
 		"escape":
 			heat_floor = esc_low if esc_low >= 0.0 else (14.0 if f < 0.45 else 32.0)
+		"race":
+			heat_floor = 0.0
 		_:
 			heat_floor = 90.0
 
@@ -547,6 +660,8 @@ func _beats(t: float) -> void:
 	var f := t / duration
 	if mode == "escape":
 		_escape_show(t)
+		return
+	if mode == "race":
 		return
 	if mode == "stunt":
 		_stunt_show(t)
@@ -1100,6 +1215,10 @@ func overlay_line() -> String:
 			return "JUMPS %d   BOOMS %d   COPS %d" % [main.stats["big_air"], main.stats["chains"] + main.stats["gas"] + main.stats["collapses"], cops]
 		"escape":
 			return "CASH %d   COPS %d   COMBO x%d" % [main.gadgets.cash, cops, main.gadgets.combo]
+		"race":
+			var car_eta := "--" if race_car_t >= 0.0 else "%.1f" % (maxf((race_finish_x - main.player.global_position.x) * race_dirx, 0.0) / maxf(main.player.speed, 1.0))
+			var train_eta := "--" if race_train_t >= 0.0 else ("%.1f" % main.rail.eta(race_finish_x) if race_train_called else "STAGING")
+			return "CAR ETA %s   TRAIN ETA %s" % [car_eta, train_eta]
 	return "COPS %d   %s   %d KM/H" % [cops, clock_s, int(absf(main.player.fwd_speed) * 3.6)]
 
 
@@ -1108,6 +1227,10 @@ func end_text(kind: String) -> String:
 	lines.append("COPS WRECKED  %d" % main.wrecked)
 	if mode == "escape":
 		lines.append("CASH  %d" % main.gadgets.cash)
+	if mode == "race":
+		lines.append("CAR  %s" % ("%.2f s" % race_car_t if race_car_t >= 0.0 else "DID NOT FINISH"))
+		lines.append("TRAIN  %s" % ("%.2f s" % race_train_t if race_train_t >= 0.0 else "DID NOT FINISH"))
+		lines.append("WINNER  %s" % (race_winner.to_upper() if race_winner != "" else "UNDECIDED"))
 	if mode == "destroy":
 		lines.append("CUBES SMASHED  %s" % _thousands(main.cells_down))
 		lines.append("BUILDINGS DOWN  %d" % main.stats["collapses"])
@@ -1144,6 +1267,10 @@ func summary() -> Dictionary:
 		"cash": st["cash"],
 		"sprays": st["sprays"],
 		"safehouse": st["safehouse"],
+		"race_winner": race_winner,
+		"race_car_time": snappedf(race_car_t, 0.01),
+		"race_train_time": snappedf(race_train_t, 0.01),
+		"race_schedule_missed": race_schedule_missed,
 		"combo_best": main.gadgets.combo_best,
 		"busted_peak": snappedf(main.busted_peak, 0.01),
 		"stuck": bot.stuck_count,
@@ -1158,6 +1285,12 @@ func summary() -> Dictionary:
 	e += 7.0 * st["mega_jump"] + 2.0 * st["near_miss"] + 12.0 * st["heli_down"]
 	e += 10.0 * st["train_hits"] + 3.0 * st["emp_hits"] + 4.0 * st["oil_spins"] + 4.0 * st["spike_cops"]
 	e += 1.0 * st["cash"] + 6.0 * st["sprays"] + 15.0 * st["safehouse"]
+	if mode == "race":
+		e += 14.0 if race_winner != "" else -14.0
+		if race_car_t >= 0.0 and race_train_t >= 0.0:
+			e += maxf(0.0, 12.0 - absf(race_car_t - race_train_t) * 0.4)
+		if st["big_air"] > 0:
+			e += 5.0
 	if main.busted_peak > 0.6:
 		e += 4.0
 	if done.has("trap_boom"):
@@ -1190,6 +1323,129 @@ func _finish() -> void:
 		if fa != null:
 			fa.store_string(js)
 			fa.close()
+
+
+
+
+# Plan one trip along the railway-side road, through the set-piece ramp, to the finish line.
+func _plan_race() -> bool:
+	if race_ramp.is_empty():
+		return false
+	var d := 1 if race_dirx > 0.0 else -1
+	var step := Vector2i(d, 0)
+	var k := race_road_k
+	var m: int = int(race_ramp["m"])
+	var before := Vector2i(m if d > 0 else m + 1, k)
+	var pre := before - step
+	var after := before + step * 2
+	var a := bot.node_ahead()
+	var h := bot._grid_dir()
+	if not bot._inside(pre) or not bot._inside(before) or not bot._inside(after):
+		return false
+	var route: Array[Vector2i] = bot._route(a, pre, h, true)
+	if route.is_empty() or (route.size() > 1 and route[route.size() - 1] - route[route.size() - 2] != step):
+		return false
+	var finish_idx := World.N - 2 if d > 0 else 2
+	var tail: Array[Vector2i] = bot._route(after, Vector2i(finish_idx, k), step, true)
+	if tail.is_empty():
+		return false
+	var points: Array = []
+	var kinds: Array = []
+	for n in route:
+		points.append(main.world.node_pos(n))
+		kinds.append("road")
+	points.append(main.world.node_pos(before))
+	kinds.append("road")
+	var p0: Vector3 = race_ramp["p0"]
+	var p1: Vector3 = race_ramp["p1"]
+	var dirv := Vector3(p1.x - p0.x, 0.0, p1.z - p0.z).normalized()
+	points.append(Vector3(p0.x, 0.9, p0.z) - dirv * 18.0)
+	kinds.append("road")
+	points.append(Vector3(p0.x, 0.9, p0.z))
+	kinds.append("ramp")
+	points.append(Vector3(p1.x, 0.9, p1.z))
+	kinds.append("ramp")
+	points.append(Vector3(p1.x, 0.9, p1.z) + dirv * 40.0)
+	kinds.append("air")
+	points.append(main.world.node_pos(after))
+	kinds.append("road")
+	for i in range(1, tail.size()):
+		points.append(main.world.node_pos(tail[i]))
+		kinds.append("road")
+	bot.set_plan(points, kinds, "race")
+	return true
+
+
+# If a collision knocks the car off its first route, keep the race pointed at the line.
+func _race_replan() -> void:
+	if race_car_t >= 0.0:
+		return
+	var a := bot.node_ahead()
+	var h := bot._grid_dir()
+	var finish_idx := World.N - 2 if race_dirx > 0.0 else 2
+	var route: Array[Vector2i] = bot._best_route(a, Vector2i(finish_idx, race_road_k), h)
+	if route.is_empty():
+		bot.replan_needed = false
+		return
+	var points: Array = []
+	var kinds: Array = []
+	for n in route:
+		points.append(main.world.node_pos(n))
+		kinds.append("road")
+	bot.set_plan(points, kinds, "race")
+
+
+func _race_tick(t: float) -> void:
+	if race_ramp.is_empty():
+		return
+	var rail: Rail = main.rail
+	var player: Car = main.player
+	var remaining := maxf((race_finish_x - player.global_position.x) * race_dirx, 0.0)
+	var car_eta := remaining / maxf(player.speed, bot.cruise * 0.85)
+	var train_distance := absf(race_finish_x) + Rail.OUT
+	var earliest := t + train_distance / 55.0 + 0.1
+	var latest := t + train_distance / 14.0 - 0.1
+	var target_at := clampf(t + car_eta + 1.15, earliest, latest)
+	if not race_train_called:
+		race_train_called = rail.call_train(race_finish_x, target_at)
+		if not race_train_called and t >= 2.0 and not race_schedule_missed:
+			race_schedule_missed = true
+			main.log_event("race_schedule_missed")
+	elif rail.running and race_train_t < 0.0:
+		var train_remaining := maxf((race_finish_x - rail.front) * rail.dirx, 0.0)
+		var train_earliest := t + train_remaining / 55.0 + 0.05
+		var train_latest := t + train_remaining / 14.0 - 0.05
+		if train_latest > train_earliest:
+			rail.retime(clampf(t + car_eta + 1.15, train_earliest, train_latest))
+	if not race_cam and remaining < 260.0:
+		race_cam = true
+		main.cam_anchor = Vector3(race_finish_x - race_dirx * 70.0, 24.0, main.world.rail_z() + 46.0)
+		main.cam_mode = "anchor"
+		main.cam_cut = true
+		main.cam_look = Vector3(race_finish_x, 1.5, main.world.rail_z())
+		main.cam_look_w = 1.0
+		pass_until = duration + 1.0
+	if race_car_t < 0.0 and (player.global_position.x - race_finish_x) * race_dirx >= 0.0 and absf(player.global_position.z - race_road_z) < 50.0:
+		race_car_t = t
+		bot.halt = true
+		main.log_event("race_car_finish")
+	if race_train_t < 0.0 and race_train_called and (rail.front - race_finish_x) * rail.dirx >= 0.0:
+		race_train_t = t
+		main.log_event("race_train_finish")
+	if race_car_t >= 0.0 and race_train_t >= 0.0 and race_winner == "":
+		race_winner = "car" if race_car_t <= race_train_t else "train"
+		main.log_event("race_winner_" + race_winner)
+		_cap("CAR WINS!" if race_winner == "car" else "TRAIN WINS!", true)
+	if t >= duration - 3.0 and race_winner == "":
+		if race_car_t >= 0.0 and race_train_t < 0.0:
+			race_winner = "car"
+		elif race_train_t >= 0.0 and race_car_t < 0.0:
+			race_winner = "train"
+		else:
+			var train_left := maxf((race_finish_x - rail.front) * rail.dirx, 0.0) if race_train_called else train_distance
+			race_winner = "car" if remaining / maxf(player.speed, 1.0) <= train_left / maxf(rail.speed, 1.0) else "train"
+		main.log_event("race_result_fallback")
+		_cap("CAR WINS!" if race_winner == "car" else "TRAIN WINS!", true)
 
 
 # ------------------------------------------------------------ the escape show
@@ -1327,7 +1583,7 @@ func _hand_tool(kind: String) -> bool:
 # Any mode: a bot carrying a tool uses it when it pays off. EMP when the police are close
 # around it; oil when one is right behind, lined up.
 func _use_tools(t: float) -> void:
-	if scripted:
+	if scripted or mode == "race":
 		return
 	var g: Gadgets = main.gadgets
 	if tool_due != "" and t >= tool_due_t:

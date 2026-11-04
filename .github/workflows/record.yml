@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "escape = cash, spike strips, a train at the crossing, EMP, a shield through a roadblock, an oil slick, the spray shop and a safehouse garage at the end | chase = 1 car vs a growing pack of police | heli = low police helicopter, ends with the car jumping into it | rush = cars from every direction, near misses | stunt = tower jumps, barrel corridors, falling towers | destroy = smash as much city as possible | survive = 5 stars from the start"
+        description: "escape = cash, spike strips, a train at the crossing, EMP, a shield through a roadblock, an oil slick, the spray shop and a safehouse garage at the end | chase = 1 car vs a growing pack of police | heli = low police helicopter, ends with the car jumping into it | rush = cars from every direction, near misses | stunt = tower jumps, barrel corridors, falling towers | destroy = smash as much city as possible | survive = 5 stars from the start | race = a car and train sprint side by side along the railway, with a ramp and finish-line result"
         type: choice
-        options: [escape, chase, heli, rush, stunt, destroy, survive]
+        options: [escape, chase, heli, rush, stunt, destroy, survive, race]
         default: escape
       orientation:
         description: "vertical = YouTube Shorts (1080x1920), horizontal = normal video (1920x1080)"

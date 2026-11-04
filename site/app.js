@@ -22,7 +22,7 @@
   };
   const EMOJI = {
     funny: "😂", romantic: "💕", cringe: "😬", happy: "😄", sad: "😢", action: "💥", twist: "🌀", drama: "🎭", dark: "🖤",
-    chase: "🚓", heli: "🚁", rush: "🚗", stunt: "🤸", destroy: "💥", survive: "⭐", escape: "🏁",
+    chase: "🚓", heli: "🚁", rush: "🚗", stunt: "🤸", destroy: "💥", survive: "⭐", escape: "🏁", race: "🚂",
   };
   const CHIP_EMOJI = ["story_type", "mode"];
   const STEPS = {

@@ -431,6 +431,25 @@ func _make_jump_ramps() -> void:
 		_slab(p0, p1, 5.0, 0.35, yellow)
 		ramp_points.append((p0 + p1) * 0.5)
 		ramps.append({"p0": p0, "p1": p1, "k": k, "m": m, "along_z": along_z, "sgn": sgn})
+	# Race mode needs a ramp on one of the roads parallel to the railway. Random placement
+	# does not guarantee one near row 7/8, so add a deterministic fallback when needed.
+	if str(main.cfg.get("bot", "")) == "race":
+		var have_race_ramp := false
+		for r in ramps:
+			if not bool(r["along_z"]) and int(r["k"]) in [RAIL_ROW, RAIL_ROW + 1]:
+				have_race_ramp = true
+				break
+		if not have_race_ramp:
+			var k := RAIL_ROW + 1
+			var m: int = N >> 1
+			var lane := -3.5
+			var sgn := 1.0
+			var mid := line(m) + PITCH * 0.5
+			var p0 := Vector3(mid - 6.0 * sgn, 0.05, line(k) + lane)
+			var p1 := Vector3(mid + 6.0 * sgn, 2.3, line(k) + lane)
+			_slab(p0, p1, 5.0, 0.35, yellow)
+			ramp_points.append((p0 + p1) * 0.5)
+			ramps.append({"p0": p0, "p1": p1, "k": k, "m": m, "along_z": false, "sgn": sgn})
 
 
 func _make_flyover(kx: int, jz: int) -> void:

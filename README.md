@@ -60,6 +60,7 @@ upload text show up on the same page. Or from GitHub:
      - `stunt`: tower-top to tower-top jumps, barrel corridors, a tower brought down as the car passes, ramps and gas stations.
      - `destroy`: smash as much of the city as possible, with a "% of the city destroyed" counter.
      - `survive`: 5 stars from the first second.
+     - `race`: the car races a train along the railway-side road, hits a guaranteed ramp, then the finish camera shows both finish times and the winner.
    - **orientation**: `vertical` (1080x1920, Shorts) or `horizontal` (1920x1080).
    - **duration**, **fps**, **takes** (records several runs and keeps the most exciting), **teaser** (opens with a flash-forward of the biggest moment, then "EARLIER..."), **time** of day, the on-screen **title**, and an optional **seed**.
    - **overlay**: `clean` (the default) keeps only the hook title on screen: no "SWAT TRUCK INCOMING"-style
