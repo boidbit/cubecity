@@ -444,7 +444,7 @@ func _make_jump_ramps() -> void:
 			var m: int = N >> 1
 			var lane := -3.5
 			var sgn := 1.0
-			var mid := line(m) + PITCH * 0.5
+			var mid: float = line(m) + PITCH * 0.5
 			var p0 := Vector3(mid - 6.0 * sgn, 0.05, line(k) + lane)
 			var p1 := Vector3(mid + 6.0 * sgn, 2.3, line(k) + lane)
 			_slab(p0, p1, 5.0, 0.35, yellow)
