@@ -129,6 +129,16 @@ var race_cam := false
 var race_car_t := -1.0
 var race_train_t := -1.0
 var race_winner := ""
+var race_finish_k := World.RAIL_ROW
+var race_detour_x := -1
+var race_detour_k := -1
+var race_detour_cue := false
+var race_train_close := false
+var race_cam_view := ""
+var race_cam_next := 0.0
+var race_cam_i := 0
+var race_cam_lock_until := 0.0
+var race_result_t := -1.0
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -167,7 +177,8 @@ func setup(main_node, cfg: Dictionary) -> void:
 			bot.cruise = 30.0
 			start_heat = 14.0
 		"race":
-			bot.cruise = 36.0
+			# Let the camera keep both racers readable and let the chase fill the clip.
+			bot.cruise = 23.0
 			start_heat = 0.0
 		_:
 			bot.cruise = 31.0
@@ -268,6 +279,7 @@ func _place_race_start() -> void:
 	race_ramp = best
 	race_dirx = 1.0 if float(race_ramp["sgn"]) > 0.0 else -1.0
 	race_road_k = int(race_ramp["k"])
+	race_finish_k = race_road_k
 	var p0: Vector3 = race_ramp["p0"]
 	race_road_z = p0.z
 	var start_idx := 1 if race_dirx > 0.0 else World.N - 1
@@ -339,7 +351,7 @@ func start() -> void:
 	else:
 		bot.plan_flee(_away_point())
 	# the hook: open on the car racing at the camera with the police behind it
-	main.cam_mode = "chase" if mode in ["destroy", "race"] else "front"
+	main.cam_mode = "race" if mode == "race" else ("chase" if mode == "destroy" else "front")
 	main.cam_cut = true
 	shot_end = 3.0
 	next_shot = 9.0
@@ -1051,7 +1063,7 @@ func _update_traps(t: float) -> void:
 # Cuts between the chase camera, the front camera (car racing at you, police behind)
 # and the helicopter view (the whole pack).
 func _camera(t: float) -> void:
-	if main.cine_t > 0.0 or t < shot_end:
+	if main.cine_t > 0.0 or mode == "race" or t < shot_end:
 		return
 	if _mega_camera(t):
 		return
@@ -1346,9 +1358,38 @@ func _plan_race() -> bool:
 	if route.is_empty() or (route.size() > 1 and route[route.size() - 1] - route[route.size() - 2] != step):
 		return false
 	var finish_idx := World.N - 2 if d > 0 else 2
-	var tail: Array[Vector2i] = bot._route(after, Vector2i(finish_idx, k), step, true)
+	race_finish_k = k
+	race_detour_x = -1
+	race_detour_k = k
+	var approach: Array[Vector2i] = []
+	var turn: Array[Vector2i] = []
+	var tail: Array[Vector2i] = []
+	var outer_k := k - 1 if k == World.RAIL_ROW else k + 1
+	# After the jump, take the outer parallel road on the same side of the railway.
+	# This keeps a safe lane open when the trackside road gets tight, without crossing
+	# the live railway.
+	for offset in range(3, 7):
+		var xi := m + d * offset
+		if xi < 2 or xi > World.N - 2 or (finish_idx - xi) * d <= 0:
+			continue
+		var lane_node := Vector2i(xi, k)
+		var outer_node := Vector2i(xi, outer_k)
+		var approach_try: Array[Vector2i] = bot._route(after, lane_node, step, true)
+		var turn_try: Array[Vector2i] = bot._route(lane_node, outer_node, step, true)
+		var tail_try: Array[Vector2i] = bot._route(outer_node, Vector2i(finish_idx, outer_k), step, true)
+		if approach_try.is_empty() or turn_try.is_empty() or tail_try.is_empty():
+			continue
+		approach = approach_try
+		turn = turn_try
+		tail = tail_try
+		race_detour_x = xi
+		race_detour_k = outer_k
+		race_finish_k = outer_k
+		break
 	if tail.is_empty():
-		return false
+		tail = bot._route(after, Vector2i(finish_idx, k), step, true)
+		if tail.is_empty():
+			return false
 	var points: Array = []
 	var kinds: Array = []
 	for n in route:
@@ -1369,12 +1410,22 @@ func _plan_race() -> bool:
 	kinds.append("air")
 	points.append(main.world.node_pos(after))
 	kinds.append("road")
-	for i in range(1, tail.size()):
-		points.append(main.world.node_pos(tail[i]))
-		kinds.append("road")
+	if race_detour_x >= 0:
+		for i in range(1, approach.size()):
+			points.append(main.world.node_pos(approach[i]))
+			kinds.append("road")
+		for i in range(1, turn.size()):
+			points.append(main.world.node_pos(turn[i]))
+			kinds.append("road")
+		for i in range(1, tail.size()):
+			points.append(main.world.node_pos(tail[i]))
+			kinds.append("road")
+	else:
+		for i in range(1, tail.size()):
+			points.append(main.world.node_pos(tail[i]))
+			kinds.append("road")
 	bot.set_plan(points, kinds, "race")
 	return true
-
 
 # If a collision knocks the car off its first route, keep the race pointed at the line.
 func _race_replan() -> void:
@@ -1383,7 +1434,7 @@ func _race_replan() -> void:
 	var a := bot.node_ahead()
 	var h := bot._grid_dir()
 	var finish_idx := World.N - 2 if race_dirx > 0.0 else 2
-	var route: Array[Vector2i] = bot._best_route(a, Vector2i(finish_idx, race_road_k), h)
+	var route: Array[Vector2i] = bot._best_route(a, Vector2i(finish_idx, race_finish_k), h)
 	if route.is_empty():
 		bot.replan_needed = false
 		return
@@ -1393,7 +1444,6 @@ func _race_replan() -> void:
 		points.append(main.world.node_pos(n))
 		kinds.append("road")
 	bot.set_plan(points, kinds, "race")
-
 
 func _race_tick(t: float) -> void:
 	if race_ramp.is_empty():
@@ -1417,15 +1467,20 @@ func _race_tick(t: float) -> void:
 		var train_latest := t + train_remaining / 14.0 - 0.05
 		if train_latest > train_earliest:
 			rail.retime(clampf(t + car_eta + 1.15, train_earliest, train_latest))
-	if not race_cam and remaining < 260.0:
-		race_cam = true
-		main.cam_anchor = Vector3(race_finish_x - race_dirx * 70.0, 24.0, main.world.rail_z() + 46.0)
-		main.cam_mode = "anchor"
-		main.cam_cut = true
-		main.cam_look = Vector3(race_finish_x, 1.5, main.world.rail_z())
-		main.cam_look_w = 1.0
-		pass_until = duration + 1.0
-	if race_car_t < 0.0 and (player.global_position.x - race_finish_x) * race_dirx >= 0.0 and absf(player.global_position.z - race_road_z) < 50.0:
+	if not race_train_close and rail.running and absf(rail.front - player.global_position.x) < 190.0:
+		race_train_close = true
+		main.hud.banner("THE TRAIN IS RIGHT BESIDE US!")
+		main.log_event("race_train_close")
+	if race_detour_x >= 0 and not race_detour_cue:
+		var detour_dist := (main.world.line(race_detour_x) - player.global_position.x) * race_dirx
+		if detour_dist < 145.0 and detour_dist > -18.0:
+			race_detour_cue = true
+			race_cam_lock_until = t + 4.5
+			race_cam_next = race_cam_lock_until
+			_set_race_camera("detour")
+			main.hud.banner("NO ROOM BY THE TRAIN — TAKE THE SIDE ROAD!")
+			main.log_event("race_side_road")
+	if race_car_t < 0.0 and (player.global_position.x - race_finish_x) * race_dirx >= 0.0 and absf(player.global_position.z - main.world.line(race_finish_k)) < 50.0:
 		race_car_t = t
 		bot.halt = true
 		main.log_event("race_car_finish")
@@ -1434,6 +1489,7 @@ func _race_tick(t: float) -> void:
 		main.log_event("race_train_finish")
 	if race_car_t >= 0.0 and race_train_t >= 0.0 and race_winner == "":
 		race_winner = "car" if race_car_t <= race_train_t else "train"
+		race_result_t = t
 		main.log_event("race_winner_" + race_winner)
 		_cap("CAR WINS!" if race_winner == "car" else "TRAIN WINS!", true)
 	if t >= duration - 3.0 and race_winner == "":
@@ -1444,9 +1500,50 @@ func _race_tick(t: float) -> void:
 		else:
 			var train_left := maxf((race_finish_x - rail.front) * rail.dirx, 0.0) if race_train_called else train_distance
 			race_winner = "car" if remaining / maxf(player.speed, 1.0) <= train_left / maxf(rail.speed, 1.0) else "train"
+		race_result_t = t
 		main.log_event("race_result_fallback")
 		_cap("CAR WINS!" if race_winner == "car" else "TRAIN WINS!", true)
+	_race_camera(t, remaining)
 
+
+func _set_race_camera(view: String) -> void:
+	if race_cam_view == view:
+		return
+	race_cam_view = view
+	main.cam_mode = "race"
+	main.cam_cut = true
+
+
+func _race_camera(t: float, remaining: float) -> void:
+	if race_winner != "" and race_result_t >= 0.0 and t - race_result_t > 3.5:
+		_set_race_camera("winner")
+		return
+	if race_car_t >= 0.0 or race_train_t >= 0.0 or remaining < 245.0:
+		_set_race_camera("finish")
+		return
+	if race_detour_cue and t < race_cam_lock_until:
+		_set_race_camera("detour")
+		return
+	var ramp_along := -1000.0
+	if not race_ramp.is_empty():
+		var p0: Vector3 = race_ramp["p0"]
+		ramp_along = (main.player.global_position - p0).dot(Vector3(race_dirx, 0.0, 0.0))
+	if ramp_along >= -115.0 and ramp_along <= 80.0:
+		_set_race_camera("jump")
+		return
+	if race_cam_view == "jump":
+		_set_race_camera("side")
+		race_cam_next = t + 4.5
+		return
+	if race_cam_next <= 0.0:
+		_set_race_camera("rear")
+		race_cam_next = t + 5.0
+		return
+	if t >= race_cam_next:
+		var shots: Array[String] = ["over", "side", "train", "rear"]
+		_set_race_camera(shots[race_cam_i % shots.size()])
+		race_cam_i += 1
+		race_cam_next = t + 5.0
 
 # ------------------------------------------------------------ the escape show
 
