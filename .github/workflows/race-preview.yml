@@ -1,0 +1,61 @@
+name: Race preview
+run-name: Cinematic race preview
+
+on:
+  push:
+    branches:
+      - feat/train-race-mode
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install Godot and recording tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg fonts-dejavu-core libgl1-mesa-dri libglx-mesa0 \
+            libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
+          echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Record the race (vertical, 55 s, 30 fps)
+        env:
+          MODE: race
+          ORIENTATION: vertical
+          DURATION: "55"
+          FPS: "30"
+          SEED: "7"
+          TIME: dusk
+          SCALE: "1"
+          EXTRA_ARGS: --overlay=clean
+        run: tools/record.sh "$GODOT" race-preview
+      - name: Check the result and cinematic camera cuts
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          s = json.load(open("race-preview/summary.json", encoding="utf-8"))
+          events = s.get("events", [])
+          names = [e.get("type", "") for e in events]
+          cameras = [name.removeprefix("race_camera_") for name in names if name.startswith("race_camera_")]
+          print(f"winner: {s.get('race_winner')}")
+          print(f"car finish time: {s.get('race_car_time')} s")
+          print(f"train finish time: {s.get('race_train_time')} s")
+          print("camera sequence: " + " -> ".join(cameras))
+          print("race beats: " + ", ".join(name for name in names if name.startswith("race_") and not name.startswith("race_camera_")))
+          if s.get("race_winner") not in {"car", "train"}:
+              sys.exit("No race winner was recorded")
+          if not {"rear", "over", "side", "train", "finish"} <= set(cameras):
+              sys.exit("A required cinematic camera cut is missing")
+          if "race_side_road" in names and "detour" not in cameras:
+              sys.exit("The side-road cue has no matching camera cut")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: race-video-and-review-data
+          path: race-preview/
+          retention-days: 30
