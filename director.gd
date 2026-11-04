@@ -1472,7 +1472,7 @@ func _race_tick(t: float) -> void:
 		main.hud.banner("THE TRAIN IS RIGHT BESIDE US!")
 		main.log_event("race_train_close")
 	if race_detour_x >= 0 and not race_detour_cue:
-		var detour_dist := (main.world.line(race_detour_x) - player.global_position.x) * race_dirx
+		var detour_dist: float = (main.world.line(race_detour_x) - player.global_position.x) * race_dirx
 		if detour_dist < 145.0 and detour_dist > -18.0:
 			race_detour_cue = true
 			race_cam_lock_until = t + 4.5
