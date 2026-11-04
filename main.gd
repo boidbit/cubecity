@@ -765,11 +765,11 @@ func _cam_race(dt: float) -> void:
 			focus = shared_focus if train_in_frame else car_focus + fwd * 205.0
 			target_fov = 58.0
 		"side":
-			desired = player.global_position - fwd * 5.0 + toward_rail * 20.0 + Vector3(0.0, 15.0, 0.0)
+			desired = player.global_position - fwd * 5.0 + toward_rail * 30.0 + Vector3(0.0, 18.0, 0.0)
 			focus = shared_focus if train_in_frame else car_focus + fwd * 95.0
 			target_fov = 60.0
 		"train":
-			desired = train_focus + Vector3(d.race_dirx * 75.0, 18.0, 0.0) + toward_rail * 14.0
+			desired = train_focus + Vector3(d.race_dirx * 75.0, 30.0, 0.0) + toward_rail * 14.0
 			focus = shared_focus if train_in_frame else train_focus
 			target_fov = 57.0
 		"detour":
@@ -780,7 +780,7 @@ func _cam_race(dt: float) -> void:
 			focus = shared_focus if train_in_frame else car_focus + fwd * 28.0
 			if not d.race_ramp.is_empty():
 				var ramp_start: Vector3 = d.race_ramp["p0"]
-				desired = ramp_start - fwd * 12.0 + toward_rail * 20.0 + Vector3(0.0, 18.0, 0.0)
+				desired = ramp_start - fwd * 12.0 + toward_rail * 30.0 + Vector3(0.0, 28.0, 0.0)
 			target_fov = 53.0
 		"finish":
 			desired = finish_center - Vector3(d.race_dirx * 95.0, 0.0, 0.0) + toward_rail * 70.0 + Vector3(0.0, 48.0, 0.0)
