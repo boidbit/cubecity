@@ -736,6 +736,82 @@ func _cam_heli(dt: float) -> void:
 
 
 # Pulls the camera in front of any wall between it and the car.
+func _cam_race(dt: float) -> void:
+	if director == null:
+		_cam_chase(dt)
+		return
+	var d: Director = director
+	var fwd := -player.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	var toward_rail := Vector3(0.0, 0.0, signf(world.rail_z() - player.global_position.z))
+	var away_from_rail := -toward_rail
+	var car_focus := player.global_position + Vector3(0.0, 1.2, 0.0)
+	var train_focus := Vector3(d.race_finish_x, 2.5, world.rail_z())
+	if rail.running:
+		train_focus = Vector3(rail.front - rail.dirx * 24.0, 2.5, rail.z)
+	var train_gap := car_focus.distance_to(train_focus)
+	var train_in_frame := rail.running and train_gap < 380.0
+	var shared_focus := car_focus.lerp(train_focus, 0.5) + Vector3(0.0, 1.0, 0.0)
+	var forward_focus := car_focus + fwd * 145.0
+	var focus := forward_focus
+	var desired := player.global_position - fwd * 14.0 + Vector3(0.0, 7.0, 0.0)
+	var target_fov := 54.0
+	match d.race_cam_view:
+		"over":
+			desired = player.global_position - fwd * 25.0 + away_from_rail * 8.0 + Vector3(0.0, 13.0, 0.0)
+			focus = shared_focus if train_in_frame else car_focus + fwd * 205.0
+			target_fov = 58.0
+		"side":
+			desired = player.global_position - fwd * 5.0 + away_from_rail * 40.0 + Vector3(0.0, 15.0, 0.0)
+			focus = shared_focus if train_in_frame else car_focus + fwd * 95.0
+			target_fov = 60.0
+		"train":
+			desired = train_focus + Vector3(d.race_dirx * 75.0, 18.0, 0.0) + away_from_rail * 42.0
+			focus = shared_focus if train_in_frame else train_focus
+			target_fov = 57.0
+		"detour":
+			desired = player.global_position - fwd * 7.0 + away_from_rail * 55.0 + Vector3(0.0, 24.0, 0.0)
+			focus = shared_focus if train_in_frame else car_focus + fwd * 100.0
+			target_fov = 61.0
+		"jump":
+			focus = shared_focus if train_in_frame else car_focus + fwd * 28.0
+			if not d.race_ramp.is_empty():
+				var ramp_start: Vector3 = d.race_ramp["p0"]
+				desired = ramp_start - fwd * 12.0 + away_from_rail * 28.0 + Vector3(0.0, 18.0, 0.0)
+			target_fov = 53.0
+		"finish":
+			var finish_z: float = world.line(d.race_finish_k)
+			var finish_center := Vector3(d.race_finish_x, 2.5, (finish_z + world.rail_z()) * 0.5)
+			desired = finish_center - Vector3(d.race_dirx * 95.0, 0.0, 0.0) + away_from_rail * 118.0 + Vector3(0.0, 48.0, 0.0)
+			focus = shared_focus if train_in_frame else finish_center
+			target_fov = 52.0
+		"winner":
+			var finish_z: float = world.line(d.race_finish_k)
+			var finish_center := Vector3(d.race_finish_x, 2.5, (finish_z + world.rail_z()) * 0.5)
+			var orbit := maxf(main.clock - d.race_result_t, 0.0) * 0.18
+			desired = finish_center + Vector3(cos(orbit) * 130.0, 42.0, sin(orbit) * 130.0)
+			focus = shared_focus if train_in_frame else finish_center
+			target_fov = 54.0
+		_:
+			focus = shared_focus if train_in_frame else forward_focus
+	var camera_target := _cam_race_clear(focus, desired)
+	if cam_cut:
+		cam.global_position = camera_target
+	else:
+		cam.global_position = cam.global_position.lerp(camera_target, 1.0 - exp(-7.0 * dt))
+	cam.look_at(focus, Vector3.UP)
+	cam.fov = lerpf(cam.fov, target_fov + fov_kick, 4.5 * dt)
+
+
+func _cam_race_clear(focus: Vector3, want: Vector3) -> Vector3:
+	var from := focus + Vector3(0.0, 1.5, 0.0)
+	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, want, 1))
+	if hit.is_empty():
+		return want
+	return (hit["position"] as Vector3) + (from - want).normalized() * 0.8
+
+
 func _cam_clear(want: Vector3) -> Vector3:
 	var from := player.global_position + Vector3(0, 1.5, 0)
 	var q := PhysicsRayQueryParameters3D.create(from, want, 1)
