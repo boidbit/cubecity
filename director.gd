@@ -253,7 +253,7 @@ func _place_race_start() -> void:
 				if score >= fallback_score:
 					continue
 				fallback_score = score
-				var mid := main.world.line(m) + World.PITCH * 0.5
+				var mid: float = main.world.line(m) + World.PITCH * 0.5
 				var p0 := Vector3(mid - 6.0, 0.05, main.world.line(k) - 3.5)
 				var p1 := Vector3(mid + 6.0, 2.3, main.world.line(k) - 3.5)
 				best = {"p0": p0, "p1": p1, "k": k, "m": m, "along_z": false, "sgn": 1.0}
