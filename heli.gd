@@ -32,6 +32,9 @@ var intercept_until := 0.0
 var wash_t := 0.0
 var wreck_t := 0.0
 var last_pos := Vector3.ZERO
+var cur_vel := Vector3.ZERO   # how it is really moving (steering starts from this: no jumps)
+var fvel := Vector3.ZERO      # velocity of the steered flight (intercept, arrival, leaving)
+var arriving := false         # flying in from far away after being summoned
 var parts: Array[Node3D] = []
 
 
@@ -175,17 +178,44 @@ func _glow_mat(c: Color) -> StandardMaterial3D:
 func summon() -> void:
 	var pl: Car = main.player
 	var side := Vector3(1, 0, 1) if not low else Vector3(0.6, 0, 0.8)
-	global_position = pl.global_position + side * (120.0 if not low else 90.0) + Vector3(0, 40.0 if not low else 22.0, 0)
+	# it comes in from far off, over the roofs, and settles behind the car: never switched on
+	# in front of the camera
+	var far := 300.0 if low else 170.0
+	global_position = pl.global_position + side * far + Vector3(0, 55.0 if low else 45.0, 0)
 	last_pos = global_position
+	fvel = Vector3.ZERO
 	visible = true
 	state = "chase"
+	arriving = low
 	chop.play()
+
+
+# The police call it off: it climbs away and is gone, instead of vanishing.
+func dismiss() -> void:
+	if state == "chase" or state == "intercept":
+		state = "leave"
+		fvel = cur_vel
+
+
+# Steered flight: a speed limit and an acceleration limit, and the speed is also held to what
+# it can still brake from (v^2 = 2 a d), so it arrives and stops on the spot, never overshoots.
+# So it can never jump: it can only fly there.
+func _fly_to(goal: Vector3, dt: float, max_speed: float, accel: float) -> void:
+	var to := goal - global_position
+	var dist := to.length()
+	var want := Vector3.ZERO
+	if dist > 0.05:
+		want = to / dist * minf(max_speed, sqrt(2.0 * accel * 0.7 * dist))
+	fvel = fvel.move_toward(want, accel * dt)
+	global_position += fvel * dt
 
 
 func start_intercept(point: Vector3, facing: Vector3, secs: float) -> void:
 	if state == "crash" or state == "wreck":
 		return
 	state = "intercept"
+	fvel = cur_vel
+	arriving = false
 	main.log_event("heli_intercept")
 	target = point
 	face = Vector3(facing.x, 0, facing.z).normalized()
@@ -212,6 +242,8 @@ func tick(dt: float) -> void:
 			_chase(dt)
 		"intercept":
 			_intercept(dt)
+		"leave":
+			_leave(dt)
 		"crash":
 			_crash_tick(dt)
 		"wreck":
@@ -224,6 +256,7 @@ func tick(dt: float) -> void:
 	# the rotor note rises a little when it flies hard
 	var spd := (global_position - last_pos).length() / maxf(dt, 0.001)
 	chop.pitch_scale = lerpf(chop.pitch_scale, 0.95 + clampf(spd / 45.0, 0.0, 0.2), minf(4.0 * dt, 1.0))
+	cur_vel = (global_position - last_pos) / maxf(dt, 0.001)
 	last_pos = global_position
 
 
@@ -249,7 +282,12 @@ func _chase(dt: float) -> void:
 		rate = 1.8
 	else:
 		goal = pl.global_position + pl.linear_velocity * 0.9 + Vector3(sin(t * 0.4) * 14.0, 26.0, cos(t * 0.4) * 14.0)
-	global_position = global_position.lerp(goal, 1.0 - exp(-rate * dt))
+	if arriving:
+		_fly_to(goal, dt, 64.0, 26.0)
+		if global_position.distance_to(goal) < 30.0:
+			arriving = false
+	else:
+		global_position = global_position.lerp(goal, 1.0 - exp(-rate * dt))
 	var look := pl.global_position - global_position
 	look.y = 0.0
 	if look.length() > 0.5:
@@ -263,9 +301,10 @@ func _chase(dt: float) -> void:
 
 func _intercept(dt: float) -> void:
 	var pl: Car = main.player
-	global_position = global_position.lerp(target, 1.0 - exp(-4.5 * dt))
-	rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), 4.0 * dt)
-	rotation.x = lerpf(rotation.x, 0.0, 3.0 * dt)
+	_fly_to(target, dt, 50.0, 24.0)
+	rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), 2.2 * dt)
+	var hv := Vector3(fvel.x, 0.0, fvel.z)
+	rotation.x = lerpf(rotation.x, -clampf(hv.length() * 0.012, 0.0, 0.3), 2.5 * dt)
 	spot.look_at(pl.global_position, Vector3.UP)
 	_wash(dt)
 	# the car is in the air and has reached the helicopter
@@ -275,6 +314,20 @@ func _intercept(dt: float) -> void:
 	elif main.clock > intercept_until:
 		main.log_event("heli_miss")
 		state = "chase"      # missed: carry on chasing
+
+
+func _leave(dt: float) -> void:
+	var pl: Car = main.player
+	var away := global_position - pl.global_position
+	away.y = 0.0
+	away = away.normalized() if away.length() > 1.0 else Vector3(1, 0, 1).normalized()
+	_fly_to(global_position + away * 200.0 + Vector3(0, 60.0, 0), dt, 55.0, 16.0)
+	rotation.y = lerp_angle(rotation.y, atan2(-fvel.x, -fvel.z), 2.0 * dt)
+	spot.look_at(pl.global_position, Vector3.UP)
+	if global_position.distance_to(pl.global_position) > 320.0:
+		visible = false
+		chop.stop()
+		state = "chase"
 
 
 func _wash(dt: float) -> void:

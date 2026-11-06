@@ -128,12 +128,10 @@ func _ready() -> void:
 	_make_rain()
 	cam.global_position = player.global_position + Vector3(0, 4, 9)
 	if director != null:
-		# video runs: no trains on their own timetable (the escape show calls its own);
-		# story runs: no trains at all
+		# video and story runs: no trains on their own timetable (the escape show and the story ask for theirs)
 		rail.auto = false
 		if cfg.has("story"):
-			rail.enabled = false
-			gadgets.story = true
+			gadgets.story = true     # the railway stays: the story can ask for a train
 		director.start()
 		if cfg.has("story") and ResourceLoader.exists("res://story/story.gd"):
 			# story lab (experiment): characters in the car, only with --story
@@ -581,8 +579,9 @@ func _update_heli(dt: float) -> void:
 		heli.summon()
 		log_event("heli")
 	elif not on and heli.visible and heli.state in ["chase", "intercept"]:
-		heli.visible = false
-		heli.chop.stop()
+		heli.dismiss()          # it flies off instead of blinking out
+	elif on and heli.visible and heli.state == "leave":
+		heli.state = "chase"    # called back before it was gone
 	if heli.visible:
 		heli.tick(dt)
 

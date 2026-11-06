@@ -74,7 +74,9 @@ func _register(root: Node3D, a: Vector3, b: Vector3, keep: float) -> void:
 	# the structure rises out of the ground while the bot is still far away
 	root.position.y = -26.0
 	var tw := create_tween()
-	tw.tween_property(root, "position:y", 0.0, 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(root, "position:y", 0.0, 1.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if main.director != null:
+		main.director.cover_build(2.6)
 
 
 # Tower-top to tower-top jump. Returns the waypoints for the bot.
@@ -123,6 +125,8 @@ func build_kicker(origin: Vector3, dirv: Vector3) -> Dictionary:
 
 # A run of barrel clusters down the road: they go off one after another as the bot passes.
 func build_corridor(origin: Vector3, dirv: Vector3, count: int = 7) -> Dictionary:
+	if main.director != null:
+		main.director.cover_build(2.0)
 	var right := dirv.cross(Vector3.UP)
 	for i in count:
 		var p := origin + dirv * (i * 9.0) + right * (2.0 if i % 2 == 0 else -2.0)
@@ -195,6 +199,21 @@ func dismantle_near(p: Vector3, r: float) -> bool:
 	return false
 
 
+# True when any part of the stretch a..b (standing up to 12 m tall) is in the camera's view.
+func _seen(a: Vector3, b: Vector3) -> bool:
+	var cam: Camera3D = main.cam
+	if cam == null:
+		return false
+	var n := int(maxf(a.distance_to(b) / 20.0, 1.0))
+	for i in n + 1:
+		var p := a.lerp(b, float(i) / float(n))
+		for y in [0.0, 6.0, 12.0]:
+			var q := Vector3(p.x, y, p.z)
+			if not cam.is_position_behind(q) and cam.is_position_in_frustum(q):
+				return true
+	return false
+
+
 func _process(_dt: float) -> void:
 	for e in live.duplicate():
 		var root: Node3D = e["root"]
@@ -208,7 +227,8 @@ func _process(_dt: float) -> void:
 			# only remove it once the bot is well clear (nobody is on it)
 			var ab := b - a
 			var t := clampf((pl - a).dot(ab) / maxf(ab.length_squared(), 0.01), 0.0, 1.0)
-			if pl.distance_to(a + ab * t) > 70.0 or main.game_over:
+			# only once nobody can see it go: well clear, and outside the camera's view
+			if (pl.distance_to(a + ab * t) > 70.0 and (not _seen(a, b) or main.clock > float(e["free_at"]) + 6.0)) or main.game_over:
 				world.stunt_zones.erase([a, b])
 				root.queue_free()
 				live.erase(e)
