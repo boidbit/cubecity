@@ -30,6 +30,23 @@ A mobile car-chase and destruction game made in Godot 4. The city, cars, buildin
     ramp, on every level crossing, around the city). The TOOL button (or T) uses the EMP or oil you carry.
   - **Combo**: cash, near misses, drifts, jumps, wrecks, train hits and spin-outs in a row multiply the points.
 
+## The look, the city and the cars
+
+- **Look** (`look.gd`): one grade for play, videos and the story: saturated colour, a bit more contrast,
+  glow on lit windows and lamps, a vivid sky, and a moon at night. At night the roads are lit by a soft pool
+  of lamplight under every street lamp (flat additive quads, no real lights) and car lamps glow after dark.
+- **An endless city** (`skyline.gd`): the playable city is still 16 x 16 blocks, but the road grid runs on to
+  the horizon and eight more blocks of towers and suburbs (with a second downtown) fade into the fog on every
+  side. Every block always has a cheap far copy that is swapped for the detailed one in the same frame, so a
+  building never appears out of nowhere. The edge of the map is an invisible, slippery barrier.
+- **Landmarks and variety** (`landmarks.gd`, facade shader): seven designed towers, and every other building
+  gets one of four window layouts (punched windows, slots between piers, a ribbon of glass, wide panes).
+- **Smooth set pieces:** the helicopter is steered (speed and acceleration limits, braking before its hover
+  point), flies in from far away and flies off when dismissed; stunt structures are built far ahead while the
+  camera is cut to the front camera, and are only removed once nobody can see them go.
+- **Trains:** the story can ask for one (`{"do": "train"}`, then lines can wait for `train_crossed` or
+  `train_passed`), and the escape show runs its train first and keeps trying for 22 s.
+
 ## Run
 
 1. Install [Godot 4.4](https://godotengine.org).
@@ -207,6 +224,9 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `stunts.gd` | Stunt set pieces: tower-top jump, barrel corridor, tower fall |
 | `heli.gd` | The police helicopter: model, low chase, rotor wash, crash |
 | `carmesh.gd` | Procedural car body meshes |
+| `look.gd` | The picture: colour grade, glow, sky, sun and moon, fog, in one place for every mode |
+| `skyline.gd` | Makes the city look endless: a far copy of every block (so buildings never pop in), 8 more blocks of skyline beyond the map, the rail tunnel houses |
+| `landmarks.gd` | Seven designed towers (needle, twin towers, octagon, round, ziggurat, clock tower, arena) that fill a block each |
 | `civcar.gd` | Parked cars and traffic |
 | `world.gd` | City generation, chunk streaming, ramps, flyovers, debris, routing |
 | `building.gd` | Destructible building data, meshes and collapse |
@@ -216,7 +236,7 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `fx.gd` | Particles, skid marks, sound (recorded files from `audio/` with synthesized fallbacks) |
 | `audio/` | Sound effects (Ogg Vorbis): siren and rotor loops, crashes, boom, tyre screech |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
-| `shaders.gd` | Facade, ground, car and debris shaders |
+| `shaders.gd` | Facade (four window layouts), ground, lamp light pool, car and debris shaders |
 | `story/` | Story lab: blocky characters, the open-top car, the story scheduler, screenplays |
 | `site/` | The studio page (GitHub Pages): start story videos, follow the runs, watch and download the videos |
 | `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |

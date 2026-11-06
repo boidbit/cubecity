@@ -129,12 +129,10 @@ func _ready() -> void:
 	_make_rain()
 	cam.global_position = player.global_position + Vector3(0, 4, 9)
 	if director != null:
-		# video runs: no trains on their own timetable (the escape show calls its own);
-		# story runs: no trains at all
+		# video and story runs: no trains on their own timetable (the escape show and the story ask for theirs)
 		rail.auto = false
 		if cfg.has("story"):
-			rail.enabled = false
-			gadgets.story = true
+			gadgets.story = true     # the railway stays: the story can ask for a train
 		director.start()
 		if cfg.has("story") and ResourceLoader.exists("res://story/story.gd"):
 			# story lab (experiment): characters in the car, only with --story
@@ -155,19 +153,14 @@ func _parse_args() -> Dictionary:
 
 func _make_env() -> void:
 	env = Environment.new()
-	env.background_mode = Environment.BG_SKY
 	sky_mat = ProceduralSkyMaterial.new()
 	sky_mat.sky_curve = 0.25
 	sky_mat.ground_curve = 0.1
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.0
-	env.fog_enabled = true
+	Look.setup(env)
 	env.fog_density = 0.0014
-	env.fog_sky_affect = 0.0
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -178,7 +171,8 @@ func _make_env() -> void:
 	sun.directional_shadow_max_distance = 110.0
 	add_child(sun)
 	cam = Camera3D.new()
-	cam.far = 420.0
+	cam.near = 0.12
+	cam.far = 3200.0     # far enough to see the skyline ring that makes the city look endless
 	cam.doppler_tracking = Camera3D.DOPPLER_TRACKING_IDLE_STEP
 	if vertical:
 		# portrait video: keep the horizontal view wide, let the vertical one grow
@@ -586,8 +580,9 @@ func _update_heli(dt: float) -> void:
 		heli.summon()
 		log_event("heli")
 	elif not on and heli.visible and heli.state in ["chase", "intercept"]:
-		heli.visible = false
-		heli.chop.stop()
+		heli.dismiss()          # it flies off instead of blinking out
+	elif on and heli.visible and heli.state == "leave":
+		heli.state = "chase"    # called back before it was gone
 	if heli.visible:
 		heli.tick(dt)
 
@@ -762,7 +757,8 @@ func _cam_clear(want: Vector3) -> Vector3:
 	return (r["position"] as Vector3) + (from - want).normalized() * 0.6
 
 
-# Camera aim that never asks the camera to look at its own position.
+# Camera aim that never asks the camera to look at its own position (a shot that has just put
+# the camera on top of its target would otherwise raise an engine error).
 func _look(target: Vector3) -> void:
 	if cam.global_position.distance_squared_to(target) > 0.0004:
 		cam.look_at(target, Vector3.UP)
@@ -779,27 +775,7 @@ func _update_env(dt: float) -> void:
 	rain_amt = move_toward(rain_amt, rain_target, dt * 0.12)
 	grip_mult = 1.0 - 0.16 * rain_amt
 	var dusk := clampf(1.0 - absf(e) * 3.0, 0.0, 1.0)
-	var top := Color(0.03, 0.04, 0.1).lerp(Color(0.2, 0.42, 0.78), day)
-	var hor := Color(0.06, 0.07, 0.14).lerp(Color(0.66, 0.77, 0.88), day).lerp(Color(0.95, 0.55, 0.32), dusk * 0.6)
-	var grey := Color(0.55, 0.58, 0.62)
-	top = top.lerp(grey * (0.3 + 0.7 * day), rain_amt * 0.6)
-	hor = hor.lerp(grey * (0.3 + 0.7 * day), rain_amt * 0.7)
-	sky_mat.sky_top_color = top
-	sky_mat.sky_horizon_color = hor
-	sky_mat.ground_horizon_color = hor
-	sky_mat.ground_bottom_color = hor.darkened(0.3)
-	env.ambient_light_color = Color(0.18, 0.2, 0.32).lerp(Color(0.66, 0.7, 0.8), day)
-	env.ambient_light_energy = lerpf(1.1, 0.8, day)
-	if director != null:
-		# video runs: night must stay readable on a phone, so lift the ambient light and exposure
-		env.ambient_light_color = Color(0.34, 0.4, 0.6).lerp(Color(0.66, 0.7, 0.8), day)
-		env.ambient_light_energy = lerpf(2.0, 0.8, day)
-		env.tonemap_exposure = lerpf(1.5, 1.0, day)
-	env.fog_light_color = hor
-	env.fog_density = lerpf(0.0018, 0.0035, rain_amt)
-	sun.light_energy = lerpf(0.0, 1.2, day) * (1.0 - 0.55 * rain_amt)
-	sun.light_color = Color(1, 0.96, 0.88).lerp(Color(1.0, 0.7, 0.45), dusk)
-	sun.rotation_degrees = Vector3(-lerpf(6.0, 60.0, clampf(e, 0.0, 1.0)), -35.0, 0)
+	Look.apply(env, sky_mat, sun, day, dusk, rain_amt, e)
 	world.set_night(night, rain_amt)
 	player.set_headlights(night)
 	rain.global_position = player.global_position + Vector3(0, 20, 0)

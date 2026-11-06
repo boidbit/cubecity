@@ -55,7 +55,19 @@ void fragment() {
 	// windows per style
 	vec4 wr = mix(vec4(0.16, 0.84, 0.2, 0.8), vec4(0.3, 0.7, 0.28, 0.76), brick);
 	wr = mix(wr, vec4(0.04, 0.96, 0.08, 0.96), glassy);
+	// the style value carries a variant too (0..3, 2 = the original look): window slots between
+	// piers, a continuous ribbon of glass, or wide panes with a mullion
+	float centre = brick > 0.5 ? 0.15 : (glassy > 0.5 ? 0.85 : 0.5);
+	float vr = floor((st - centre) / 0.06 + 2.0);
+	if (vr < 0.5) {
+		wr = glassy > 0.5 ? vec4(0.14, 0.86, 0.03, 0.97) : vec4(mix(0.34, 0.3, brick), mix(0.66, 0.7, brick), 0.1, 0.9);
+	} else if (vr < 1.5) {
+		wr = glassy > 0.5 ? vec4(0.0, 1.0, 0.3, 0.92) : vec4(0.0, 1.0, 0.3, 0.74);
+	} else if (vr > 2.5) {
+		wr = glassy > 0.5 ? vec4(0.03, 0.97, 0.06, 0.96) : vec4(0.1, 0.9, 0.22, 0.82);
+	}
 	float win = side * step(wr.x, cell.x) * step(cell.x, wr.y) * step(wr.z, cell.y) * step(cell.y, wr.w);
+	win *= 1.0 - step(2.5, vr) * step(abs(cell.x - 0.5), 0.035);
 	float lit = step(mix(0.6, 0.8, glassy), h) * world_hash;
 	vec3 glass = mix(vec3(0.11, 0.17, 0.24), vec3(0.2, 0.32, 0.42) * (0.7 + 0.5 * h2), glassy) * (0.8 + 0.4 * h);
 	// ground floor shop fronts
@@ -64,13 +76,17 @@ void fragment() {
 	float awn = shop * step(0.7, cell.y) * step(cell.y, 0.86);
 	float pick = h21(floor(wpos.xz / 6.0));
 	vec3 awc = pick < 0.25 ? vec3(0.75, 0.15, 0.12) : (pick < 0.5 ? vec3(0.1, 0.45, 0.25) : (pick < 0.75 ? vec3(0.12, 0.3, 0.65) : vec3(0.85, 0.6, 0.1)));
+	float door = shop * step(0.72, h2) * step(0.3, cell.x) * step(cell.x, 0.7) * step(cell.y, 0.7);
 	win = win * (1.0 - shop) + sglass;
 	vec3 col = mix(base, glass, win);
 	col = mix(col, awc, awn);
+	col = mix(col, vec3(0.22, 0.13, 0.09), door);
 	ALBEDO = col;
 	ROUGHNESS = mix(0.9, mix(0.18, 0.06, glassy), win);
 	METALLIC = win * mix(0.35, 0.6, glassy);
-	vec3 em = win * (1.0 - shop) * lit * night * vec3(1.0, 0.8, 0.45) * mix(1.5, 0.9, glassy);
+	vec3 wl = mix(vec3(1.0, 0.8, 0.45), vec3(0.55, 0.78, 1.0), step(0.86, h2));   // now and then a blue TV glow
+	vec3 em = win * (1.0 - shop) * lit * night * wl * mix(1.5, 0.9, glassy);
+	em += door * night * vec3(1.0, 0.7, 0.4) * 0.8;
 	em += sglass * night * vec3(1.0, 0.85, 0.6) * 1.2 + awn * night * awc * 1.5;
 	EMISSION = em;
 }
@@ -116,10 +132,13 @@ void fragment() {
 	bool road = (road_x || road_z) && inside;
 	bool walk = !road && (d.x < hw + 2.6 || d.y < hw + 2.6) && inside;
 	float n = vnoise(p * 0.8) * 0.5 + vnoise(p * 3.1) * 0.35 + h21(floor(p * 6.0)) * 0.15;
+	// far away the fine detail (noise, lane dashes, paving joints) would only shimmer: fade it out
+	float far_f = smoothstep(90.0, 380.0, length(VERTEX));
+	n = mix(n, 0.5, far_f);
 	vec3 col;
 	float rough = 0.95;
 	float sz = p.y - strip_z;
-	bool strip = strip_on > 0.5 && abs(sz) < 4.5 && abs(p.x) < half_size - 20.0;
+	bool strip = strip_on > 0.5 && abs(sz) < 4.5 && abs(p.x) < 586.0;
 	if (strip) {
 		col = vec3(0.15, 0.155, 0.17) * (0.85 + 0.3 * n);
 		float edge = step(abs(abs(sz) - 4.0), 0.14);
@@ -131,26 +150,26 @@ void fragment() {
 		col = mix(col, vec3(chk), band);
 		rough = 0.8;
 	} else if (road) {
-		col = vec3(0.17, 0.175, 0.19) * (0.8 + 0.4 * n);
+		col = vec3(0.23, 0.235, 0.265) * (0.8 + 0.4 * n);
 		float dash_along_z = step(0.5, fract(p.y / 8.0));
 		float dash_along_x = step(0.5, fract(p.x / 8.0));
 		float cx = step(d.x, 0.14) * dash_along_z * (road_z ? 0.0 : 1.0);
 		float cz = step(d.y, 0.14) * dash_along_x * (road_x ? 0.0 : 1.0);
 		float ex = step(abs(d.x - (hw - 0.7)), 0.12) * (road_z ? 0.0 : 1.0);
 		float ez = step(abs(d.y - (hw - 0.7)), 0.12) * (road_x ? 0.0 : 1.0);
-		float line = max(max(cx, cz) * 0.9, max(ex, ez) * 0.8);
+		float line = max(max(cx, cz) * 0.9, max(ex, ez) * 0.8) * (1.0 - far_f * 0.85);
 		col = mix(col, vec3(0.85, 0.82, 0.7), line);
-		rough = mix(0.92, 0.22, wet);
-		col *= mix(1.0, 0.65, wet);
+		rough = mix(0.72, 0.18, wet);
+		col *= mix(1.0, 0.7, wet);
 	} else if (walk) {
 		vec2 t = fract(p / 2.0);
 		float joint = step(t.x, 0.03) + step(t.y, 0.03);
-		col = vec3(0.52, 0.51, 0.49) * (0.85 + 0.25 * n) * (1.0 - 0.18 * min(joint, 1.0));
+		col = vec3(0.62, 0.6, 0.57) * (0.85 + 0.25 * n) * (1.0 - 0.18 * min(joint, 1.0) * (1.0 - far_f));
 		rough = mix(0.9, 0.5, wet);
 	} else if (inside) {
-		col = mix(vec3(0.33, 0.37, 0.27), vec3(0.28, 0.45, 0.24), n) * 0.85;
+		col = mix(vec3(0.27, 0.46, 0.18), vec3(0.19, 0.52, 0.2), n);
 	} else {
-		col = mix(vec3(0.42, 0.37, 0.28), vec3(0.3, 0.42, 0.25), n);
+		col = mix(vec3(0.4, 0.4, 0.26), vec3(0.24, 0.5, 0.22), n);
 	}
 	ALBEDO = col;
 	ROUGHNESS = rough;
@@ -214,6 +233,22 @@ void fragment() {
 	ALBEDO = c;
 	EMISSION = finish > 0.5 ? c * 0.35 : vec3(0.0);
 	ROUGHNESS = 0.7;
+}
+"""
+
+# A soft pool of lamplight on the road under each street lamp (night only). Drawn flat just
+# above the ground, added to what is already there: no real lights, so it costs almost nothing.
+const POOL := """
+shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_disabled, fog_disabled;
+uniform float night = 0.0;
+uniform vec3 glow : source_color = vec3(1.0, 0.78, 0.45);
+void fragment() {
+	vec2 p = UV * 2.0 - 1.0;
+	float d = length(p);
+	float f = smoothstep(1.0, 0.0, d);
+	f = f * f * (0.55 + 0.45 * f);
+	ALBEDO = glow * f * night * 0.42;
 }
 """
 

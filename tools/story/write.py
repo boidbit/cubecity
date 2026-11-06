@@ -22,7 +22,7 @@ import gemini  # noqa: E402
 
 EMOTIONS = ["neutral", "smug", "love", "shock", "angry", "sad", "happy", "laugh", "cry", "shy", "scared", "think"]
 GESTURES = ["talk", "up", "point", "wave", "idle"]
-ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers", "boom",
+ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers", "boom", "train",
            "prop_show", "prop_fly", "prop_hide", "slowmo", "stop", "go",
            "park", "exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug",
            "dance", "cheer", "hold", "give",
@@ -30,9 +30,10 @@ ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers"
 FOOT = ["walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer"]
 SPOTS = ["bench", "icecream", "chai"]       # sets put up where the car parks (park "at")
 STALLS = ["icecream", "chai"]               # these come with a vendor who can speak
-CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "prop_fly"]   # need the car to be driving
+CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "train", "prop_fly"]   # need the car to be driving
 EVENTS = ["takeoff", "big_air", "prop_fly", "near_miss", "cop_wrecked", "roadblock",
-          "parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won"]
+          "parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won",
+          "train_crossed", "train_passed"]
 WAIT_FOR = ["parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won"]
 SHOTS = ["zoom", "pov", "wide"]
 MUSIC_CUES = ["calm", "romantic", "happy", "comic", "sad", "tension", "action", "silence"]
@@ -86,11 +87,13 @@ WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
      G is one of: talk, up, point, wave, idle. The faces and bodies act these out, so use the strong ones
      (cry, shock, angry, love, shy, scared) where the story turns, and give the listener a "react" that fits.
    - Optional "on": wait for a moment in the action before saying the line: takeoff (the car leaves a ramp,
-     perfect for a scream), big_air (the car lands), prop_fly, near_miss, cop_wrecked, roadblock.
+     perfect for a scream), big_air (the car lands), prop_fly, near_miss, cop_wrecked, roadblock,
+     train_crossed (the car has just crossed the railway ahead of a train), train_passed (the train has gone by).
 2. An action: {"do": A} where A is one of:
    police (add "stars": 1-3, police start chasing them), calm (the police give up and leave),
    heli / heli_off (police helicopter), jump (a ramp appears on the road and the car jumps it),
    roadblock (police block the road ahead), crossers (two cars cut across just in front: a near miss),
+   train (the car heads for a level crossing and goes over just ahead of a passing train: flashing gates, a loud horn),
    boom (barrels explode behind the car and knock out the police), slowmo (2 seconds of slow motion),
    prop_show / prop_fly / prop_hide (add "prop": P; prop_fly throws it out of the car, best right after a jump),
    stop / go (the car stops / drives on).
@@ -106,7 +109,7 @@ WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
    each with "who": W,
    enter_car (add "who": W; back into their seats), then go to drive on.
    The order is: park, exit_car, the scene on foot, then either enter_car + go or the ending.
-   Car actions (police, jump, roadblock, crossers, boom, prop_fly) only work while they are driving.
+   Car actions (police, jump, roadblock, crossers, boom, train, prop_fly) only work while they are driving.
    SIDE CHARACTERS ("cast", optional, at most 3; ids are short lowercase words like "rahul", "goon1", "papa"):
      "cast": {"rahul": {"name": "RAHUL", "gender": "male", "role": "Shona's cousin, nerdy and loud",
                         "look": {"style": S, "skin": "#c98b5e", "hair": "#2b1d16", "shirt": "#f2f2f2", "pants": "#3a4a6a",

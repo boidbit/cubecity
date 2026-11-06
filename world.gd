@@ -41,6 +41,7 @@ var total_cells := 0
 var props: Props
 var race_plan := {}               # race mode: the course (see race.gd)
 var race_lights: Array[StandardMaterial3D] = []   # the start gantry's lights
+var skyline: Skyline
 var safehouses: Array[Dictionary] = []   # door (on the lot edge), dir (into the garage), block, rect
 
 
@@ -126,6 +127,9 @@ func setup(main_node, fx_node) -> void:
 	if str(main.cfg.get("bot", "")) == "race":
 		_make_race_course()
 	_make_debris_pool()
+	skyline = Skyline.new()
+	add_child(skyline)
+	skyline.setup(self)
 
 
 func set_night(v: float, wet: float) -> void:
@@ -178,17 +182,38 @@ func _make_ground() -> void:
 	g.add_child(cs)
 	var mi := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
-	pm.size = Vector2(size, size)
+	# the ground (and its road grid) runs on out to the horizon, under the skyline ring
+	pm.size = Vector2(7000.0, 7000.0)
 	mi.mesh = pm
 	mi.material_override = ground_mat
 	g.add_child(mi)
 	static_root.add_child(g)
-	var wc := Color(0.4, 0.42, 0.46)
+	ground_mat.set_shader_parameter("half_size", HALF + Skyline.RING * PITCH)
+	# the edge of the playable city: an invisible, slippery barrier (the ring beyond it is
+	# scenery), so a car slides along it instead of stopping dead against a wall
 	var e := HALF + 12.0
-	_static_box(Vector3(e * 2 + 4, 6, 2), Transform3D(Basis.IDENTITY, Vector3(0, 3, -e)), wc)
-	_static_box(Vector3(e * 2 + 4, 6, 2), Transform3D(Basis.IDENTITY, Vector3(0, 3, e)), wc)
-	_static_box(Vector3(2, 6, e * 2 + 4), Transform3D(Basis.IDENTITY, Vector3(-e, 3, 0)), wc)
-	_static_box(Vector3(2, 6, e * 2 + 4), Transform3D(Basis.IDENTITY, Vector3(e, 3, 0)), wc)
+	var slick := PhysicsMaterial.new()
+	slick.friction = 0.02
+	slick.bounce = 0.1
+	for spec in [[Vector3(e * 2 + 4, 40, 2), Vector3(0, 20, -e)], [Vector3(e * 2 + 4, 40, 2), Vector3(0, 20, e)],
+			[Vector3(2, 40, e * 2 + 4), Vector3(-e, 20, 0)], [Vector3(2, 40, e * 2 + 4), Vector3(e, 20, 0)]]:
+		var wall := StaticBody3D.new()
+		wall.collision_layer = 1
+		wall.collision_mask = 0
+		wall.physics_material_override = slick
+		var wc := CollisionShape3D.new()
+		var ws := BoxShape3D.new()
+		ws.size = spec[0]
+		wc.shape = ws
+		wall.add_child(wc)
+		wall.position = spec[1]
+		static_root.add_child(wall)
+
+
+# Facade style: the base (0.15 brick, 0.5 concrete, 0.85 glass) plus a variant 0..3 that the
+# facade shader reads as the window layout (2 = the classic punched windows).
+static func encode_style(base: float, variant: int) -> float:
+	return base + float(variant - 2) * 0.06 + 0.015
 
 
 func line(k: int) -> float:
@@ -276,6 +301,9 @@ func _fill_block(key: Vector2i, list: Array[Building], x0: float, z0: float, kin
 	for sh in safehouses:
 		if sh["block"] == key:
 			garage = sh["rect"]
+	if Landmarks.SITES.has(key) and garage.size == Vector2.ZERO and not rail:
+		_landmark(key, list, x0, z0)
+		return
 	var gas_lot := Vector2i(-1, -1)
 	if kind == "mid" and rng.randf() < 0.22 and not rail and garage.size == Vector2.ZERO:
 		gas_lot = Vector2i(rng.randi_range(0, 1), rng.randi_range(0, 1))
@@ -323,6 +351,7 @@ func _fill_block(key: Vector2i, list: Array[Building], x0: float, z0: float, kin
 					d = rng.randi_range(10, 14)
 					h = rng.randi_range(3, 4)
 					tint = Color(0.52, 0.52, 0.54).lerp(Color(0.62, 0.45, 0.38), rng.randf() * 0.6)
+			style = encode_style(style, rng.randi_range(0, 3))
 			w = mini(w, lot_cells - 1)
 			d = mini(d, lot_cells - 1)
 			var ox := x0 + (a * lot_cells + rng.randi_range(0, lot_cells - w)) * CELL
@@ -349,6 +378,19 @@ func _fill_block(key: Vector2i, list: Array[Building], x0: float, z0: float, kin
 			_roof_defs(bld, kind)
 			buildings.append(bld)
 			list.append(bld)
+
+
+# One designed building that fills the whole block (see landmarks.gd).
+func _landmark(key: Vector2i, list: Array[Building], x0: float, z0: float) -> void:
+	var lm := Landmarks.build(Landmarks.SITES[key])
+	var w: int = lm["w"]
+	var d: int = lm["d"]
+	var bld := Building.new()
+	bld.setup(self, Vector3(x0 + float((26 - w) / 2) * CELL, 0.0, z0 + float((26 - d) / 2) * CELL), w, d, lm["heights"], lm["tint"], lm["style"])
+	for r: Array in lm["roofs"]:
+		bld.roof_defs.append([r[0], r[1], r[2], rng.randi()])
+	buildings.append(bld)
+	list.append(bld)
 
 
 func _shape_heights(kind: String, w: int, d: int, h: int) -> PackedInt32Array:
@@ -543,6 +585,7 @@ func load_around(p: Vector3, immediate: bool) -> void:
 					bl.unload_nodes()
 				props.unload_block(k)
 				loaded_blocks.erase(k)
+				skyline.block_unloaded(k)
 	var budget := 999 if immediate else 2
 	while budget > 0 and not load_queue.is_empty():
 		var k: Vector2i = load_queue.pop_front()
@@ -552,6 +595,7 @@ func load_around(p: Vector3, immediate: bool) -> void:
 			bl.load_nodes(chunk_root)
 		props.load_block(k, chunk_root)
 		loaded_blocks[k] = true
+		skyline.block_loaded(k)
 		budget -= 1
 
 
