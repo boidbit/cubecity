@@ -18,7 +18,8 @@ const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "ONE CAR vs THE CITY", 
 	"stunt": "THE STUNT SHOW", "heli": "ONE CAR vs A HELICOPTER", "rush": "RUSH HOUR vs ONE CAR",
 	"escape": "CAN HE ESCAPE?"}
 # The escape show tries these in order, moving on when one cannot be placed from here.
-const ESCAPE_ORDER := ["spikes", "cash", "train", "emp", "spray", "oil", "shield", "cash", "train", "emp", "oil"]
+# the train goes first: it is the beat people ask for, and it needs the longest run-up
+const ESCAPE_ORDER := ["train", "spikes", "cash", "emp", "spray", "oil", "shield", "cash", "train", "emp", "oil"]
 # The stunt show runs these in order, moving on as soon as one is done (or cannot be placed).
 const STUNT_ORDER := ["corridor", "mega", "tower", "ramp", "mega", "gas", "tower", "corridor"]
 # Story lines shown in the middle of the screen when these events happen (once each).
@@ -324,6 +325,12 @@ func cue(kind: String, arg: float = 0.0) -> bool:
 			return done.has("trap")
 		"swat":
 			main.spawn_swat()
+		"train":
+			# the car heads for the nearest level crossing, timed so it goes over just ahead of
+			# the train; "train_crossed" and "train_passed" are logged for the story to wait on
+			if route_beat == "train" or main.rail.running:
+				return false
+			return _plan_train()
 	return true
 
 
@@ -479,8 +486,9 @@ func tick(dt: float) -> void:
 	if not scripted:
 		_story(t)
 	_use_tools(t)
-	if mode == "escape":
+	if route_beat == "train":
 		_train_tick(t)
+	if mode == "escape":
 		_spray_tick(t)
 		_ram_tick(t)
 		_spike_tick(t)
@@ -598,7 +606,9 @@ func _beats(t: float) -> void:
 # ------------------------------------------------------------ stunt set pieces
 
 func _plan_mega() -> bool:
-	var ax: Dictionary = bot.stunt_axis(Stunts.MEGA_LEN + 50.0, 70.0 if main.player.speed < 22.0 else 50.0)
+	# built far ahead (the camera is cut away while it goes up), and in heli mode early enough
+	# for the helicopter to fly into place without hurrying
+	var ax: Dictionary = bot.stunt_axis(Stunts.MEGA_LEN + 50.0, 150.0 if mode == "heli" else 120.0)
 	if ax.is_empty():
 		return false
 	mega_info = main.stunts.build_mega(ax["origin"], ax["dir"])
@@ -610,7 +620,7 @@ func _plan_mega() -> bool:
 
 # Story lab: a kicker ramp built on the road just ahead.
 func _plan_kicker() -> bool:
-	var ahead := clampf(main.player.speed * 1.7, 38.0, 60.0)
+	var ahead := clampf(main.player.speed * 3.4, 90.0, 115.0)
 	var origin := Vector3.ZERO
 	var dirv := Vector3.ZERO
 	if bot.straight_ahead() >= ahead + 75.0:
@@ -619,7 +629,7 @@ func _plan_kicker() -> bool:
 		dirv = pa["dir"]
 	else:
 		# the route turns soon: go straight on instead, if the road ahead allows it
-		var ax: Dictionary = bot.stunt_axis(105.0, 38.0)
+		var ax: Dictionary = bot.stunt_axis(105.0, 95.0)
 		if ax.is_empty():
 			return false
 		origin = ax["origin"]
@@ -630,6 +640,18 @@ func _plan_kicker() -> bool:
 	mega_cam_t = 0.0
 	bot.set_plan(info["pts"], info["kinds"], "kicker")
 	return true
+
+
+# A set piece is about to go up on the road ahead: cut to the camera in front of the car (it
+# looks back at the car, so the road ahead is behind it) until the structure is standing. The
+# audience never sees it appear. Story runs keep their own cameras.
+func cover_build(secs: float) -> void:
+	if scripted or main.cine_t > 0.0 or main.cam_mode == "anchor":
+		return
+	if main.cam_mode == "chase" or main.cam_mode == "heli":
+		main.cam_mode = "front"
+		main.cam_cut = true
+	shot_end = maxf(shot_end, main.clock + secs)
 
 
 # An ordinary ramp jump; the stunt camera films it too.
@@ -643,7 +665,7 @@ func _plan_ramp() -> bool:
 
 
 func _plan_corridor() -> bool:
-	var ax: Dictionary = bot.stunt_axis(7 * 9.0 + 70.0, 45.0)
+	var ax: Dictionary = bot.stunt_axis(7 * 9.0 + 70.0, 90.0)
 	if ax.is_empty():
 		return false
 	var info: Dictionary = main.stunts.build_corridor(ax["origin"], ax["dir"], 7)
@@ -790,7 +812,7 @@ func _heli_tick(t: float) -> void:
 	var flat := Vector3(pl.global_position.x, 0.0, pl.global_position.z)
 	var along := (flat - Vector3(lip.x, 0.0, lip.z)).dot(dirv)
 	# the finale did not work out (car stuck, helicopter timed out): try another jump
-	if jump_stage >= 1 and heli.state == "chase" and t - jump_t > 3.0:
+	if jump_stage >= 1 and heli.state == "chase" and t - jump_t > 3.0 and not heli.arriving:
 		jump = {}
 		jump_stage = 0
 		done.erase("jump")
@@ -802,9 +824,12 @@ func _heli_tick(t: float) -> void:
 				jump = {}
 				done.erase("jump")
 				return
-			if along < -8.0 and pl.speed > 10.0:
+			# it sets off as soon as the jump is planned, with the whole approach to get there:
+			# it flies up beside the car and ahead of it, steered, never placed
+			if -along < 250.0 and pl.speed > 10.0 and heli.state == "chase" and not heli.arriving:
 				var hover := Vector3(lip.x, 0.0, lip.z) + dirv * float(jump["hover_d"]) + Vector3(0, float(jump["lip_h"]) + float(jump["hover_up"]), 0)
-				heli.start_intercept(hover, -dirv, 9.0)
+				var eta := maxf(-along, 20.0) / maxf(pl.speed, 15.0)
+				heli.start_intercept(hover, -dirv, clampf(eta + 5.5, 7.0, 16.0))
 				jump_stage = 1
 				jump_t = t
 		1:
@@ -1200,7 +1225,12 @@ func _escape_show(t: float) -> void:
 	if house_t >= 0.0:
 		return
 	var committed := (route_beat == "train" and train_passed < 0.0) or (route_beat == "spray" and spray_t < 0.0)
-	if route_beat != "house" and not committed and t > duration * 0.45:
+	var train_done := false
+	for k in done:
+		if str(k).begins_with("train"):
+			train_done = true
+	# the safehouse run waits until the train has had its turn (unless time is really short)
+	if route_beat != "house" and not committed and t > duration * 0.45 and (train_done or t > duration * 0.7):
 		# head for the safehouse in time; a train or spray run under way finishes first
 		var est := _house_eta()
 		var late := 0.0 if route_beat in ["train", "spray"] else 6.0
@@ -1241,7 +1271,7 @@ func _escape_show(t: float) -> void:
 		esc_i += 1
 		esc_tries = 0.0
 		esc_wait = t + 4.0
-	elif t - esc_tries > 7.0:
+	elif t - esc_tries > (22.0 if kind == "train" else 7.0):
 		esc_i += 1      # cannot be placed from here: on to the next one
 		esc_tries = 0.0
 		esc_wait = t + 0.5
@@ -1501,6 +1531,7 @@ func _train_tick(t: float) -> void:
 	if train_passed < 0.0:
 		if on_road and to_go < -2.0:
 			train_passed = t
+			main.log_event("train_crossed")
 			rail.after_speed = 42.0
 			if rail.eta(train_x) < 2.6:
 				main.log_event("train_close")
@@ -1512,7 +1543,7 @@ func _train_tick(t: float) -> void:
 						var behind: float = (c.global_position.z - zr) * -train_dirz
 						if behind > 0.0 and behind < 45.0:
 							close = true
-				if not close:
+				if not close and not scripted:
 					_spawn_behind(30.0, 22.0)
 				if trace:
 					var info := []
@@ -1548,13 +1579,13 @@ func _train_tick(t: float) -> void:
 			train_called = rail.call_train(train_x, at)
 		elif eta > 0.4:
 			rail.retime(at)
-		if train_called and on_road and to_go < 90.0 and to_go > 30.0 and not train_victim:
+		if train_called and on_road and to_go < 90.0 and to_go > 30.0 and not train_victim and not scripted:
 			# a police car right on the car's tail: it follows it over, and meets the train
 			train_victim = true
 			var cop := _spawn_behind(26.0, 18.0)
 			if cop != null:
 				cop.reckless_until = t + 7.0
-		if train_called and on_road and to_go < 75.0 and to_go > 8.0 and not train_cam:
+		if train_called and on_road and to_go < 75.0 and to_go > 8.0 and not train_cam and not scripted:
 			# past the crossing, on the sidewalk, looking back at the car coming over
 			train_cam = true
 			var dirv := Vector3(0, 0, train_dirz)
@@ -1571,6 +1602,7 @@ func _train_tick(t: float) -> void:
 			# once the car is over, the camera turns to the crossing: the train and the police
 			main.cam_look_w = clampf(since / 0.8, 0.0, 0.75)
 		if since > 4.0 or not rail.running:
+			main.log_event("train_passed")
 			route_beat = ""
 			train_cam = false
 			pass_until = t
