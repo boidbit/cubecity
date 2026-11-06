@@ -215,8 +215,7 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `director.gd` | Stages video runs: modes, beats, story captions, camera cuts, overlay text, run summary |
 | `stunts.gd` | Stunt set pieces: tower-top jump, barrel corridor, tower fall |
 | `heli.gd` | The police helicopter: model, low chase, rotor wash, crash |
-| `carmesh.gd` | Car bodies: sport, sedan, SUV and van are lofted from a side silhouette into smooth shaded shells (glass, lamps, door seams, mirrors, arches); the SWAT truck is boxy on purpose |
-| `kit.gd` | The in-house asset kit: reusable, cached parts made in code (rounded tyre with a five-spoke rim, surface-of-revolution helper). Add new parts here instead of starting from scratch |
+| `carmesh.gd` | Procedural car body meshes |
 | `look.gd` | The picture: colour grade, glow, sky, sun and moon, fog, in one place for every mode |
 | `skyline.gd` | Makes the city look endless: a far copy of every block (so buildings never pop in), 8 more blocks of skyline beyond the map, the rail tunnel houses |
 | `landmarks.gd` | Seven designed towers (needle, twin towers, octagon, round, ziggurat, clock tower, arena) that fill a block each |
@@ -230,7 +229,6 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `audio/` | Sound effects (Ogg Vorbis): siren and rotor loops, crashes, boom, tyre screech |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade (four window layouts), ground, lamp light pool, car and debris shaders |
-| `tools/showroom/` | Look-dev scene (not in the game): `godot --path . tools/showroom/showroom.tscn -- --car=sedan [--night] [--debug]` renders one car turning under the game's own lighting |
 | `story/` | Story lab: blocky characters, the open-top car, the story scheduler, screenplays |
 | `site/` | The studio page (GitHub Pages): start story videos, follow the runs, watch and download the videos |
 | `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |

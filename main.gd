@@ -758,7 +758,6 @@ func _update_env(dt: float) -> void:
 	var dusk := clampf(1.0 - absf(e) * 3.0, 0.0, 1.0)
 	Look.apply(env, sky_mat, sun, day, dusk, rain_amt, e)
 	world.set_night(night, rain_amt)
-	RenderingServer.global_shader_parameter_set(&"night_amount", night)
 	player.set_headlights(night)
 	rain.global_position = player.global_position + Vector3(0, 20, 0)
 	rain.emitting = rain_amt > 0.2

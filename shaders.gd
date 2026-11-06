@@ -7,19 +7,7 @@ static var _cache := {}
 
 # One Shader per source, shared by every material that uses it, so a car that
 # spawns mid-game does not trigger a fresh shader compile (a stutter on phones).
-static var _globals := false
-
-
-# The one shader value every material shares: how dark it is (0 = day, 1 = night).
-static func register_globals() -> void:
-	if _globals:
-		return
-	_globals = true
-	RenderingServer.global_shader_parameter_add(&"night_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
-
-
 static func get_shader(code: String) -> Shader:
-	register_globals()
 	if not _cache.has(code):
 		var sh := Shader.new()
 		sh.code = code
@@ -175,7 +163,6 @@ void fragment() {
 
 const CAR := """
 shader_type spatial;
-global uniform float night_amount;
 uniform vec4 color : source_color = vec4(0.8, 0.1, 0.1, 1.0);
 uniform vec3 mesh_offset = vec3(0.0);
 uniform float damage = 0.0;
@@ -204,24 +191,15 @@ void vertex() {
 }
 
 void fragment() {
-	float a = COLOR.a;
-	float fixedc = step(0.25, a);
-	float glass = step(0.9, a);
-	float head = step(0.65, a) * (1.0 - step(0.75, a));
-	float tail = step(0.75, a) * (1.0 - step(0.9, a));
-	float lamp = max(head, tail);
+	float fixedc = step(0.25, COLOR.a);
+	float glass = step(0.75, COLOR.a);
 	vec3 c = mix(color.rgb, COLOR.rgb, fixedc);
-	c = mix(c, vec3(1.0, 0.96, 0.85), head);
-	c = mix(c, vec3(0.75, 0.04, 0.04), tail);
 	float burn = clamp(damage * 0.65 + crumple * 0.35, 0.0, 0.85);
-	c = mix(c, vec3(0.04), burn * (1.0 - glass * 0.5) * (1.0 - lamp));
+	c = mix(c, vec3(0.04), burn * (1.0 - glass * 0.5));
 	ALBEDO = c;
-	METALLIC = mix(0.3 * (1.0 - damage), 0.0, fixedc) + glass * 0.6;
-	ROUGHNESS = mix(0.3 + damage * 0.5, mix(0.75, 0.05, glass), fixedc);
-	ROUGHNESS = mix(ROUGHNESS, 0.15, lamp);
+	METALLIC = mix(0.55 * (1.0 - damage), 0.0, fixedc) + glass * 0.6;
+	ROUGHNESS = mix(0.28 + damage * 0.5, mix(0.75, 0.05, glass), fixedc);
 	SPECULAR = 0.5 + glass * 0.4;
-	// lamps glow a little by day and a lot at night (the glow comes from the global night value)
-	EMISSION = head * vec3(1.0, 0.93, 0.75) * (0.35 + 2.6 * night_amount) * (1.0 - burn) + tail * vec3(1.0, 0.06, 0.03) * (0.5 + 1.8 * night_amount) * (1.0 - burn);
 }
 """
 

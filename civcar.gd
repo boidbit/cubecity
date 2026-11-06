@@ -63,9 +63,20 @@ func build(m, color: Color, traffic: bool, kind: String = "sedan") -> void:
 		sign.mesh = sb
 		sign.position = Vector3(0, 1.34, 0.2)
 		add_child(sign)
+	var tire := CylinderMesh.new()
+	tire.top_radius = 0.38
+	tire.bottom_radius = 0.38
+	tire.height = 0.28
+	tire.radial_segments = 10
+	tire.rings = 1
+	var tm := StandardMaterial3D.new()
+	tm.albedo_color = Color(0.05, 0.05, 0.05)
+	tire.material = tm
 	for x in [-0.84, 0.84]:
 		for z in [-1.3, 1.3]:
-			var w := Kit.wheel(0.38, 0.28)
+			var w := MeshInstance3D.new()
+			w.mesh = tire
+			w.rotation_degrees = Vector3(0, 0, 90)
 			w.position = Vector3(x, 0.24, z)
 			add_child(w)
 	add_to_group("loose")
