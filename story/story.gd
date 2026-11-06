@@ -1451,7 +1451,8 @@ func _cam_to(pos: Vector3, look: Vector3, fov: float, omega: float, dt: float, a
 	cam.global_position = cam_pos
 	var lw := xf * look_local
 	if cam_pos.distance_to(lw) > 0.05:
-		cam.look_at(lw, Vector3.UP)
+		if cam.global_position.distance_squared_to(lw) > 0.0004:
+			cam.look_at(lw, Vector3.UP)
 	cam.fov = cam_fov
 
 

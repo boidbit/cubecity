@@ -30,6 +30,8 @@ def stats(s):
     if s.get("mode") == "race":
         winner = str(s.get("race_winner") or "undecided").upper()
         out.append(("🏁 winner", winner))
+        if int(s.get("race_lead_changes", 0)):
+            out.append(("🔁 lead changes", s["race_lead_changes"]))
         for key, label in (("race_car_time", "🚗 car finish"), ("race_train_time", "🚂 train finish")):
             value = float(s.get(key, -1.0))
             if value >= 0.0:

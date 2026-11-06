@@ -64,17 +64,17 @@ def titles(s):
     events = {e.get("type") for e in s.get("events", [])}
     if mode == "race":
         winner = str(s.get("race_winner") or "")
-        car_time = float(s.get("race_car_time", -1.0))
-        train_time = float(s.get("race_train_time", -1.0))
-        if winner == "car" and car_time >= 0.0 and train_time >= 0.0:
-            gap = abs(car_time - train_time)
-            out = [f"The Car Beat the Train by {gap:.2f} Seconds 🏁",
-                   "Can a Car Beat a Train to the Finish? 🚗🚂",
-                   "One Ramp. One Finish Line. Car vs Train."]
-        elif winner == "train" and car_time >= 0.0 and train_time >= 0.0:
-            gap = abs(car_time - train_time)
-            out = [f"The Train Beat the Car by {gap:.2f} Seconds 🚂",
-                   "Can a Car Beat a Train to the Finish? 🚗🏁",
+        margin = float(s.get("race_margin", -1.0))
+        changes = int(s.get("race_lead_changes", 0))
+        who = "Car" if winner == "car" else "Train"
+        loser = "Train" if winner == "car" else "Car"
+        if winner and 0.0 <= margin < 0.6:
+            out = [f"Photo Finish! The {who} Won by {margin:.2f} Seconds 🏁",
+                   "Car vs Train: Decided by a Hair 🚗🚂",
+                   "One Ramp. One Finish Line. Too Close to Call."]
+        elif winner and margin >= 0.0:
+            out = [f"The {who} Beat the {loser} by {margin:.2f} Seconds 🏁",
+                   f"It Changed Hands {changes} Time{'s' if changes != 1 else ''}: Car vs Train 🚗🚂" if changes else "Can a Car Beat a Train to the Finish? 🚗🚂",
                    "One Ramp. One Finish Line. Car vs Train."]
         else:
             out = ["Car vs Train: Who Reaches the Finish First? 🏁",
@@ -127,6 +127,8 @@ def description(s):
             lines.append(f"🚗 Car finish: {car_time:.2f} seconds")
         if train_time >= 0.0:
             lines.append(f"🚂 Train finish: {train_time:.2f} seconds")
+        if int(s.get("race_lead_changes", 0)):
+            lines.append(f"🔁 Lead changes: {int(s['race_lead_changes'])}")
     else:
         lines.append(f"🚓 Police in the chase: {s.get('max_cops', 0)}")
         lines.append(f"💥 Police cars wrecked: {s.get('cops_wrecked', 0)}")

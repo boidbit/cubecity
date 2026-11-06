@@ -53,6 +53,7 @@ var block_t := 22.0
 var shake := 0.0
 var cam_dir := Vector3(0, 0, -1)
 var cam_mode := "chase"
+var race_focus := Vector3.ZERO   # smoothed look-at point of the race camera
 var cam_cut := false
 var cam_steer := 0.0
 var cam_cop_back := 0.0
@@ -611,7 +612,7 @@ func _update_cam(dt: float) -> void:
 		if not hit.is_empty():
 			cp = (hit["position"] as Vector3) + (c - cp).normalized() * 1.0
 		cam.global_position = cam.global_position.lerp(cp, 1.0 - exp(-2.0 * dt))
-		cam.look_at(c + Vector3(0, 1.0, 0), Vector3.UP)
+		_look(c + Vector3(0, 1.0, 0))
 		return
 	if cine_t > 0.0 and not game_over:
 		cine_t -= dt
@@ -624,7 +625,7 @@ func _update_cam(dt: float) -> void:
 		if not hit.is_empty():
 			cp = (hit["position"] as Vector3) + (from - cp).normalized() * 1.0
 		cam.global_position = cam.global_position.lerp(cp, 1.0 - exp(-3.0 * dt))
-		cam.look_at(cine_target + Vector3(0, cine_h * 0.3, 0), Vector3.UP)
+		_look(cine_target + Vector3(0, cine_h * 0.3, 0))
 		return
 	match cam_mode:
 		"anchor":
@@ -680,7 +681,7 @@ func _cam_chase(dt: float) -> void:
 	p += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake
 	cam.global_position = p + _intro_off()
 	var side := cam_dir.cross(Vector3.UP)
-	cam.look_at(player.global_position + cam_dir * ahead - side * cam_steer * 2.5 + Vector3(0, 1.2, 0), Vector3.UP)
+	_look(player.global_position + cam_dir * ahead - side * cam_steer * 2.5 + Vector3(0, 1.2, 0))
 	var base := 56.0 if vertical else 62.0
 	var fov := base + clampf(spd, 0.0, 40.0) * (0.2 if vertical else 0.5) + ((5.0 if vertical else 8.0) if player.nitro_active else 0.0) + fov_kick
 	cam.fov = lerpf(cam.fov, fov, 4.0 * dt)
@@ -695,7 +696,7 @@ func _cam_front(dt: float) -> void:
 	var ahead := 8.0 + player.speed * 0.18 if vertical else 11.0 + player.speed * 0.25
 	var target := _cam_clear(player.global_position + fwd * ahead + side * 1.6 + Vector3(0, 2.6 if vertical else 3.2, 0))
 	cam.global_position = (target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-10.0 * dt))) + _intro_off()
-	cam.look_at(player.global_position - fwd * 5.0 + Vector3(0, 0.8, 0), Vector3.UP)
+	_look(player.global_position - fwd * 5.0 + Vector3(0, 0.8, 0))
 	cam.fov = lerpf(cam.fov, 58.0 + fov_kick, 6.0 * dt)
 
 
@@ -716,7 +717,7 @@ func _cam_anchor(dt: float) -> void:
 	if not hit.is_empty():
 		p = (hit["position"] as Vector3) + (focus - p).normalized() * 0.8
 		cam.global_position = p
-	cam.look_at(focus, Vector3.UP)
+	_look(focus)
 	cam.fov = lerpf(cam.fov, 52.0 + fov_kick, 6.0 * dt)
 
 
@@ -731,83 +732,25 @@ func _intro_off() -> Vector3:
 func _cam_heli(dt: float) -> void:
 	var target := player.global_position - cam_dir * 12.0 + Vector3(0, 22.0, 0)
 	cam.global_position = target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-4.0 * dt))
-	cam.look_at(player.global_position + cam_dir * 6.0, Vector3.UP)
+	_look(player.global_position + cam_dir * 6.0)
 	cam.fov = lerpf(cam.fov, 62.0 + fov_kick, 4.0 * dt)
 
 
-# Race camera cuts keep the car and train framed together.
+# Race camera: the shots are worked out by the race (race.gd); this only moves the camera
+# there, smoothly, and snaps on a cut.
 func _cam_race(dt: float) -> void:
-	if director == null:
+	if director == null or director.race == null:
 		_cam_chase(dt)
 		return
-	var d: Director = director
-	var fwd := -player.global_transform.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var toward_rail := Vector3(0.0, 0.0, signf(world.rail_z() - player.global_position.z))
-	var away_from_rail := -toward_rail
-	var car_focus := player.global_position + Vector3(0.0, 1.2, 0.0)
-	var train_focus := Vector3(d.race_finish_x, 2.5, world.rail_z())
-	if rail.running:
-		train_focus = Vector3(rail.front - rail.dirx * 24.0, 2.5, rail.z)
-	var train_gap := car_focus.distance_to(train_focus)
-	var train_in_frame := rail.running and train_gap < 380.0
-	var shared_focus := car_focus.lerp(train_focus, 0.5) + Vector3(0.0, 1.0, 0.0)
-	var forward_focus := car_focus + fwd * 145.0
-	var focus := forward_focus
-	var desired := player.global_position - fwd * 14.0 + Vector3(0.0, 7.0, 0.0)
-	var target_fov := 54.0
-	var finish_z: float = world.line(d.race_finish_k)
-	var finish_center := Vector3(d.race_finish_x, 2.5, (finish_z + world.rail_z()) * 0.5)
-	match d.race_cam_view:
-		"over":
-			desired = player.global_position - fwd * 25.0 + away_from_rail * 8.0 + Vector3(0.0, 13.0, 0.0)
-			focus = shared_focus if train_in_frame else car_focus + fwd * 205.0
-			target_fov = 58.0
-		"side":
-			desired = player.global_position - fwd * 5.0 + toward_rail * 30.0 + Vector3(0.0, 18.0, 0.0)
-			focus = shared_focus if train_in_frame else car_focus + fwd * 95.0
-			target_fov = 60.0
-		"train":
-			desired = train_focus + Vector3(d.race_dirx * 75.0, 30.0, 0.0) + toward_rail * 14.0
-			focus = shared_focus if train_in_frame else train_focus
-			target_fov = 57.0
-		"detour":
-			desired = player.global_position - fwd * 7.0 + Vector3(0.0, 24.0, 0.0)
-			focus = shared_focus if train_in_frame else car_focus + fwd * 100.0
-			target_fov = 61.0
-		"jump":
-			focus = shared_focus if train_in_frame else car_focus + fwd * 28.0
-			if not d.race_ramp.is_empty():
-				var ramp_start: Vector3 = d.race_ramp["p0"]
-				desired = ramp_start - fwd * 12.0 + toward_rail * 30.0 + Vector3(0.0, 28.0, 0.0)
-			target_fov = 53.0
-		"finish":
-			desired = finish_center - Vector3(d.race_dirx * 95.0, 0.0, 0.0) + toward_rail * 70.0 + Vector3(0.0, 48.0, 0.0)
-			focus = shared_focus if train_in_frame else finish_center
-			target_fov = 52.0
-		"winner":
-			var orbit := maxf(clock - d.race_result_t, 0.0) * 0.18
-			desired = finish_center + Vector3(cos(orbit) * 130.0, 42.0, sin(orbit) * 130.0)
-			focus = shared_focus if train_in_frame else finish_center
-			target_fov = 54.0
-		_:
-			focus = shared_focus if train_in_frame else forward_focus
-	var camera_target := _cam_race_clear(focus, desired)
+	var r: Race = director.race
 	if cam_cut:
-		cam.global_position = camera_target
+		cam.global_position = r.cam_pos
+		race_focus = r.cam_focus
 	else:
-		cam.global_position = cam.global_position.lerp(camera_target, 1.0 - exp(-7.0 * dt))
-	cam.look_at(focus, Vector3.UP)
-	cam.fov = lerpf(cam.fov, target_fov + fov_kick, 4.5 * dt)
-
-
-func _cam_race_clear(focus: Vector3, want: Vector3) -> Vector3:
-	var from := focus + Vector3(0.0, 1.5, 0.0)
-	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, want, 1))
-	if hit.is_empty():
-		return want
-	return (hit["position"] as Vector3) + (from - want).normalized() * 0.8
+		cam.global_position = cam.global_position.lerp(r.cam_pos, 1.0 - exp(-9.0 * dt))
+		race_focus = race_focus.lerp(r.cam_focus, 1.0 - exp(-9.0 * dt))
+	_look(race_focus)
+	cam.fov = lerpf(cam.fov, r.cam_fov + fov_kick, 4.5 * dt)
 
 
 func _cam_clear(want: Vector3) -> Vector3:
@@ -817,6 +760,12 @@ func _cam_clear(want: Vector3) -> Vector3:
 	if r.is_empty():
 		return want
 	return (r["position"] as Vector3) + (from - want).normalized() * 0.6
+
+
+# Camera aim that never asks the camera to look at its own position.
+func _look(target: Vector3) -> void:
+	if cam.global_position.distance_squared_to(target) > 0.0004:
+		cam.look_at(target, Vector3.UP)
 
 
 func _update_env(dt: float) -> void:

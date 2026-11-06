@@ -83,6 +83,10 @@ uniform float road_w = 14.0;
 uniform float half_size = 576.0;
 uniform float night = 0.0;
 uniform float wet = 0.0;
+uniform float strip_on = 0.0;
+uniform float strip_z = 0.0;
+uniform float start_x = 0.0;
+uniform float finish_x = 0.0;
 varying vec3 wpos;
 
 float h21(vec2 p) {
@@ -114,7 +118,19 @@ void fragment() {
 	float n = vnoise(p * 0.8) * 0.5 + vnoise(p * 3.1) * 0.35 + h21(floor(p * 6.0)) * 0.15;
 	vec3 col;
 	float rough = 0.95;
-	if (road) {
+	float sz = p.y - strip_z;
+	bool strip = strip_on > 0.5 && abs(sz) < 4.5 && abs(p.x) < half_size - 20.0;
+	if (strip) {
+		col = vec3(0.15, 0.155, 0.17) * (0.85 + 0.3 * n);
+		float edge = step(abs(abs(sz) - 4.0), 0.14);
+		float dash = step(abs(sz), 0.1) * step(0.5, fract(p.x / 7.0));
+		col = mix(col, vec3(0.9, 0.88, 0.78), max(edge, dash * 0.85));
+		// start and finish lines: a chequered band across the strip
+		float band = max(step(abs(p.x - start_x), 1.2), step(abs(p.x - finish_x), 1.2));
+		float chk = mod(floor(sz / 1.5) + floor(p.x / 1.2), 2.0);
+		col = mix(col, vec3(chk), band);
+		rough = 0.8;
+	} else if (road) {
 		col = vec3(0.17, 0.175, 0.19) * (0.8 + 0.4 * n);
 		float dash_along_z = step(0.5, fract(p.y / 8.0));
 		float dash_along_x = step(0.5, fract(p.x / 8.0));
@@ -181,6 +197,23 @@ void fragment() {
 	METALLIC = mix(0.55 * (1.0 - damage), 0.0, fixedc) + glass * 0.6;
 	ROUGHNESS = mix(0.28 + damage * 0.5, mix(0.75, 0.05, glass), fixedc);
 	SPECULAR = 0.5 + glass * 0.4;
+}
+"""
+
+# The race gantries' banners: chequered for the finish line, a dark panel for the start.
+const RACE_BANNER := """
+shader_type spatial;
+uniform float finish = 1.0;
+varying vec3 wpos;
+void vertex() {
+	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+void fragment() {
+	float chk = mod(floor(wpos.z / 1.1) + floor(wpos.y / 1.1), 2.0);
+	vec3 c = finish > 0.5 ? vec3(chk) : mix(vec3(0.05, 0.05, 0.07), vec3(0.9, 0.78, 0.1), step(0.9, fract(wpos.z * 0.15)) * 0.0);
+	ALBEDO = c;
+	EMISSION = finish > 0.5 ? c * 0.35 : vec3(0.0);
+	ROUGHNESS = 0.7;
 }
 """
 

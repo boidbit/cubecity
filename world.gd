@@ -39,6 +39,8 @@ var flyovers: Array[Vector2i] = []  # (kx, jz): road x = line(kx) rises over nod
 var stunt_zones: Array = []         # [start, end] of stunt set pieces standing on the road right now
 var total_cells := 0
 var props: Props
+var race_plan := {}               # race mode: the course (see race.gd)
+var race_lights: Array[StandardMaterial3D] = []   # the start gantry's lights
 var safehouses: Array[Dictionary] = []   # door (on the lot edge), dir (into the garage), block, rect
 
 
@@ -121,6 +123,8 @@ func setup(main_node, fx_node) -> void:
 	_make_jump_ramps()
 	_make_flyover(4, 5)
 	_make_flyover(11, 10)
+	if str(main.cfg.get("bot", "")) == "race":
+		_make_race_course()
 	_make_debris_pool()
 
 
@@ -259,6 +263,8 @@ func _pick_safehouses(kinds: Dictionary) -> void:
 func _fill_block(key: Vector2i, list: Array[Building], x0: float, z0: float, kind: String) -> void:
 	if kind == "park":
 		return
+	if key.y == RAIL_ROW and str(main.cfg.get("bot", "")) == "race":
+		return          # race mode: the railway's block row is cleared for the course
 	var lots := 2
 	if kind == "sub":
 		lots = 3
@@ -431,25 +437,70 @@ func _make_jump_ramps() -> void:
 		_slab(p0, p1, 5.0, 0.35, yellow)
 		ramp_points.append((p0 + p1) * 0.5)
 		ramps.append({"p0": p0, "p1": p1, "k": k, "m": m, "along_z": along_z, "sgn": sgn})
-	# Race mode needs a ramp on one of the roads parallel to the railway. Random placement
-	# does not guarantee one near row 7/8, so add a deterministic fallback when needed.
-	if str(main.cfg.get("bot", "")) == "race":
-		var have_race_ramp := false
-		for r in ramps:
-			if not bool(r["along_z"]) and int(r["k"]) in [RAIL_ROW, RAIL_ROW + 1]:
-				have_race_ramp = true
-				break
-		if not have_race_ramp:
-			var k := RAIL_ROW + 1
-			var m: int = N >> 1
-			var lane := -3.5
-			var sgn := 1.0
-			var mid: float = line(m) + PITCH * 0.5
-			var p0 := Vector3(mid - 6.0 * sgn, 0.05, line(k) + lane)
-			var p1 := Vector3(mid + 6.0 * sgn, 2.3, line(k) + lane)
-			_slab(p0, p1, 5.0, 0.35, yellow)
-			ramp_points.append((p0 + p1) * 0.5)
-			ramps.append({"p0": p0, "p1": p1, "k": k, "m": m, "along_z": false, "sgn": sgn})
+
+
+# Race mode: a paved strip beside the track from edge to edge (the ground shader draws it), a
+# start gantry with its lights and a finish gantry with a chequered banner across both strip
+# and track, a jump ramp on the strip, and two nitro pads. See race.gd.
+func _make_race_course() -> void:
+	race_plan = Race.plan_for(main.cfg)
+	var d: float = race_plan["dirx"]
+	var zt := rail_z()
+	var zs := zt + Race.LANE
+	ground_mat.set_shader_parameter("strip_on", 1.0)
+	ground_mat.set_shader_parameter("strip_z", zs)
+	ground_mat.set_shader_parameter("start_x", float(race_plan["start_x"]))
+	ground_mat.set_shader_parameter("finish_x", float(race_plan["finish_x"]))
+	props.clear_rect(Vector3(-HALF - 30.0, 0, zs - 7.0), Vector3(HALF + 30.0, 0, zs + 7.0))
+	_race_gantry(float(race_plan["start_x"]), false, zt, zs)
+	_race_gantry(float(race_plan["finish_x"]), true, zt, zs)
+	# the ramp: a kicker the car takes flat out
+	var rx: float = race_plan["ramp_x"]
+	var p0 := Vector3(rx, 0.05, zs)
+	var p1 := Vector3(rx + d * 15.0, 2.6, zs)
+	_slab(p0, p1, 7.0, 0.4, Color(0.9, 0.68, 0.1))
+	_static_box(Vector3(7.0, 2.6, 0.5), Transform3D(Basis.looking_at(Vector3(d, 0, 0), Vector3.UP), p1 + Vector3(-d * 0.25, -1.3, 0)), Color(0.3, 0.3, 0.32))
+	# nitro pads
+	for px in race_plan["pads_x"]:
+		props.add_pickup(Vector3(float(px), 0.0, zs), "nitro", true)
+
+
+func _race_gantry(x: float, finish: bool, zt: float, zs: float) -> void:
+	var z0 := zt - 7.0
+	var z1 := zs + 7.0
+	var steel := Color(0.22, 0.23, 0.27)
+	for z in [z0, z1]:
+		_static_box(Vector3(0.8, 10.0, 0.8), Transform3D(Basis.IDENTITY, Vector3(x, 5.0, z)), steel)
+	var banner := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(1.0, 2.2, z1 - z0 + 0.8)
+	banner.mesh = bm
+	var mat := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = Shaders.RACE_BANNER
+	mat.shader = sh
+	mat.set_shader_parameter("finish", 1.0 if finish else 0.0)
+	banner.material_override = mat
+	banner.position = Vector3(x, 10.0, (z0 + z1) * 0.5)
+	static_root.add_child(banner)
+	if not finish:
+		# three lights on the side the racers face: red, red, red, then green on GO
+		var d: float = race_plan["dirx"]
+		for i in 3:
+			var lm := StandardMaterial3D.new()
+			lm.albedo_color = Color(0.9, 0.05, 0.05)
+			lm.emission_enabled = true
+			lm.emission = Color(1.0, 0.1, 0.05)
+			lm.emission_energy_multiplier = 0.2
+			var li := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 0.8
+			sm.height = 1.6
+			li.mesh = sm
+			li.material_override = lm
+			li.position = Vector3(x - d * 0.8, 10.0, (z0 + z1) * 0.5 + float(i - 1) * 3.2)
+			static_root.add_child(li)
+			race_lights.append(lm)
 
 
 func _make_flyover(kx: int, jz: int) -> void:
