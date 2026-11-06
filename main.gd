@@ -606,7 +606,7 @@ func _update_cam(dt: float) -> void:
 		if not hit.is_empty():
 			cp = (hit["position"] as Vector3) + (c - cp).normalized() * 1.0
 		cam.global_position = cam.global_position.lerp(cp, 1.0 - exp(-2.0 * dt))
-		cam.look_at(c + Vector3(0, 1.0, 0), Vector3.UP)
+		_look(c + Vector3(0, 1.0, 0))
 		return
 	if cine_t > 0.0 and not game_over:
 		cine_t -= dt
@@ -619,7 +619,7 @@ func _update_cam(dt: float) -> void:
 		if not hit.is_empty():
 			cp = (hit["position"] as Vector3) + (from - cp).normalized() * 1.0
 		cam.global_position = cam.global_position.lerp(cp, 1.0 - exp(-3.0 * dt))
-		cam.look_at(cine_target + Vector3(0, cine_h * 0.3, 0), Vector3.UP)
+		_look(cine_target + Vector3(0, cine_h * 0.3, 0))
 		return
 	match cam_mode:
 		"anchor":
@@ -673,7 +673,7 @@ func _cam_chase(dt: float) -> void:
 	p += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake
 	cam.global_position = p + _intro_off()
 	var side := cam_dir.cross(Vector3.UP)
-	cam.look_at(player.global_position + cam_dir * ahead - side * cam_steer * 2.5 + Vector3(0, 1.2, 0), Vector3.UP)
+	_look(player.global_position + cam_dir * ahead - side * cam_steer * 2.5 + Vector3(0, 1.2, 0))
 	var base := 56.0 if vertical else 62.0
 	var fov := base + clampf(spd, 0.0, 40.0) * (0.2 if vertical else 0.5) + ((5.0 if vertical else 8.0) if player.nitro_active else 0.0) + fov_kick
 	cam.fov = lerpf(cam.fov, fov, 4.0 * dt)
@@ -688,7 +688,7 @@ func _cam_front(dt: float) -> void:
 	var ahead := 8.0 + player.speed * 0.18 if vertical else 11.0 + player.speed * 0.25
 	var target := _cam_clear(player.global_position + fwd * ahead + side * 1.6 + Vector3(0, 2.6 if vertical else 3.2, 0))
 	cam.global_position = (target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-10.0 * dt))) + _intro_off()
-	cam.look_at(player.global_position - fwd * 5.0 + Vector3(0, 0.8, 0), Vector3.UP)
+	_look(player.global_position - fwd * 5.0 + Vector3(0, 0.8, 0))
 	cam.fov = lerpf(cam.fov, 58.0 + fov_kick, 6.0 * dt)
 
 
@@ -709,7 +709,7 @@ func _cam_anchor(dt: float) -> void:
 	if not hit.is_empty():
 		p = (hit["position"] as Vector3) + (focus - p).normalized() * 0.8
 		cam.global_position = p
-	cam.look_at(focus, Vector3.UP)
+	_look(focus)
 	cam.fov = lerpf(cam.fov, 52.0 + fov_kick, 6.0 * dt)
 
 
@@ -724,7 +724,7 @@ func _intro_off() -> Vector3:
 func _cam_heli(dt: float) -> void:
 	var target := player.global_position - cam_dir * 12.0 + Vector3(0, 22.0, 0)
 	cam.global_position = target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-4.0 * dt))
-	cam.look_at(player.global_position + cam_dir * 6.0, Vector3.UP)
+	_look(player.global_position + cam_dir * 6.0)
 	cam.fov = lerpf(cam.fov, 62.0 + fov_kick, 4.0 * dt)
 
 
@@ -736,6 +736,13 @@ func _cam_clear(want: Vector3) -> Vector3:
 	if r.is_empty():
 		return want
 	return (r["position"] as Vector3) + (from - want).normalized() * 0.6
+
+
+# Camera aim that never asks the camera to look at its own position (a shot that has just put
+# the camera on top of its target would otherwise raise an engine error).
+func _look(target: Vector3) -> void:
+	if cam.global_position.distance_squared_to(target) > 0.0004:
+		cam.look_at(target, Vector3.UP)
 
 
 func _update_env(dt: float) -> void:

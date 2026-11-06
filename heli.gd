@@ -295,7 +295,7 @@ func _chase(dt: float) -> void:
 	var hv := (global_position - last_pos) / maxf(dt, 0.001)
 	hv.y = 0.0
 	rotation.x = lerpf(rotation.x, -clampf(hv.length() * 0.012, 0.0, 0.3), 3.0 * dt)
-	spot.look_at(pl.global_position, Vector3.UP)
+	_aim_spot(pl.global_position)
 	_wash(dt)
 
 
@@ -305,7 +305,7 @@ func _intercept(dt: float) -> void:
 	rotation.y = lerp_angle(rotation.y, atan2(-face.x, -face.z), 2.2 * dt)
 	var hv := Vector3(fvel.x, 0.0, fvel.z)
 	rotation.x = lerpf(rotation.x, -clampf(hv.length() * 0.012, 0.0, 0.3), 2.5 * dt)
-	spot.look_at(pl.global_position, Vector3.UP)
+	_aim_spot(pl.global_position)
 	_wash(dt)
 	# the car is in the air and has reached the helicopter
 	var hit := global_position + Vector3(0, -1.1, 0)
@@ -323,11 +323,16 @@ func _leave(dt: float) -> void:
 	away = away.normalized() if away.length() > 1.0 else Vector3(1, 0, 1).normalized()
 	_fly_to(global_position + away * 200.0 + Vector3(0, 60.0, 0), dt, 55.0, 16.0)
 	rotation.y = lerp_angle(rotation.y, atan2(-fvel.x, -fvel.z), 2.0 * dt)
-	spot.look_at(pl.global_position, Vector3.UP)
+	_aim_spot(pl.global_position)
 	if global_position.distance_to(pl.global_position) > 320.0:
 		visible = false
 		chop.stop()
 		state = "chase"
+
+
+func _aim_spot(target: Vector3) -> void:
+	if spot.global_position.distance_squared_to(target) > 0.0004:
+		spot.look_at(target, Vector3.UP)
 
 
 func _wash(dt: float) -> void:
