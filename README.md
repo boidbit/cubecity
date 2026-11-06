@@ -77,6 +77,14 @@ upload text show up on the same page. Or from GitHub:
      - `stunt`: tower-top to tower-top jumps, barrel corridors, a tower brought down as the car passes, ramps and gas stations.
      - `destroy`: smash as much of the city as possible, with a "% of the city destroyed" counter.
      - `survive`: 5 stars from the first second.
+     - `race`: a real race, car against train, down a purpose-built strip beside the railway (the block row is cleared
+       for it). Both stand on the start line, three lights count down, and on GO the car drives off while the heavy
+       train pulls away. The car has a jump ramp and two nitro pads; the train has its own top speed, its own pull-away
+       and a surge of speed part-way. Nothing decides the winner: each seed gives a different train, ramp and pads
+       (and a direction), and whoever's nose crosses the finish line first wins, timed to the millisecond. The video has
+       its own overlay even in `clean` mode: a progress strip with both racers, the gap, the countdown, "TRAIN TAKES THE
+       LEAD!"-style commentary and a result card. The cameras keep both racers in view and the run reports how much of
+       the race they were (`race_visible_pct`).
    - **orientation**: `vertical` (1080x1920, Shorts) or `horizontal` (1920x1080).
    - **duration**, **fps**, **takes** (records several runs and keeps the most exciting), **teaser** (opens with a flash-forward of the biggest moment, then "EARLIER..."), **time** of day, the on-screen **title**, and an optional **seed**.
    - **overlay**: `clean` (the default) keeps only the hook title on screen: no "SWAT TRUCK INCOMING"-style
@@ -215,8 +223,7 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `director.gd` | Stages video runs: modes, beats, story captions, camera cuts, overlay text, run summary |
 | `stunts.gd` | Stunt set pieces: tower-top jump, barrel corridor, tower fall |
 | `heli.gd` | The police helicopter: model, low chase, rotor wash, crash |
-| `carmesh.gd` | Car bodies: sport, sedan, SUV and van are lofted from a side silhouette into smooth shaded shells (glass, lamps, door seams, mirrors, arches); the SWAT truck is boxy on purpose |
-| `kit.gd` | The in-house asset kit: reusable, cached parts made in code (rounded tyre with a five-spoke rim, surface-of-revolution helper). Add new parts here instead of starting from scratch |
+| `carmesh.gd` | Procedural car body meshes |
 | `look.gd` | The picture: colour grade, glow, sky, sun and moon, fog, in one place for every mode |
 | `skyline.gd` | Makes the city look endless: a far copy of every block (so buildings never pop in), 8 more blocks of skyline beyond the map, the rail tunnel houses |
 | `landmarks.gd` | Seven designed towers (needle, twin towers, octagon, round, ziggurat, clock tower, arena) that fill a block each |
@@ -230,7 +237,6 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `audio/` | Sound effects (Ogg Vorbis): siren and rotor loops, crashes, boom, tyre screech |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade (four window layouts), ground, lamp light pool, car and debris shaders |
-| `tools/showroom/` | Look-dev scene (not in the game): `godot --path . tools/showroom/showroom.tscn -- --car=sedan [--night] [--debug]` renders one car turning under the game's own lighting |
 | `story/` | Story lab: blocky characters, the open-top car, the story scheduler, screenplays |
 | `site/` | The studio page (GitHub Pages): start story videos, follow the runs, watch and download the videos |
 | `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |

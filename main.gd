@@ -53,6 +53,7 @@ var block_t := 22.0
 var shake := 0.0
 var cam_dir := Vector3(0, 0, -1)
 var cam_mode := "chase"
+var race_focus := Vector3.ZERO   # smoothed look-at point of the race camera
 var cam_cut := false
 var cam_steer := 0.0
 var cam_cop_back := 0.0
@@ -628,6 +629,8 @@ func _update_cam(dt: float) -> void:
 			_cam_front(dt)
 		"heli":
 			_cam_heli(dt)
+		"race":
+			_cam_race(dt)
 		_:
 			_cam_chase(dt)
 	cam_cut = false
@@ -728,7 +731,23 @@ func _cam_heli(dt: float) -> void:
 	cam.fov = lerpf(cam.fov, 62.0 + fov_kick, 4.0 * dt)
 
 
-# Pulls the camera in front of any wall between it and the car.
+# Race camera: the shots are worked out by the race (race.gd); this only moves the camera
+# there, smoothly, and snaps on a cut.
+func _cam_race(dt: float) -> void:
+	if director == null or director.race == null:
+		_cam_chase(dt)
+		return
+	var r: Race = director.race
+	if cam_cut:
+		cam.global_position = r.cam_pos
+		race_focus = r.cam_focus
+	else:
+		cam.global_position = cam.global_position.lerp(r.cam_pos, 1.0 - exp(-9.0 * dt))
+		race_focus = race_focus.lerp(r.cam_focus, 1.0 - exp(-9.0 * dt))
+	_look(race_focus)
+	cam.fov = lerpf(cam.fov, r.cam_fov + fov_kick, 4.5 * dt)
+
+
 func _cam_clear(want: Vector3) -> Vector3:
 	var from := player.global_position + Vector3(0, 1.5, 0)
 	var q := PhysicsRayQueryParameters3D.create(from, want, 1)
@@ -758,7 +777,6 @@ func _update_env(dt: float) -> void:
 	var dusk := clampf(1.0 - absf(e) * 3.0, 0.0, 1.0)
 	Look.apply(env, sky_mat, sun, day, dusk, rain_amt, e)
 	world.set_night(night, rain_amt)
-	RenderingServer.global_shader_parameter_set(&"night_amount", night)
 	player.set_headlights(night)
 	rain.global_position = player.global_position + Vector3(0, 20, 0)
 	rain.emitting = rain_amt > 0.2

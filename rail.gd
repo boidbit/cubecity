@@ -29,6 +29,9 @@ var front := 0.0              # x of the front of the train
 var dirx := 1.0
 var speed := CRUISE
 var after_speed := CRUISE     # speed once a timed crossing is passed
+var accel_up := 18.0          # m/s^2 speeding up (a race train is heavy and starts slowly)
+var accel_down := 14.0
+var racing := false           # a race train (standing start): eta() knows it is still speeding up
 var next_t := 22.0
 var enabled := true
 var auto := true              # trains on their own timetable (normal play)
@@ -275,7 +278,30 @@ func start_train(d: float, spd: float) -> void:
 	main.log_event("train")
 
 
+# Race: a train already standing on the track with its nose at front_x, which pulls away
+# (up to top_speed, at accel m/s^2) when after_speed is set. No tunnel, no timing tricks.
+func start_standing(front_x: float, d: float, accel: float) -> void:
+	running = true
+	dirx = d
+	front = front_x
+	speed = 0.0
+	after_speed = 0.0
+	accel_up = accel
+	racing = true
+	timed = {}
+	hit_ids.clear()
+	trains_run += 1
+	train.visible = true
+	train.collision_layer = 1
+	train.global_transform = Transform3D(Basis(Vector3.UP, 0.0 if d > 0.0 else PI), Vector3(front, 0.0, z))
+	rumble.play()
+	main.log_event("train")
+
+
 func _stop_train() -> void:
+	racing = false
+	accel_up = 18.0
+	accel_down = 14.0
 	running = false
 	timed = {}
 	train.visible = false
@@ -296,6 +322,14 @@ func eta(x: float) -> float:
 	var rem := (x - front) * dirx
 	if rem < 0.0:
 		return INF
+	var top := maxf(after_speed, speed)
+	if racing and speed < top - 0.5 and accel_up > 0.1:
+		# still speeding up: time to cover rem with constant acceleration up to top speed
+		var t_acc := (top - speed) / accel_up
+		var d_acc := (speed + top) * 0.5 * t_acc
+		if rem <= d_acc:
+			return (sqrt(speed * speed + 2.0 * accel_up * rem) - speed) / accel_up
+		return t_acc + (rem - d_acc) / top
 	return rem / maxf(speed, 1.0)
 
 
@@ -365,7 +399,7 @@ func _physics_process(dt: float) -> void:
 			want = clampf(rem / left, 8.0, 55.0)
 		else:
 			want = 45.0
-	speed = move_toward(speed, want, (18.0 if want > speed else 14.0) * dt)
+	speed = move_toward(speed, want, (accel_up if want > speed else accel_down) * dt)
 	front += dirx * speed * dt
 	train.global_transform = Transform3D(Basis(Vector3.UP, 0.0 if dirx > 0.0 else PI), Vector3(front, 0.0, z))
 	rumble.pitch_scale = clampf(0.6 + speed / 60.0, 0.6, 1.4)
@@ -451,7 +485,7 @@ func _gates(dt: float) -> void:
 		if running:
 			var ahead := (x - front) * dirx
 			var behind := (x - tail()) * dirx
-			want = (ahead > 0.0 and ahead < WARN * maxf(speed, 12.0)) or (ahead <= 0.0 and behind > -speed * 1.2)
+			want = (ahead > 0.0 and (ahead < WARN * maxf(speed, 12.0) or eta(x) < WARN)) or (ahead <= 0.0 and behind > -speed * 1.2)
 		var was: bool = c["want"]
 		c["want"] = want
 		if want and not was and absf(x - pp.x) < 150.0 and absf(pp.z - z) < 150.0:

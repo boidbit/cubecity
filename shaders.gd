@@ -7,19 +7,7 @@ static var _cache := {}
 
 # One Shader per source, shared by every material that uses it, so a car that
 # spawns mid-game does not trigger a fresh shader compile (a stutter on phones).
-static var _globals := false
-
-
-# The one shader value every material shares: how dark it is (0 = day, 1 = night).
-static func register_globals() -> void:
-	if _globals:
-		return
-	_globals = true
-	RenderingServer.global_shader_parameter_add(&"night_amount", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
-
-
 static func get_shader(code: String) -> Shader:
-	register_globals()
 	if not _cache.has(code):
 		var sh := Shader.new()
 		sh.code = code
@@ -111,6 +99,10 @@ uniform float road_w = 14.0;
 uniform float half_size = 576.0;
 uniform float night = 0.0;
 uniform float wet = 0.0;
+uniform float strip_on = 0.0;
+uniform float strip_z = 0.0;
+uniform float start_x = 0.0;
+uniform float finish_x = 0.0;
 varying vec3 wpos;
 
 float h21(vec2 p) {
@@ -145,7 +137,19 @@ void fragment() {
 	n = mix(n, 0.5, far_f);
 	vec3 col;
 	float rough = 0.95;
-	if (road) {
+	float sz = p.y - strip_z;
+	bool strip = strip_on > 0.5 && abs(sz) < 4.5 && abs(p.x) < 586.0;
+	if (strip) {
+		col = vec3(0.15, 0.155, 0.17) * (0.85 + 0.3 * n);
+		float edge = step(abs(abs(sz) - 4.0), 0.14);
+		float dash = step(abs(sz), 0.1) * step(0.5, fract(p.x / 7.0));
+		col = mix(col, vec3(0.9, 0.88, 0.78), max(edge, dash * 0.85));
+		// start and finish lines: a chequered band across the strip
+		float band = max(step(abs(p.x - start_x), 1.2), step(abs(p.x - finish_x), 1.2));
+		float chk = mod(floor(sz / 1.5) + floor(p.x / 1.2), 2.0);
+		col = mix(col, vec3(chk), band);
+		rough = 0.8;
+	} else if (road) {
 		col = vec3(0.23, 0.235, 0.265) * (0.8 + 0.4 * n);
 		float dash_along_z = step(0.5, fract(p.y / 8.0));
 		float dash_along_x = step(0.5, fract(p.x / 8.0));
@@ -175,7 +179,6 @@ void fragment() {
 
 const CAR := """
 shader_type spatial;
-global uniform float night_amount;
 uniform vec4 color : source_color = vec4(0.8, 0.1, 0.1, 1.0);
 uniform vec3 mesh_offset = vec3(0.0);
 uniform float damage = 0.0;
@@ -204,24 +207,32 @@ void vertex() {
 }
 
 void fragment() {
-	float a = COLOR.a;
-	float fixedc = step(0.25, a);
-	float glass = step(0.9, a);
-	float head = step(0.65, a) * (1.0 - step(0.75, a));
-	float tail = step(0.75, a) * (1.0 - step(0.9, a));
-	float lamp = max(head, tail);
+	float fixedc = step(0.25, COLOR.a);
+	float glass = step(0.75, COLOR.a);
 	vec3 c = mix(color.rgb, COLOR.rgb, fixedc);
-	c = mix(c, vec3(1.0, 0.96, 0.85), head);
-	c = mix(c, vec3(0.75, 0.04, 0.04), tail);
 	float burn = clamp(damage * 0.65 + crumple * 0.35, 0.0, 0.85);
-	c = mix(c, vec3(0.04), burn * (1.0 - glass * 0.5) * (1.0 - lamp));
+	c = mix(c, vec3(0.04), burn * (1.0 - glass * 0.5));
 	ALBEDO = c;
-	METALLIC = mix(0.3 * (1.0 - damage), 0.0, fixedc) + glass * 0.6;
-	ROUGHNESS = mix(0.3 + damage * 0.5, mix(0.75, 0.05, glass), fixedc);
-	ROUGHNESS = mix(ROUGHNESS, 0.15, lamp);
+	METALLIC = mix(0.55 * (1.0 - damage), 0.0, fixedc) + glass * 0.6;
+	ROUGHNESS = mix(0.28 + damage * 0.5, mix(0.75, 0.05, glass), fixedc);
 	SPECULAR = 0.5 + glass * 0.4;
-	// lamps glow a little by day and a lot at night (the glow comes from the global night value)
-	EMISSION = head * vec3(1.0, 0.93, 0.75) * (0.35 + 2.6 * night_amount) * (1.0 - burn) + tail * vec3(1.0, 0.06, 0.03) * (0.5 + 1.8 * night_amount) * (1.0 - burn);
+}
+"""
+
+# The race gantries' banners: chequered for the finish line, a dark panel for the start.
+const RACE_BANNER := """
+shader_type spatial;
+uniform float finish = 1.0;
+varying vec3 wpos;
+void vertex() {
+	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+void fragment() {
+	float chk = mod(floor(wpos.z / 1.1) + floor(wpos.y / 1.1), 2.0);
+	vec3 c = finish > 0.5 ? vec3(chk) : mix(vec3(0.05, 0.05, 0.07), vec3(0.9, 0.78, 0.1), step(0.9, fract(wpos.z * 0.15)) * 0.0);
+	ALBEDO = c;
+	EMISSION = finish > 0.5 ? c * 0.35 : vec3(0.0);
+	ROUGHNESS = 0.7;
 }
 """
 

@@ -15,7 +15,7 @@ import release as story_release  # noqa: E402
 import upload_text  # noqa: E402
 
 MODES = {"escape": "🏁 Escape", "chase": "🚓 Police chase", "heli": "🚁 Helicopter", "rush": "🚗 Rush hour", "stunt": "🤸 Stunts",
-         "destroy": "💥 Destroy the city", "survive": "⭐ Survive 5 stars"}
+         "destroy": "💥 Destroy the city", "survive": "⭐ Survive 5 stars", "race": "🏁 Car vs train"}
 
 
 def stats(s):
@@ -27,7 +27,17 @@ def stats(s):
             out.append((label, s[key]))
     if s.get("mode") == "destroy" and s.get("cubes"):
         out.append(("🧱 cubes", f"{int(s['cubes']):,}"))
-    out.append(("🏁", "safehouse" if s.get("safehouse") else ("escaped" if s.get("end") == "survived" else str(s.get("end", "")))))
+    if s.get("mode") == "race":
+        winner = str(s.get("race_winner") or "undecided").upper()
+        out.append(("🏁 winner", winner))
+        if int(s.get("race_lead_changes", 0)):
+            out.append(("🔁 lead changes", s["race_lead_changes"]))
+        for key, label in (("race_car_time", "🚗 car finish"), ("race_train_time", "🚂 train finish")):
+            value = float(s.get(key, -1.0))
+            if value >= 0.0:
+                out.append((label, f"{value:.2f}s"))
+    else:
+        out.append(("🏁", "safehouse" if s.get("safehouse") else ("escaped" if s.get("end") == "survived" else str(s.get("end", "")))))
     return [[k, str(v)] for k, v in out if str(v) not in ("", "0")]
 
 

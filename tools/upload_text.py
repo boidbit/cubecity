@@ -38,6 +38,7 @@ MODE_TAGS = {
     "heli": ["helicopter", "police helicopter"],
     "rush": ["traffic", "near miss", "rush hour"],
     "stunt": ["car stunts", "ramp jump", "jump"],
+    "race": ["car vs train", "train race", "car racing"],
 }
 
 HOOKS = {
@@ -48,6 +49,7 @@ HOOKS = {
     "heli": "A police helicopter is chasing one car through the city. Can the car get away, or take it down?",
     "rush": "Rush hour. Cars from every direction, police closing in, and one car threading through. How close can it get?",
     "stunt": "Ramps, jumps, explosions and falling towers: the stunt show.",
+    "race": "A car races a train across the city. One ramp, one finish line—who gets there first?",
 }
 
 
@@ -60,7 +62,25 @@ def titles(s):
     misses = int(s.get("near_miss", 0))
     jumps = int(s.get("big_air", 0))
     events = {e.get("type") for e in s.get("events", [])}
-    if mode == "escape":
+    if mode == "race":
+        winner = str(s.get("race_winner") or "")
+        margin = float(s.get("race_margin", -1.0))
+        changes = int(s.get("race_lead_changes", 0))
+        who = "Car" if winner == "car" else "Train"
+        loser = "Train" if winner == "car" else "Car"
+        if winner and 0.0 <= margin < 0.6:
+            out = [f"Photo Finish! The {who} Won by {margin:.2f} Seconds 🏁",
+                   "Car vs Train: Decided by a Hair 🚗🚂",
+                   "One Ramp. One Finish Line. Too Close to Call."]
+        elif winner and margin >= 0.0:
+            out = [f"The {who} Beat the {loser} by {margin:.2f} Seconds 🏁",
+                   f"It Changed Hands {changes} Time{'s' if changes != 1 else ''}: Car vs Train 🚗🚂" if changes else "Can a Car Beat a Train to the Finish? 🚗🚂",
+                   "One Ramp. One Finish Line. Car vs Train."]
+        else:
+            out = ["Car vs Train: Who Reaches the Finish First? 🏁",
+                   "A Train Race Through Cube City 🚂🚗",
+                   "One Ramp. One Finish Line. Car vs Train."]
+    elif mode == "escape":
         trains = int(s.get("train_hits", 0))
         out = ["Can He Escape? The Train Didn't Stop 🚂🚓" if trains else "Can He Escape the Whole Police Force? 🚓💨",
                "He Made It to the Safehouse... Barely 😳" if s.get("safehouse") else f"{cops} Cops, 1 Car, No Way Out 🚨",
@@ -98,11 +118,23 @@ def description(s):
     events = {e.get("type") for e in s.get("events", [])}
     seen = [text for kind, text in MOMENTS if kind in events]
     lines = [HOOKS.get(mode, HOOKS["chase"]), ""]
-    lines.append(f"🚓 Police in the chase: {s.get('max_cops', 0)}")
-    lines.append(f"💥 Police cars wrecked: {s.get('cops_wrecked', 0)}")
-    if s.get("collapses"):
+    if mode == "race":
+        winner = str(s.get("race_winner") or "undecided").upper()
+        lines.append(f"🏁 Winner: {winner}")
+        car_time = float(s.get("race_car_time", -1.0))
+        train_time = float(s.get("race_train_time", -1.0))
+        if car_time >= 0.0:
+            lines.append(f"🚗 Car finish: {car_time:.2f} seconds")
+        if train_time >= 0.0:
+            lines.append(f"🚂 Train finish: {train_time:.2f} seconds")
+        if int(s.get("race_lead_changes", 0)):
+            lines.append(f"🔁 Lead changes: {int(s['race_lead_changes'])}")
+    else:
+        lines.append(f"🚓 Police in the chase: {s.get('max_cops', 0)}")
+        lines.append(f"💥 Police cars wrecked: {s.get('cops_wrecked', 0)}")
+    if mode != "race" and s.get("collapses"):
         lines.append(f"🏢 Buildings brought down: {s['collapses']}")
-    if s.get("near_miss"):
+    if mode != "race" and s.get("near_miss"):
         lines.append(f"😳 Near misses: {s['near_miss']}")
     if mode == "destroy" and s.get("cubes"):
         lines.append(f"🏙️ Cubes smashed: {int(s['cubes']):,}")
@@ -113,11 +145,11 @@ def description(s):
             lines.append("👀 Watch for " + seen[0] + ".")
     lines += [
         "",
-        "AI-driven gameplay from Cube City Chase, a car chase and destruction game I'm making "
+        "AI-driven gameplay from Cube City Chase, a car chase, racing and destruction game I'm making "
         "with the Godot engine. Everything in it (the city, cars, explosions and sounds) is generated in code.",
         "",
         "🎮 Play the game: [add your Play Store link here]",
-        "🔔 Subscribe for more runs. Which mode next: chase, destroy, survive, helicopter, rush hour or stunts? Tell me in the comments!",
+        "🔔 Subscribe for more runs. Which mode next: chase, escape, race, destroy, survive, helicopter, rush hour or stunts? Tell me in the comments!",
         "",
         " ".join(hashtags(s)),
     ]
@@ -126,7 +158,7 @@ def description(s):
 
 def hashtags(s):
     first = "#Shorts" if s.get("orientation", "vertical") == "vertical" else "#Gaming"
-    second = {"destroy": "#CityDestruction", "heli": "#Helicopter", "rush": "#CarChase", "stunt": "#Stunts", "escape": "#Escape"}.get(
+    second = {"destroy": "#CityDestruction", "heli": "#Helicopter", "rush": "#CarChase", "stunt": "#Stunts", "escape": "#Escape", "race": "#CarVsTrain"}.get(
         s.get("mode"), "#PoliceChase")
     return [first, second, "#IndieGame"]
 
@@ -146,6 +178,7 @@ def pinned_comment(s):
         "heli": "Would you try that jump? 👇",
         "rush": "How many near misses did you count? 👇",
         "stunt": "Which stunt was the craziest? 👇",
+        "race": "Could the car beat the train? What should race next? 👇",
     }.get(s.get("mode"), "Would you have escaped? What should happen next? 👇")
 
 

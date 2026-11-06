@@ -142,6 +142,7 @@ var busted_bar: ProgressBar
 var busted_fill: StyleBoxFlat
 var over_panel: ColorRect
 var hurt_rect: ColorRect
+var race: RaceHud            # race mode only: the progress strip, countdown and result
 var minimap: MiniMap
 var banner_tw: Tween
 var over_t := 0.0
@@ -410,6 +411,10 @@ func _build_video() -> void:
 	tw.tween_interval(2.4)
 	tw.tween_property(lbl_hook, "modulate:a", 0.0, 0.3)
 	tw.parallel().tween_property(lbl_title, "modulate:a", 1.0, 0.3)
+	if main.director != null and main.director.mode == "race":
+		race = RaceHud.new()
+		race.setup(v)
+		add_child(race)
 
 
 func _build_common() -> void:

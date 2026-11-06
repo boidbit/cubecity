@@ -1,0 +1,151 @@
+name: Race preview
+run-name: Cinematic race preview
+
+# Records one car-vs-train race (vertical, as a Short) and checks that it is a race worth
+# watching: both racers on screen for most of it, a real winner with real finish times, the
+# countdown and the finish cameras. A second, quick job plays eight seeds without drawing
+# anything and checks the same things plus that the race is not decided in advance (both car
+# and train can win). Run it by hand from the Actions tab, or push to feat/train-race-mode.
+on:
+  push:
+    branches:
+      - feat/train-race-mode
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "Seed for the recorded race (the course, the train's speed and the ramp all follow from it)"
+        type: string
+        default: "7"
+      orientation:
+        type: choice
+        options: [vertical, horizontal]
+        default: vertical
+      time:
+        type: choice
+        options: [dusk, day, night]
+        default: dusk
+
+jobs:
+  seeds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install Godot
+        run: echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Import the project
+        run: timeout 300 "$GODOT" --headless --import > /dev/null 2>&1 || true
+      - name: Play eight races (no drawing)
+        run: |
+          mkdir -p race-seeds
+          # eight different races (a seed decides the course, the train and the direction):
+          # four as a Short, four as a normal video, chosen so both winners turn up
+          for ori in vertical horizontal; do
+            if [ "$ori" = vertical ]; then seeds="1 5 6 9"; else seeds="2 7 10 11"; fi
+            for seed in $seeds; do
+              timeout 300 "$GODOT" --headless --fixed-fps 60 --quit-after $((70 * 60)) -- \
+                --bot=race --orientation=$ori --duration=55 --seed=$seed \
+                --summary=race-seeds/$ori-$seed.json > race-seeds/$ori-$seed.log 2>&1 &
+            done
+            wait
+          done
+          if grep -lE "SCRIPT ERROR" race-seeds/*.log; then
+            echo "::error::script errors in a race run (files above)"
+            exit 1
+          fi
+      - name: Check the races
+        run: |
+          python3 - <<'PY'
+          import glob, json, os, sys
+          rows, bad = [], []
+          for f in sorted(glob.glob("race-seeds/*.json")):
+              s = json.load(open(f, encoding="utf-8"))
+              name = os.path.basename(f)[:-5]
+              rows.append((name, s))
+              if s.get("race_winner") not in ("car", "train"):
+                  bad.append(f"{name}: no winner")
+              if float(s.get("race_car_time", -1)) < 0 or float(s.get("race_train_time", -1)) < 0:
+                  bad.append(f"{name}: a finish time is missing")
+              if float(s.get("race_visible_pct", 0)) < 75.0:
+                  bad.append(f"{name}: both racers in view only {s.get('race_visible_pct')}% of the race")
+          print(f"{'run':<14}{'winner':<7}{'car s':>8}{'train s':>9}{'margin':>8}{'leads':>6}{'in view %':>10}")
+          for name, s in rows:
+              print(f"{name:<14}{s.get('race_winner') or '-':<7}{s.get('race_car_time'):>8}{s.get('race_train_time'):>9}{s.get('race_margin'):>8}{s.get('race_lead_changes'):>6}{s.get('race_visible_pct'):>10}")
+          winners = {s.get("race_winner") for _, s in rows}
+          if len(rows) != 8:
+              bad.append(f"expected 8 finished runs, got {len(rows)}")
+          if len(winners) < 2:
+              print("::warning::all eight races had the same winner: check the car/train balance")
+          if bad:
+              sys.exit("\n".join(bad))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: race-seed-summaries
+          path: race-seeds/
+          retention-days: 14
+
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install Godot and recording tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg fonts-dejavu-core libgl1-mesa-dri libglx-mesa0 \
+            libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
+          echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Record the race (55 s, 30 fps)
+        env:
+          MODE: race
+          ORIENTATION: ${{ inputs.orientation || 'vertical' }}
+          DURATION: "55"
+          FPS: "30"
+          SEED: ${{ inputs.seed || '7' }}
+          TIME: ${{ inputs.time || 'dusk' }}
+          SCALE: "1"
+          EXTRA_ARGS: --overlay=clean
+        run: tools/record.sh "$GODOT" race-preview
+      - name: Check the result and the camera work
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          s = json.load(open("race-preview/summary.json", encoding="utf-8"))
+          events = s.get("events", [])
+          names = [e.get("type", "") for e in events]
+          cameras = [n.removeprefix("race_camera_") for n in names if n.startswith("race_camera_")]
+          print(f"winner: {s.get('race_winner')}  margin: {s.get('race_margin')} s")
+          print(f"car {s.get('race_car_time')} s   train {s.get('race_train_time')} s   lead changes {s.get('race_lead_changes')}")
+          print(f"both racers in view: {s.get('race_visible_pct')}%   per shot: {s.get('race_shot_visible')}")
+          print("camera sequence: " + " -> ".join(cameras))
+          print("race beats: " + ", ".join(n for n in names if n.startswith("race_") and not n.startswith("race_camera_")))
+          bad = []
+          if s.get("race_winner") not in {"car", "train"}:
+              bad.append("No race winner was recorded")
+          if "race_go" not in names:
+              bad.append("The race never started (no GO)")
+          if float(s.get("race_visible_pct", 0)) < 75.0:
+              bad.append("The racers were out of view for too much of the race")
+          if not {"grid", "finish", "winner"} <= set(cameras):
+              bad.append("A required camera cut (grid, finish, winner) is missing")
+          if len(set(cameras)) < 4:
+              bad.append("Too few different camera shots")
+          if bad:
+              sys.exit("\n".join(bad))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: race-video-and-review-data
+          path: race-preview/
+          retention-days: 30

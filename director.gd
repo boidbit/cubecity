@@ -16,7 +16,7 @@ extends Node
 
 const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "ONE CAR vs THE CITY", "survive": "SURVIVE 5 STARS",
 	"stunt": "THE STUNT SHOW", "heli": "ONE CAR vs A HELICOPTER", "rush": "RUSH HOUR vs ONE CAR",
-	"escape": "CAN HE ESCAPE?"}
+	"escape": "CAN HE ESCAPE?", "race": "CAR VS TRAIN"}
 # The escape show tries these in order, moving on when one cannot be placed from here.
 # the train goes first: it is the beat people ask for, and it needs the longest run-up
 const ESCAPE_ORDER := ["train", "spikes", "cash", "emp", "spray", "oil", "shield", "cash", "train", "emp", "oil"]
@@ -28,13 +28,13 @@ const EVENT_CAPTIONS := {
 	"big_air": "SEND IT!", "mega_jump": "NO WAY...", "trap_set": "ONE LAST TRICK...", "trap": "BOOM.",
 	"collapse": "TIMBER!", "gas": "GAS STATION = BOMB", "chain": "CHAIN REACTION!", "near_miss": "TOO CLOSE!",
 	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!",
-	"train_hit": "THE TRAIN DIDN'T STOP", "emp": "LIGHTS OUT.", "spray": "NEW CAR. WHO DIS?", "safehouse": "SAFE.",
+	"train_hit": "THE TRAIN DIDN'T STOP", "race_car_finish": "THE CAR CROSSED THE LINE!", "race_train_finish": "THE TRAIN CROSSED THE LINE!", "emp": "LIGHTS OUT.", "spray": "NEW CAR. WHO DIS?", "safehouse": "SAFE.",
 	"spike_cop": "OWN SPIKES!", "oil_spin": "SLIPPERY!", "gate_smash": "NO TIME TO WAIT", "shield": "UNTOUCHABLE",
 }
 const START_CAPTIONS := {
 	"chase": "ONE CAR. NO BRAKES.", "survive": "5 STARS. NO ESCAPE.", "destroy": "HOW MUCH CAN IT BREAK?",
 	"heli": "THEY SENT A HELICOPTER.", "rush": "RUSH HOUR. NO RULES.", "stunt": "NO RAMP IS TOO BIG.",
-	"escape": "ESCAPE THE CITY.",
+	"escape": "ESCAPE THE CITY.", "race": "CAR VS TRAIN. GO!",
 }
 const PRIORITY := ["trap", "heli_down", "mega_jump", "collapse", "gas"]
 const FINALE := 12.0      # seconds before the end when the protection lifts and the finale starts
@@ -118,6 +118,7 @@ var ram := {}             # the roadblock the shielded car drives through: c, di
 var ram_cam := false
 var spikes := {}
 var spike_cam := false
+var race: Race = null        # car versus train (race.gd), race mode only
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -155,13 +156,19 @@ func setup(main_node, cfg: Dictionary) -> void:
 		"escape":
 			bot.cruise = 30.0
 			start_heat = 14.0
+		"race":
+			start_heat = 0.0      # (the car's pace is set by the race itself)
 		_:
 			bot.cruise = 31.0
 			start_heat = 14.0
 	if scripted:
 		bot.cruise = 24.0
 		start_heat = 0.0
-	_place_start()
+	if mode == "race":
+		race = Race.new()
+		race.setup(self, main_node)
+	else:
+		_place_start()
 
 
 # Mid-block on a road near the edge of the city, heading in, with a long straight ahead.
@@ -233,8 +240,21 @@ func start() -> void:
 			main.cap_bonus = 0
 			main.spawn_gap = Vector2(2.4, 3.8)
 			_opening_police(3)
+		"race":
+			# Keep the route clear so the train and car stay together in the race shots.
+			main.cap_bonus = 0
+			main.spawn_t = 1e9
+			main.block_t = 1e9
+			main.traffic_cap = 0
+			main.heat = 0.0
+			main.level = 0
+			main.rail.auto = false
 		_:
 			main.spawn_gap = Vector2(2.5, 4.0)
+	if mode == "race":
+		race.start()
+		main.log_event("start")
+		return
 	bot.plan_flee(_away_point())
 	# the hook: open on the car racing at the camera with the police behind it
 	main.cam_mode = "chase" if mode == "destroy" else "front"
@@ -452,6 +472,8 @@ func tick(dt: float) -> void:
 		var head := "HELICOPTER DOWN" if main.stats["heli_down"] > 0 else "SURVIVED"
 		if main.stats["safehouse"] > 0:
 			head = "ESCAPED"
+		if mode == "race":
+			head = (race.winner.to_upper() + " WINS") if race.winner != "" else "RACE OVER"
 		main.hud.show_over(end_text(head))
 		main.log_event("survived")
 	if main.game_over:
@@ -471,6 +493,8 @@ func tick(dt: float) -> void:
 			var r: Rail = main.rail
 			extra = " beat=%s esc=%d train=%s front=%.0f v=%.0f eta=%.1f tool=%s" % [route_beat, esc_i, str(r.running), r.front, r.speed,
 				r.eta(train_x) if route_beat == "train" else -1.0, main.gadgets.tool]
+		elif mode == "race":
+			extra = " phase=%s car_t=%.2f train_t=%.2f gap=%.1f lead=%s shot=%s" % [race.phase, race.car_t, race.train_t, race.nose_gap, race.lead, race.shot]
 		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)], extra)
 	if scripted:
 		_scripted_heat(t)
@@ -493,13 +517,18 @@ func tick(dt: float) -> void:
 		_ram_tick(t)
 		_spike_tick(t)
 		_house_tick(t)
+	if mode == "race":
+		race.tick(t, dt)
 	_camera(t)
 	_break_free(dt)
 	_stunt_jam(dt)
 	_rescue(t)
 	_unwedge(dt)
 	_jump_moment()
-	if (bot.replan_needed or bot.needs_plan()) and not bot.external:
+	if mode == "race":
+		if bot.replan_needed:
+			race.replan()
+	elif (bot.replan_needed or bot.needs_plan()) and not bot.external:
 		bot.plan_flee(_away_point())
 
 
@@ -547,6 +576,8 @@ func _heat(t: float) -> void:
 			heat_floor = 40.0 if f < 0.5 else 62.0
 		"escape":
 			heat_floor = esc_low if esc_low >= 0.0 else (14.0 if f < 0.45 else 32.0)
+		"race":
+			heat_floor = 0.0
 		_:
 			heat_floor = 90.0
 
@@ -555,6 +586,8 @@ func _beats(t: float) -> void:
 	var f := t / duration
 	if mode == "escape":
 		_escape_show(t)
+		return
+	if mode == "race":
 		return
 	if mode == "stunt":
 		_stunt_show(t)
@@ -961,7 +994,7 @@ func _update_traps(t: float) -> void:
 # Cuts between the chase camera, the front camera (car racing at you, police behind)
 # and the helicopter view (the whole pack).
 func _camera(t: float) -> void:
-	if main.cine_t > 0.0 or t < shot_end:
+	if main.cine_t > 0.0 or mode == "race" or t < shot_end:
 		return
 	if _mega_camera(t):
 		return
@@ -1125,6 +1158,8 @@ func overlay_line() -> String:
 			return "JUMPS %d   BOOMS %d   COPS %d" % [main.stats["big_air"], main.stats["chains"] + main.stats["gas"] + main.stats["collapses"], cops]
 		"escape":
 			return "CASH %d   COPS %d   COMBO x%d" % [main.gadgets.cash, cops, main.gadgets.combo]
+		"race":
+			return "CAR %d m   TRAIN %d m   %s" % [int(race._progress(race._car_front()) * Race.HALF_COURSE * 2.0), int(race._progress(main.rail.front) * Race.HALF_COURSE * 2.0), race.lead.to_upper()]
 	return "COPS %d   %s   %d KM/H" % [cops, clock_s, int(absf(main.player.fwd_speed) * 3.6)]
 
 
@@ -1133,6 +1168,10 @@ func end_text(kind: String) -> String:
 	lines.append("COPS WRECKED  %d" % main.wrecked)
 	if mode == "escape":
 		lines.append("CASH  %d" % main.gadgets.cash)
+	if mode == "race":
+		lines.append("CAR  %s" % ("%.2f s" % race.car_t if race.car_t >= 0.0 else "DID NOT FINISH"))
+		lines.append("TRAIN  %s" % ("%.2f s" % race.train_t if race.train_t >= 0.0 else "DID NOT FINISH"))
+		lines.append("WINNER  %s" % (race.winner.to_upper() if race.winner != "" else "UNDECIDED"))
 	if mode == "destroy":
 		lines.append("CUBES SMASHED  %s" % _thousands(main.cells_down))
 		lines.append("BUILDINGS DOWN  %d" % main.stats["collapses"])
@@ -1183,6 +1222,13 @@ func summary() -> Dictionary:
 	e += 7.0 * st["mega_jump"] + 2.0 * st["near_miss"] + 12.0 * st["heli_down"]
 	e += 10.0 * st["train_hits"] + 3.0 * st["emp_hits"] + 4.0 * st["oil_spins"] + 4.0 * st["spike_cops"]
 	e += 1.0 * st["cash"] + 6.0 * st["sprays"] + 15.0 * st["safehouse"]
+	if mode == "race":
+		# a race is exciting when it is close, changes hands, and you can see it
+		e += 10.0 if race.winner != "" else -14.0
+		if race.margin >= 0.0:
+			e += maxf(0.0, 14.0 - race.margin * 3.5)
+		e += 6.0 * float(race.lead_changes) + (5.0 if st["big_air"] > 0 else 0.0)
+		e += race.visible_pct() * 0.15
 	if main.busted_peak > 0.6:
 		e += 4.0
 	if done.has("trap_boom"):
@@ -1191,6 +1237,8 @@ func summary() -> Dictionary:
 	if main.game_over and main.over_time < duration - FINALE - 2.0:
 		e -= 15.0
 	s["excitement"] = snappedf(e, 0.1)
+	if mode == "race":
+		race.summary_into(s)
 	return s
 
 
@@ -1215,6 +1263,8 @@ func _finish() -> void:
 		if fa != null:
 			fa.store_string(js)
 			fa.close()
+
+
 
 
 # ------------------------------------------------------------ the escape show
@@ -1357,7 +1407,7 @@ func _hand_tool(kind: String) -> bool:
 # Any mode: a bot carrying a tool uses it when it pays off. EMP when the police are close
 # around it; oil when one is right behind, lined up.
 func _use_tools(t: float) -> void:
-	if scripted:
+	if scripted or mode == "race":
 		return
 	var g: Gadgets = main.gadgets
 	if tool_due != "" and t >= tool_due_t:

@@ -80,8 +80,8 @@ func drive(dt: float) -> void:
 		return
 	_advance()
 	if idx >= pts.size():
-		if plan_name == "garage":
-			# parked inside the safehouse: stop and stay
+		if plan_name in ["garage", "race"]:
+			# parked inside the safehouse or at the race finish: stop and stay
 			halt = true
 			return
 		replan_needed = true
@@ -346,7 +346,7 @@ func debug_line(t: float) -> String:
 
 func needs_plan() -> bool:
 	# plan the next stretch a node early, on the straight, not in the middle of the last turn
-	return pts.size() - idx < (2 if plan_name in ["garage", "train", "spray"] else 3)
+	return false if plan_name == "race" else pts.size() - idx < (2 if plan_name in ["garage", "train", "spray"] else 3)
 
 
 # True while a ramp, smash or target is still ahead in the current plan.
