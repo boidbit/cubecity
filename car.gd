@@ -136,9 +136,6 @@ func build(color: Color, player: bool, k: String = "") -> void:
 	var rz := 2.14 if not swat else 2.75
 	_part(Vector3(1.9, 0.22, 0.16), Vector3(0, 0.42, fz), trim if not swat else pcol)
 	_part(Vector3(1.9, 0.22, 0.16), Vector3(0, 0.42, rz), trim)
-	if not swat:
-		_part(Vector3(0.16, 0.1, 0.12), Vector3(-0.98, 0.96, -0.6), pcol)
-		_part(Vector3(0.16, 0.1, 0.12), Vector3(0.98, 0.96, -0.6), pcol)
 	if player:
 		_part(Vector3(1.75, 0.06, 0.34), Vector3(0, 1.16, 1.88), trim)
 		_part(Vector3(0.08, 0.2, 0.1), Vector3(-0.6, 1.03, 1.88), trim)
@@ -218,46 +215,7 @@ func _shape(size: Vector3, pos: Vector3) -> void:
 
 
 func _wheel_visual(w: VehicleWheel3D, r: float) -> void:
-	var tire := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = r
-	cm.bottom_radius = r
-	cm.height = 0.3
-	cm.radial_segments = 16
-	cm.rings = 1
-	var tm := StandardMaterial3D.new()
-	tm.albedo_color = Color(0.04, 0.04, 0.045)
-	tm.roughness = 0.85
-	cm.material = tm
-	tire.mesh = cm
-	tire.rotation_degrees = Vector3(0, 0, 90)
-	w.add_child(tire)
-	var rim := MeshInstance3D.new()
-	var rm := CylinderMesh.new()
-	rm.top_radius = r * 0.66
-	rm.bottom_radius = r * 0.66
-	rm.height = 0.32
-	rm.radial_segments = 14
-	rm.rings = 1
-	var mm := StandardMaterial3D.new()
-	mm.albedo_color = Color(0.75, 0.76, 0.8)
-	mm.metallic = 0.9
-	mm.roughness = 0.25
-	rm.material = mm
-	rim.mesh = rm
-	rim.rotation_degrees = Vector3(0, 0, 90)
-	w.add_child(rim)
-	for a in [0.0, 60.0, 120.0]:
-		var sp := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.34, r * 1.25, 0.07)
-		var dm := StandardMaterial3D.new()
-		dm.albedo_color = Color(0.2, 0.2, 0.22)
-		dm.metallic = 0.6
-		bm.material = dm
-		sp.mesh = bm
-		sp.rotation_degrees = Vector3(a, 0, 0)
-		w.add_child(sp)
+	w.add_child(Kit.wheel(r, 0.3))
 
 
 func _deco(size: Vector3, pos: Vector3, mat: Material) -> void:

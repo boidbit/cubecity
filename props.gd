@@ -19,6 +19,8 @@ var arm_mesh: BoxMesh
 var head_mesh: BoxMesh
 var barrel_mesh: CylinderMesh
 var lamp_mat: StandardMaterial3D
+var pool_mat: ShaderMaterial
+var pool_mesh: QuadMesh
 var glow_mats: Array[StandardMaterial3D] = []
 var night := 0.0
 var spin_t := 0.0
@@ -58,6 +60,12 @@ func setup(w) -> void:
 	lamp_mat.emission_enabled = true
 	lamp_mat.emission = Color(1.0, 0.82, 0.55)
 	lamp_mat.emission_energy_multiplier = 0.2
+	pool_mat = ShaderMaterial.new()
+	pool_mat.shader = Shaders.get_shader(Shaders.POOL)
+	pool_mesh = QuadMesh.new()
+	pool_mesh.size = Vector2(19.0, 19.0)
+	pool_mesh.orientation = PlaneMesh.FACE_Y
+	pool_mesh.material = pool_mat
 	head_mesh = BoxMesh.new()
 	head_mesh.size = Vector3(0.45, 0.14, 0.7)
 	head_mesh.material = lamp_mat
@@ -104,6 +112,7 @@ func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
 func set_night(v: float) -> void:
 	night = v
 	lamp_mat.emission_energy_multiplier = 0.2 + v * 3.5
+	pool_mat.set_shader_parameter("night", v)
 	for g in glow_mats:
 		g.emission_energy_multiplier = 0.4 + v * 2.2
 
@@ -254,6 +263,8 @@ func load_block(key: Vector2i, parent: Node3D) -> void:
 		mms["pole"] = _mm(parent, pole_mesh, lamps.size(), false)
 		mms["arm"] = _mm(parent, arm_mesh, lamps.size(), false)
 		mms["head"] = _mm(parent, head_mesh, lamps.size(), false)
+		mms["pool"] = _mm(parent, pool_mesh, lamps.size(), false)
+		(mms["pool"].get_meta("node") as MultiMeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		for i in lamps.size():
 			var d: Dictionary = lamps[i]
 			d["i"] = i
@@ -262,6 +273,7 @@ func load_block(key: Vector2i, parent: Node3D) -> void:
 			(mms["pole"] as MultiMesh).set_instance_transform(i, Transform3D(Basis.IDENTITY, p + Vector3(0, 3.25, 0)))
 			(mms["arm"] as MultiMesh).set_instance_transform(i, Transform3D(b, p + Vector3(0, 6.4, 0) + b * Vector3(0, 0, -0.85)))
 			(mms["head"] as MultiMesh).set_instance_transform(i, Transform3D(b, p + Vector3(0, 6.3, 0) + b * Vector3(0, 0, -1.6)))
+			(mms["pool"] as MultiMesh).set_instance_transform(i, Transform3D(Basis.IDENTITY, p + b * Vector3(0, 0, -3.2) + Vector3(0, 0.07, 0)))
 	for k in mms:
 		nodes.append(mms[k].get_meta("node"))
 	block_mm[key] = mms
@@ -314,7 +326,7 @@ func _mm(parent: Node3D, mesh: Mesh, count: int, colors: bool) -> MultiMesh:
 	mm.instance_count = count
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
-	mmi.visibility_range_end = 190.0
+	mmi.visibility_range_end = 320.0
 	parent.add_child(mmi)
 	mm.set_meta("node", mmi)
 	return mm
@@ -497,6 +509,17 @@ func make_roof_prop(kind: String, sd: int) -> Node3D:
 			var grey := _mat(Color(0.62, 0.64, 0.66))
 			n.add_child(_box(Vector3(1.4, 0.9, 1.1), Vector3(0, 0.45, 0), grey))
 			n.add_child(_box(Vector3(0.9, 0.05, 0.9), Vector3(0, 0.93, 0), _mat(Color(0.15, 0.15, 0.16))))
+		"spire":
+			# a landmark's mast: a slim tapered shaft with a red beacon on top (the far copy of the
+			# building draws the same mast as a thin box, so it is there before the block streams in)
+			var shaft := CylinderMesh.new()
+			shaft.top_radius = 0.06
+			shaft.bottom_radius = 0.34
+			shaft.height = Landmarks.SPIRE_H
+			shaft.radial_segments = 6
+			shaft.material = _mat(Color(0.82, 0.83, 0.86))
+			n.add_child(_mesh_node(shaft, Vector3(0, Landmarks.SPIRE_H * 0.5, 0)))
+			n.add_child(_box(Vector3(0.45, 0.45, 0.45), Vector3(0, Landmarks.SPIRE_H + 0.2, 0), glow_mats[0]))
 		"antenna":
 			var pole := CylinderMesh.new()
 			pole.top_radius = 0.04

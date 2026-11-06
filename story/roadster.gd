@@ -13,12 +13,16 @@ const WHEEL_Z := 0.15
 
 
 static func mesh() -> ArrayMesh:
-	var profile := [
-		Vector3(-2.05, 0.32, 0.9), Vector3(-2.12, 0.56, 0.91), Vector3(-1.98, 0.74, 0.9), Vector3(-0.9, 0.88, 0.89),
-		Vector3(-0.5, 0.98, 0.87), Vector3(1.5, 0.98, 0.87), Vector3(2.02, 0.92, 0.89), Vector3(2.1, 0.58, 0.91),
-		Vector3(2.03, 0.32, 0.9)]
-	return CarMesh._body(profile, [], [], [-1.3, 1.3], 0.89, 0.87, 0.88, 0.98,
-		func(st: SurfaceTool): _cockpit(st))
+	# a low open body with no cabin of its own (make_cabin puts the glass one on top), lofted
+	# like the other cars: smooth, rounded at both ends, with lamps, door seams and mirrors
+	var sp := {
+		"top": [Vector2(-2.12, 0.56), Vector2(-1.98, 0.74), Vector2(-0.9, 0.88), Vector2(-0.5, 0.98), Vector2(1.5, 0.98),
+			Vector2(2.02, 0.92), Vector2(2.1, 0.58)],
+		"low_w": 0.89, "cabin_w": 0.87, "belt": 0.98, "roof": 0.98, "yb": 0.32, "tip": 0.34,
+		"wheels": [-1.3, 1.3], "wind_f": Vector2(9, 9.1), "wind_r": Vector2(9, 9.1), "side_win": Vector2(9, 9.1),
+		"pillars": [], "doors": [-0.5, 0.35], "handles": [-0.3, 0.55], "mirror_z": -0.7, "mirror_y": 1.0, "lamp_y": 0.66,
+		"extras": func(st: SurfaceTool): _cockpit(st)}
+	return CarMesh._loft(sp)
 
 
 static func _cockpit(st: SurfaceTool) -> void:
