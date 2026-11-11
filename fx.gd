@@ -23,6 +23,16 @@ var skid_i := 0
 var fade: Gradient
 const SKID_MAX := 700
 
+# Burning vehicles (burn.gd): the textures, materials and colour ramps are made once and shared.
+var burn_mat := {}          # kind (smoke, flame_body, flame_core, ember) -> StandardMaterial3D
+var burn_ramp := {}         # kind -> Gradient
+var burn_curve := {}        # kind -> Curve
+var burns: Array = []       # every Burn that exists
+var burn_t := 0.0
+const BURN_LIGHTS := 2      # the burning cars nearest the camera that get a flickering light ...
+const BURN_FULL := 4        # ... and the full fire; the rest are cut down to smoke and small flames
+const BURN_FAR := 110.0     # metres from the camera beyond which a fire is cut down whatever its rank
+
 var sounds := {}
 var sfx_pool: Array[AudioStreamPlayer3D] = []
 var sfx_i := 0
@@ -196,6 +206,7 @@ func setup(main_node) -> void:
 	add_child(engine_player)
 	engine_player.play()
 	engine_pb = engine_player.get_stream_playback() as AudioStreamGeneratorPlayback
+	_make_burn_assets()
 
 
 func _pool_node(mesh: Mesh, amount: int, life: float, grav: Vector3, vmin: float, vmax: float, spread: float, curve: Curve, col: Color) -> CPUParticles3D:
@@ -630,3 +641,119 @@ func engine(rpm: float, thr: float, active: bool) -> void:
 		s = s * 0.5 + engine_noise * (0.25 + thr * 0.4)
 		var v := clampf(s * vol, -0.9, 0.9)
 		engine_pb.push_frame(Vector2(v, v))
+
+
+# ------------------------------------------------------------ burning vehicles
+
+func _make_burn_assets() -> void:
+	var smoke_tex := _burn_noise(false)
+	var flame_tex := _burn_noise(true)
+	var ember_g := Gradient.new()
+	ember_g.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+	ember_g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.55), Color(1, 1, 1, 0)])
+	var ember_tex := GradientTexture2D.new()
+	ember_tex.gradient = ember_g
+	ember_tex.fill = GradientTexture2D.FILL_RADIAL
+	ember_tex.fill_from = Vector2(0.5, 0.5)
+	ember_tex.fill_to = Vector2(1.0, 0.5)
+	ember_tex.width = 32
+	ember_tex.height = 32
+	burn_mat["smoke"] = _burn_material(smoke_tex, false, false, 0)
+	burn_mat["smoke_dense"] = burn_mat["smoke"]
+	burn_mat["flame_body"] = _burn_material(flame_tex, false, true, 1)
+	burn_mat["flame_core"] = _burn_material(flame_tex, true, true, 2)
+	burn_mat["ember"] = _burn_material(ember_tex, true, false, 3)
+	# colours above 1 are hot: the glow in Look picks up what is over its threshold (1.6)
+	# the smoke is warm at the bottom, where the fire lights it (it is unshaded, so this is how it shows at night)
+	burn_ramp["smoke"] = _burn_ramp([0.0, 0.1, 0.35, 0.7, 1.0], [Color(0.35, 0.14, 0.06, 0.0), Color(0.30, 0.12, 0.05, 0.6),
+		Color(0.10, 0.09, 0.09, 0.55), Color(0.12, 0.12, 0.13, 0.38), Color(0.24, 0.24, 0.26, 0.0)])
+	burn_ramp["smoke_dense"] = _burn_ramp([0.0, 0.07, 0.3, 0.7, 1.0], [Color(0.35, 0.14, 0.06, 0.0), Color(0.22, 0.09, 0.04, 0.78),
+		Color(0.07, 0.065, 0.065, 0.72), Color(0.11, 0.11, 0.12, 0.5), Color(0.24, 0.24, 0.26, 0.0)])
+	burn_ramp["flame_body"] = _burn_ramp([0.0, 0.15, 0.6, 1.0], [Color(1.0, 0.55, 0.12, 0.0), Color(1.0, 0.42, 0.08, 0.85),
+		Color(0.75, 0.14, 0.03, 0.6), Color(0.18, 0.03, 0.02, 0.0)])
+	burn_ramp["flame_core"] = _burn_ramp([0.0, 0.12, 0.45, 1.0], [Color(1.5, 1.2, 0.6, 0.0), Color(1.7, 1.3, 0.55, 0.55),
+		Color(1.5, 0.7, 0.15, 0.45), Color(0.5, 0.08, 0.02, 0.0)])
+	burn_ramp["ember"] = _burn_ramp([0.0, 0.6, 1.0], [Color(1.5, 0.95, 0.3, 1.0), Color(1.0, 0.3, 0.05, 0.8), Color(0.3, 0.05, 0.0, 0.0)])
+	var flame := Curve.new()
+	flame.add_point(Vector2(0.0, 0.55))
+	flame.add_point(Vector2(0.25, 1.0))
+	flame.add_point(Vector2(1.0, 0.2))
+	var smoke := Curve.new()
+	smoke.add_point(Vector2(0.0, 0.4))
+	smoke.add_point(Vector2(0.5, 1.0))
+	smoke.add_point(Vector2(1.0, 1.8))
+	var tiny := Curve.new()
+	tiny.add_point(Vector2(0.0, 1.0))
+	tiny.add_point(Vector2(1.0, 0.2))
+	burn_curve["smoke"] = smoke
+	burn_curve["smoke_dense"] = smoke
+	burn_curve["flame_body"] = flame
+	burn_curve["flame_core"] = flame
+	burn_curve["ember"] = tiny
+
+
+func _burn_ramp(offsets: Array, colors: Array) -> Gradient:
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array(offsets)
+	g.colors = PackedColorArray(colors)
+	return g
+
+
+func _burn_material(tex: Texture2D, additive: bool, upright: bool, priority: int = 0) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.render_priority = priority      # drawn in this order, whatever the distance: smoke under flames under sparks
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD if additive else BaseMaterial3D.BLEND_MODE_MIX
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y if upright else BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.albedo_texture = tex
+	m.disable_receive_shadows = true
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return m
+
+
+# A soft round blob with a ragged edge (radial falloff times noise): the shape of a puff of smoke,
+# or of a tongue of flame once it is drawn tall and thin.
+func _burn_noise(flame: bool) -> ImageTexture:
+	var n := FastNoiseLite.new()
+	n.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	n.frequency = 0.09
+	n.fractal_octaves = 3
+	n.seed = 7 if flame else 3
+	var size := 64
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	for y in size:
+		for x in size:
+			var u := (x + 0.5) / size * 2.0 - 1.0
+			var v := (y + 0.5) / size * 2.0 - 1.0
+			var fall := clampf(1.0 - sqrt(u * u + v * v), 0.0, 1.0)
+			fall = fall * fall * (3.0 - 2.0 * fall)
+			var nz := n.get_noise_2d(x, y) * 0.5 + 0.5
+			var a := 0.0
+			if flame:
+				var tip := clampf(1.0 - (v * 0.5 + 0.5) * 0.6, 0.0, 1.0)    # brighter at the bottom
+				a = clampf(fall * (0.5 + 1.0 * nz) * (0.6 + 0.6 * tip), 0.0, 1.0)
+			else:
+				a = clampf(fall * (0.55 + 0.8 * nz), 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, a))
+	return ImageTexture.create_from_image(img)
+
+
+# Only the burning cars nearest the camera get the full fire, and the nearest two a light.
+func _process(delta: float) -> void:
+	burn_t -= delta
+	if burn_t > 0.0 or burns.is_empty() or main == null or main.cam == null:
+		return
+	burn_t = 0.3
+	var cp: Vector3 = main.cam.global_position
+	var live: Array = []
+	for b in burns.duplicate():
+		if not is_instance_valid(b):
+			burns.erase(b)
+		elif b.level > 0:
+			live.append(b)
+	live.sort_custom(func(a, c): return a.global_position.distance_squared_to(cp) < c.global_position.distance_squared_to(cp))
+	for i in live.size():
+		var far: bool = (live[i].global_position.distance_to(cp) > BURN_FAR)
+		live[i].set_tier(0 if (far or i >= BURN_FULL) else (2 if i < BURN_LIGHTS else 1))

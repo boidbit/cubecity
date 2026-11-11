@@ -12,7 +12,6 @@ var hp := 45.0
 var dead := false
 var moving := false
 var mat: ShaderMaterial
-var fire_p: CPUParticles3D
 var prop_ref = null
 var dir := Vector3(0, 0, -1)
 var node := Vector2i.ZERO
@@ -163,14 +162,10 @@ func hurt(a: float) -> void:
 		if prop_ref != null:
 			prop_ref["alive"] = false
 		knock(Vector3.ZERO)
-		fire_p = main.fx.make_fire()
-		fire_p.position = Vector3(0, 1.0, 0)
-		add_child(fire_p)
-		fire_p.emitting = true
-		var sm: CPUParticles3D = main.fx.make_smoke()
-		sm.position = Vector3(0, 1.2, 0)
-		add_child(sm)
-		sm.emitting = true
+		var b := Burn.new()          # the wreck burns on (see burn.gd)
+		b.setup(main.fx)
+		add_child(b)
+		b.set_level(3)
 		main.explode_at.call_deferred(global_position + Vector3(0, 0.8, 0), 6.5, 16.0, 30.0)
 		main.on_civ_wreck(self)
 

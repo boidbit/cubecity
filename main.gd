@@ -7,6 +7,7 @@ const HEAT_MAX := 100.0
 const LEVEL_HEAT := [1.0, 12.0, 30.0, 55.0, 85.0]   # heat needed for 1..5 stars
 const POLICE_CAP := [0, 3, 5, 6, 8, 10]              # by wanted level
 const BUSTED_TIME := 7.0                             # seconds boxed in before you are busted
+const WRECK_BURN_TIME := 28.0                        # seconds a wrecked police car burns before it is cleared away
 const SIRENS_AUDIBLE := 2                            # police cars that sound their siren at once
 const SIREN_RANGE := 110.0                           # ...and only if this close to the player
 
@@ -923,8 +924,7 @@ func on_cells_destroyed(n: int) -> void:
 
 func on_car_dead(car: Car) -> void:
 	explode_at(car.global_position, 7.0 if car.is_player else 5.0, 12.0, 25.0)
-	car.fire.emitting = true
-	car.smoke.emitting = true
+	car.set_burn_level(3)
 	car.engine_force = 0.0
 	car.brake = 20.0
 	if car.is_swat:
@@ -943,7 +943,7 @@ func on_car_dead(car: Car) -> void:
 		blocks.erase(car)
 		if not car.is_swat:
 			hud.banner("WRECKED +100")
-		get_tree().create_timer(14.0).timeout.connect(func():
+		get_tree().create_timer(WRECK_BURN_TIME).timeout.connect(func():
 			if is_instance_valid(car):
 				car.queue_free())
 

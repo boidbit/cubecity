@@ -11,6 +11,14 @@ const STEER_GAIN_LO := 2.2   # max turn rate when slow (rad/s)
 const STEER_GAIN_HI := 1.0   # max turn rate at 40 m/s (rad/s)
 const SIREN_DB_REC := -1.0   # siren volume with the recorded loop (it is mastered ~10 dB below the synthesized one)
 const SIREN_DB_SYNTH := -7.0
+# A damaged car shows it (see Burn): below this share of its health it smokes, then shows flames,
+# then is on fire. A car on fire loses BURN_DAMAGE health a second (times its dmg_scale) and does
+# not mend itself, so the fire does not go out until a repair (a pickup, a spray shop) or the end:
+# a police car goes up within seconds, the player has about 13 s to find a repair.
+const BURN_SMOKE := 0.45
+const BURN_FLAMES := 0.30
+const BURN_FIRE := 0.20
+const BURN_DAMAGE := 1.5
 
 var main
 var kind := "sport"
@@ -62,9 +70,8 @@ var siren_want := false     # set by main: only the police nearest the player ar
 var siren_gain := 0.0       # 0..1, eased so a siren fades in and out instead of cutting
 var siren_db := -2.0
 var head_lights: Array[SpotLight3D] = []
-var smoke: CPUParticles3D
-var fire: CPUParticles3D
-var flame: CPUParticles3D
+var burn: Burn = null       # smoke and fire, made the first time the car is hurt enough
+var flame: CPUParticles3D   # the nitro flame
 
 # ai
 var target: Node3D = null
@@ -199,13 +206,6 @@ func build(color: Color, player: bool, k: String = "") -> void:
 		if not swat:
 			for s in [-1.0, 1.0]:
 				_deco(Vector3(0.03, 0.4, 1.7), Vector3(s * 0.93, 0.64, 0.0), trim)   # black door panels
-
-	smoke = main.fx.make_smoke()
-	smoke.position = Vector3(0, 1.0, -1.3)
-	add_child(smoke)
-	fire = main.fx.make_fire()
-	fire.position = Vector3(0, 1.0, -1.3)
-	add_child(fire)
 
 
 func _shape(size: Vector3, pos: Vector3) -> void:
@@ -373,10 +373,14 @@ func hurt(amount: float) -> void:
 		main.on_player_hurt(amount)
 	_update_look()
 	if hp <= 0.0:
-		dead = true
-		if siren_snd != null:
-			siren_snd.stop()
-		main.on_car_dead(self)
+		_die()
+
+
+func _die() -> void:
+	dead = true
+	if siren_snd != null:
+		siren_snd.stop()
+	main.on_car_dead(self)
 
 
 func heal(amount: float) -> void:
@@ -387,10 +391,42 @@ func heal(amount: float) -> void:
 
 
 func _update_look() -> void:
-	var d := clampf(1.0 - hp / max_hp, 0.0, 1.0)
-	mat_body.set_shader_parameter("damage", d)
-	smoke.emitting = hp < max_hp * 0.45
-	fire.emitting = hp < max_hp * 0.2
+	var share := hp / max_hp
+	mat_body.set_shader_parameter("damage", clampf(1.0 - share, 0.0, 1.0))
+	set_burn_level(3 if share < BURN_FIRE else (2 if share < BURN_FLAMES else (1 if share < BURN_SMOKE else 0)))
+
+
+# 0 nothing, 1 smoke, 2 flames, 3 on fire. The Burn node is made the first time it is needed.
+func set_burn_level(l: int) -> void:
+	if burn == null:
+		if l <= 0:
+			return
+		burn = Burn.new()
+		burn.setup(main.fx, 1.4 if is_swat else 1.0)
+		add_child(burn)
+	var was := burn.level
+	burn.set_level(l)
+	if l >= 3 and was < 3 and not dead:
+		main.log_event("on_fire")
+		if is_player:
+			main.hud.banner("ON FIRE! FIND A REPAIR")
+
+
+func burning() -> bool:
+	return burn != null and burn.level >= 3
+
+
+# A car on fire loses health (silently: no flash, no shake) and nothing mends it.
+func _burn_damage(delta: float) -> void:
+	if is_player and main.gadgets != null and main.gadgets.shielded():
+		return
+	hp -= BURN_DAMAGE * dmg_scale * delta
+	if is_player and main.protect:
+		hp = maxf(hp, 4.0)      # video runs: a clip never ends on a wreck
+	last_hurt = main.clock      # (this is what stops a player's car mending itself)
+	_update_look()
+	if hp <= 0.0:
+		_die()
 
 
 func add_dent(world_point: Vector3, depth: float) -> void:
@@ -453,6 +489,10 @@ func _physics_process(delta: float) -> void:
 	speed = linear_velocity.length()
 
 	_handle_impacts(delta)
+	if burn != null and burn.level >= 3:
+		_burn_damage(delta)
+		if dead:
+			return
 	if siren_a != null:
 		_siren(delta)
 	if siren_snd != null:
@@ -547,9 +587,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		flip_t = 0.0
 
-	if is_player and not main.game_over:
-		if main.clock - last_hurt > 4.0 and hp < max_hp:
-			heal(5.0 * delta)
+	# (the player's car used to mend itself at 5 health a second, 4 s after the last hit, so smoke and
+	# fire went out by themselves. Damage stays now: a repair pickup or a spray shop is the way out.)
 
 	_body_motion(delta)
 	_skid_and_smoke()

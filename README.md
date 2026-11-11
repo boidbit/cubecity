@@ -7,7 +7,9 @@ A mobile car-chase and destruction game made in Godot 4. The city, cars, buildin
 - A 1.1 km road-grid city with districts: downtown glass towers, brick and concrete mid-rises, suburbs, industrial blocks and parks.
 - Destructible voxel buildings. Drive through them and bring them down in a full collapse.
 - Arcade car physics built on `VehicleBody3D`: steering assist, handbrake drifts, nitro and drift boost.
-- Damage model with dents, parts that fly off, smoke and fire.
+- Damage model with dents, parts that fly off, smoke and fire. A car below 45 % health smokes, below 30 % smokes
+  heavily, below 20 % is on fire and loses health until it is repaired (a repair pickup or a spray shop): nothing mends it
+  by itself. A wrecked police car burns on for about 28 s.
 - Wanted level from 0 to 5 stars. Your first crime brings the police; stay out of sight to lose them.
 - Police that follow the roads, PIT manoeuvres, roadblocks, a helicopter with a spotlight, a SWAT truck boss, and sirens.
 - BUSTED meter: stay boxed in by police for 7 seconds and you are arrested.
@@ -64,6 +66,10 @@ Steering feel is tuned by the `STEER_*` constants at the top of `car.gd`.
   test). The car is sent into street lamps and trees at 15, 25 and 35 m/s and into one at a crawl. It must lose only a share
   of its speed (never stop), must not hit a lamp that is a metre away, and must not be flipped or stopped by the fallen prop.
   It exits 1 if anything fails. The test itself is `tools/tests/props_test.gd`.
+- `tools/test_fire.sh path/to/godot` checks burning cars (about 15 s; CI runs it): the stages by health (smoke, heavy smoke,
+  fire), a car on fire loses health and does not mend itself, a repair puts it out, a wrecked police car burns on for about
+  28 s, and the particles of a pile of burning wrecks stay within a budget. How the fire looks is judged by eye
+  (`burn.gd`; its known issue is noted at the top of the file).
 - `tools/test_determinism.sh path/to/godot` checks that the same `--seed` gives the same run: three bot runs side by side
   must end with the same events at the same moments (about 15 s; CI runs it). Videos and tests can rely on a seed.
 - `tools/smoke.sh path/to/godot` is the broad check: the bot plays every mode and the run fails on any script error.

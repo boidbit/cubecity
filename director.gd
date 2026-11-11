@@ -27,7 +27,7 @@ const EVENT_CAPTIONS := {
 	"roadblock": "THEY BLOCKED THE ROAD", "heli": "NOW A HELICOPTER?!", "swat": "THE SWAT TRUCK ARRIVES",
 	"big_air": "SEND IT!", "mega_jump": "NO WAY...", "trap_set": "ONE LAST TRICK...", "trap": "BOOM.",
 	"collapse": "TIMBER!", "gas": "GAS STATION = BOMB", "chain": "CHAIN REACTION!", "near_miss": "TOO CLOSE!",
-	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!",
+	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!", "on_fire": "NOW IT'S ON FIRE!",
 	"train_hit": "THE TRAIN DIDN'T STOP", "race_car_finish": "THE CAR CROSSED THE LINE!", "race_train_finish": "THE TRAIN CROSSED THE LINE!", "emp": "LIGHTS OUT.", "spray": "NEW CAR. WHO DIS?", "safehouse": "SAFE.",
 	"spike_cop": "OWN SPIKES!", "oil_spin": "SLIPPERY!", "gate_smash": "NO TIME TO WAIT", "shield": "UNTOUCHABLE",
 }
