@@ -25,6 +25,23 @@ var glow_mats: Array[StandardMaterial3D] = []
 var night := 0.0
 var spin_t := 0.0
 
+# Hitting a street lamp or a tree. The car's footprint is tested against the prop (grown by the
+# prop's own radius), so a gap of a metre is no hit and a graze with a corner is a small one. The
+# prop is knocked down; the car loses a share of its speed, a little health and gets a dent, but it
+# is never stopped. The fallen prop is thrown about for show only: it lives on DEBRIS_LAYER, which
+# no car collides with. (On the cars' layer it was a 60 kg box that appeared inside the nose and
+# under the wheel rays and stopped a car doing 25 m/s dead; tools/test_props.sh keeps that fixed.)
+const DEBRIS_LAYER := 8
+const HIT_SPEED := 2.0         # m/s: slower than this the car is parked against the prop, not hitting it
+const CAR_HALF_W := 0.91       # the car's footprint (the collision boxes in Car.build)
+const CAR_HALF_L := 2.05
+const HIT_MARGIN := 0.12       # metres of air that still count as a touch (60 Hz steps, wheel overhang)
+const LAMP_R := 0.12           # pole radius at the foot
+const TREE_R := 0.24           # trunk radius at the foot, times the tree's size
+const LAMP_H := 6.5
+const LAMP_KEEP := 0.90        # share of its speed a car keeps after a head-on hit on a lamp ...
+const TREE_KEEP := 0.78        # ... and on a tree (a graze costs about half as much)
+
 
 func setup(w) -> void:
 	world = w
@@ -572,7 +589,7 @@ func _break(key: Vector2i, d: Dictionary, push: Vector3) -> void:
 	var hide := Transform3D(Basis().scaled(Vector3.ZERO), d["p"])
 	var rb := RigidBody3D.new()
 	rb.mass = 60.0
-	rb.collision_layer = 4
+	rb.collision_layer = DEBRIS_LAYER   # not 4: cars collide with that, see the note at the top
 	rb.collision_mask = 1 | 4
 	var cs := CollisionShape3D.new()
 	var bs := BoxShape3D.new()
@@ -602,10 +619,37 @@ func _break(key: Vector2i, d: Dictionary, push: Vector3) -> void:
 	rb.add_child(cs)
 	world.debris_root.add_child(rb)
 	rb.global_transform = Transform3D(Basis.IDENTITY, d["p"])
-	rb.linear_velocity = push + Vector3(0, 3, 0)
+	rb.linear_velocity = push + Vector3(0, clampf(push.length() * 0.4, 1.0, 3.0), 0)
 	rb.angular_velocity = Vector3(push.z, 0, -push.x).normalized() * 3.0
 	main.get_tree().create_timer(8.0).timeout.connect(rb.queue_free)
 	main.on_prop_smash(d["p"])
+
+
+# The player's car against a lamp or a tree: `inv` is the car's inverse transform, `spd` its speed.
+# Does nothing unless the prop is inside the car's footprint (plus HIT_MARGIN).
+func _car_hits_prop(key: Vector2i, d: Dictionary, pl: Car, inv: Transform3D, spd: float) -> void:
+	var tree: bool = d["t"] == "tree"
+	var size: float = d["s"] if tree else 1.0
+	var r: float = TREE_R * size if tree else LAMP_R
+	var top: float = 3.0 * size if tree else LAMP_H
+	if pl.global_position.y - 0.5 > top:
+		return                                    # in the air above it
+	var p: Vector3 = d["p"]
+	var lp: Vector3 = inv * p                     # the prop in the car's own frame (x right, z back)
+	if absf(lp.x) > CAR_HALF_W + r + HIT_MARGIN or absf(lp.z) > CAR_HALF_L + r + HIT_MARGIN:
+		return
+	# straight on takes the full share, a graze with a corner about half of it
+	var centred := clampf(1.0 - maxf(absf(lp.x) - 0.3, 0.0) / (CAR_HALF_W + r), 0.0, 1.0)
+	var k := lerpf(0.3, 1.0, centred)
+	var keep := lerpf(1.0, TREE_KEEP if tree else LAMP_KEEP, k)
+	var v := pl.linear_velocity
+	_break(key, d, Vector3(v.x, 0.0, v.z) * 0.6)
+	pl.linear_velocity = Vector3(v.x * keep, v.y, v.z * keep)
+	var hit := Vector3(p.x, maxf(pl.global_position.y, 0.4), p.z)
+	pl.add_dent(hit, clampf(spd * 0.012, 0.06, 0.3) * k)
+	pl.hurt(clampf((spd - 6.0) * (0.2 if tree else 0.1), 0.0, 8.0) * k)
+	main.fx.sparks(hit, clampi(int(spd * 0.4), 6, 16))
+	main.shake_cam(0.1 + spd * 0.008)
 
 
 func _boom(d: Dictionary, delay: float) -> void:
@@ -644,6 +688,7 @@ func _physics_process(delta: float) -> void:
 	var spd: float = pl.speed
 	var bk: Vector2i = world.block_of(pp)
 	var now: float = main.clock
+	var car_inv: Transform3D = pl.global_transform.affine_inverse()
 	for di in range(-1, 2):
 		for dj in range(-1, 2):
 			var key := Vector2i(bk.x + di, bk.y + dj)
@@ -670,9 +715,8 @@ func _physics_process(delta: float) -> void:
 				var dist := (d["p"] as Vector3).distance_to(Vector3(pp.x, 0, pp.z))
 				match t:
 					"tree", "lamp":
-						if dist < 2.0 and spd > 4.0:
-							_break(key, d, pl.linear_velocity * 0.6)
-							pl.linear_velocity *= 0.93
+						if spd > HIT_SPEED and dist < 3.5:
+							_car_hits_prop(key, d, pl, car_inv, spd)
 					"barrel":
 						if dist < 2.6 and spd > 2.0:
 							_boom(d, 0.05)
