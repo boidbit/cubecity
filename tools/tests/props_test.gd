@@ -201,6 +201,9 @@ func _setup(run: Dictionary) -> bool:
 	cur["t"] = 0.0
 	cur["rec"] = []
 	cur["t_ev"] = -1.0
+	cur["near"] = 1e9              # closest approach (along the car) and what was true then, for a failure message
+	cur["near_info"] = ""
+	cur["touched"] = {}            # what the car collided with on the way, for a failure message
 	settle = SETTLE
 	return true
 
@@ -254,6 +257,14 @@ func _physics_process(delta: float) -> bool:
 	var up := player.global_transform.basis.y
 	(cur["rec"] as Array).append({"t": t, "v": player.linear_velocity.length(),
 		"tilt": rad_to_deg(acos(clampf(up.y, -1.0, 1.0)))})
+	for b in player.get_colliding_bodies():
+		var key := "%s '%s' at (%.0f, %.0f)" % [b.get_class(), b.name, b.global_position.x, b.global_position.z]
+		if not (cur["touched"] as Dictionary).has(key):
+			(cur["touched"] as Dictionary)[key] = "t=%.2f s, car at (%.0f, %.0f) doing %.1f m/s" % [t, player.global_position.x, player.global_position.z, player.linear_velocity.length()]
+	if absf(lp.z) < float(cur["near"]):
+		cur["near"] = absf(lp.z)
+		cur["near_info"] = "closest at t=%.2f s: prop %.2f m beside the car's axis and %.2f m along it, car doing %.1f m/s, block loaded %s, car on the ground %s, prop alive %s" % [
+			t, lp.x, lp.z, player.linear_velocity.length(), str(props.loaded.has(world.block_of(pp))), str(player.airtime == 0.0), str(prop["alive"])]
 	if float(cur["t_ev"]) < 0.0:
 		if cur["control"]:
 			if absf(lp.x) < CAR_HALF_W + r and absf(lp.z) < CAR_HALF_L + r:
@@ -329,7 +340,7 @@ func _finish() -> void:
 	if problems.is_empty():
 		_pass(cur["name"], ", ".join(notes) if not notes.is_empty() else "no hit")
 	else:
-		_fail(cur["name"], "; ".join(problems))
+		_fail(cur["name"], "; ".join(problems) + " [" + str(cur["near_info"]) + "] touched: " + str(cur["touched"]))
 
 
 func _pass(name: String, detail: String) -> void:
