@@ -26,7 +26,7 @@ const BEHIND := 40.0        # clear metres wanted behind the prop when choosing 
 const AHEAD := 36.0         # metres past the prop the physics query checks (a car at 35 m/s covers them in a second)
 const AFTER := 1.2          # seconds recorded after the hit
 const ATTEMPTS := 4         # strips tried for a case before it is called a failure
-const MAX_SKIPS := 12       # more unusable strips than this over the whole test is a failure too
+const MAX_SKIPS := 12       # more runs thrown away than this over the whole test is a failure too
 const CAR_HALF_W := 0.91    # the car's footprint, as in Car.build (kept apart from the game's constants
 const CAR_HALF_L := 2.05    # on purpose: the test must say what is right, not repeat what the game says)
 

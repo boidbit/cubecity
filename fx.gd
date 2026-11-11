@@ -37,6 +37,10 @@ var engine_player: AudioStreamPlayer
 var engine_pb: AudioStreamGeneratorPlayback
 var engine_phase := 0.0
 var engine_noise := 0.0
+# The engine sound makes as many samples as the audio thread asks for, which depends on the wall
+# clock. It has its own random numbers, so the game's (--seed) do not depend on how fast the
+# machine is: the same seed gives the same run.
+var audio_rng := RandomNumberGenerator.new()
 const MIX := 22050.0
 const SCREECH_ON := false   # tyre squeal switched off: it sounded bad. true brings it back
 const MEDIUM_HIT := 6.0     # impact sizes (see Car._apply_impact) that get a recorded crash
@@ -621,7 +625,7 @@ func engine(rpm: float, thr: float, active: bool) -> void:
 		if engine_phase > 1.0:
 			engine_phase -= 1.0
 		var p := engine_phase * TAU
-		engine_noise += 0.15 * (randf_range(-1.0, 1.0) - engine_noise)
+		engine_noise += 0.15 * (audio_rng.randf_range(-1.0, 1.0) - engine_noise)
 		var s := sin(p) + 0.55 * sin(2.0 * p + 0.6) + 0.3 * sin(3.0 * p) + 0.15 * sin(5.0 * p)
 		s = s * 0.5 + engine_noise * (0.25 + thr * 0.4)
 		var v := clampf(s * vol, -0.9, 0.9)

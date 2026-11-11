@@ -64,6 +64,8 @@ Steering feel is tuned by the `STEER_*` constants at the top of `car.gd`.
   test). The car is sent into street lamps and trees at 15, 25 and 35 m/s and into one at a crawl. It must lose only a share
   of its speed (never stop), must not hit a lamp that is a metre away, and must not be flipped or stopped by the fallen prop.
   It exits 1 if anything fails. The test itself is `tools/tests/props_test.gd`.
+- `tools/test_determinism.sh path/to/godot` checks that the same `--seed` gives the same run: three bot runs side by side
+  must end with the same events at the same moments (about 15 s; CI runs it). Videos and tests can rely on a seed.
 - `tools/smoke.sh path/to/godot` is the broad check: the bot plays every mode and the run fails on any script error.
 
 ## Videos for YouTube (GitHub Actions)

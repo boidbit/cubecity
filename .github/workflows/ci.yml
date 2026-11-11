@@ -24,6 +24,8 @@ jobs:
         run: echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
       - name: Collision test (headless physics, lamps and trees)
         run: tools/test_props.sh "$GODOT" smoke-out
+      - name: Determinism test (the same seed gives the same run)
+        run: tools/test_determinism.sh "$GODOT" smoke-out
       - name: Smoke test (headless, all bot modes)
         run: tools/smoke.sh "$GODOT" smoke-out 45
       - uses: actions/upload-artifact@v4
