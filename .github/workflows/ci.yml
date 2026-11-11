@@ -22,7 +22,7 @@ jobs:
           key: godot-4.4.1-stable
       - name: Install Godot
         run: echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
-      - name: Collision test (headless physics: lamps and trees)
+      - name: Collision test (headless physics, lamps and trees)
         run: tools/test_props.sh "$GODOT" smoke-out
       - name: Smoke test (headless, all bot modes)
         run: tools/smoke.sh "$GODOT" smoke-out 45
