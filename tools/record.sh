@@ -5,9 +5,9 @@
 #
 # Usage: tools/record.sh <godot> <out dir>
 # Settings come from the environment (all optional):
-#   MODE=escape|chase|destroy|survive|stunt|heli|rush|race  ORIENTATION=vertical|horizontal  DURATION=55  FPS=60
+#   MODE=escape|chase|destroy|survive|stunt|heli|rush|race|swarm  ORIENTATION=vertical|horizontal  DURATION=55  FPS=60
 #   SEED=123  TIME=dusk|day|night  TITLE="..."  SCALE=1 (0.5 for a quick half-size preview)
-#   EXTRA_ARGS="--story=... --story_log=..."  more game arguments (the story lab uses this)
+#   EXTRA_ARGS="--story=... --story_log=..."  more game arguments (the story lab uses this; swarm takes --intensity=0..1)
 set -euo pipefail
 GODOT=$1
 OUT=$2

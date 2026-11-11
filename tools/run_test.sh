@@ -22,7 +22,8 @@ if [ $rc -ne 0 ]; then
   echo "::error::$NAME test exited with code $rc"
   status=1
 fi
-if grep -nE "SCRIPT ERROR|Parse Error" "$OUT/$NAME-test.log" | grep -n .; then
+# (engine errors count too, like the smoke test: "resources still in use at exit" is Godot's shutdown housekeeping)
+if grep -nE "SCRIPT ERROR|Parse Error|ERROR:" "$OUT/$NAME-test.log" | grep -v "resources still in use at exit" | grep -n .; then
   echo "::error::$NAME test: script errors in the log (lines above)"
   status=1
 fi

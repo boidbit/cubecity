@@ -8,7 +8,7 @@ import os
 import sys
 
 COLS = ["mode", "end", "excitement", "avg_kmh", "max_cops", "cops_wrecked", "collapses",
-        "chains", "gas", "big_air", "mega_jump", "near_miss", "heli_down", "smash", "busted_peak", "stuck",
+        "chains", "gas", "big_air", "mega_jump", "near_miss", "player_hits", "saves", "heli_down", "smash", "busted_peak", "stuck",
         "cubes"]
 
 

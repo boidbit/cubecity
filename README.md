@@ -70,8 +70,12 @@ Steering feel is tuned by the `STEER_*` constants at the top of `car.gd`.
   fire), a car on fire loses health and does not mend itself, a repair puts it out, a wrecked police car burns on for about
   28 s, and the particles of a pile of burning wrecks stay within a budget. How the fire looks is judged by eye
   (`burn.gd`; its known issue is noted at the top of the file).
-- `tools/test_determinism.sh path/to/godot` checks that the same `--seed` gives the same run: three bot runs side by side
-  must end with the same events at the same moments (about 15 s; CI runs it). Videos and tests can rely on a seed.
+- `tools/test_determinism.sh path/to/godot [out] [mode]` checks that the same `--seed` gives the same run: three bot runs
+  side by side must end with the same events at the same moments (about 15 s; CI runs it for `chase` and `swarm`).
+  Videos and tests can rely on a seed.
+- `tools/test_swarm.sh path/to/godot` plays 8 swarm clips (4 seeds, each calm and wild; about 35 s; CI runs it): the car survives,
+  28 or more police at the peak, it keeps moving, near misses, police from every side, and a wild clip takes clearly more
+  hits than a calm one. `--no_oracle` (a game argument) plays the same clips with the bot's own rays only.
 - `tools/smoke.sh path/to/godot` is the broad check: the bot plays every mode and the run fails on any script error.
 
 ## Videos for YouTube (GitHub Actions)
@@ -94,6 +98,13 @@ upload text show up on the same page. Or from GitHub:
      - `stunt`: tower-top to tower-top jumps, barrel corridors, a tower brought down as the car passes, ramps and gas stations.
      - `destroy`: smash as much of the city as possible, with a "% of the city destroyed" counter.
      - `survive`: 5 stars from the first second.
+     - `swarm`: 30 to 40 police cars on one car, from behind, out of the side streets, head-on and across the road
+       ahead, with normal traffic going about its business. The director reads every car (`oracle.gd`: it looks 3 s
+       ahead, tries 21 moves, and keeps the one that is a clean miss, a good near miss or, when it wants one, a small
+       hit) and steers the bot's car through; when even the best move ends in a hard hit the other car swerves at the
+       last moment. Every clip has an `intensity` from the seed (or the workflow's `intensity` input, 0 .. 1): a calm
+       clip has few hits, a wild one has a slow police car ahead that the car runs into, a few times, and more cars pressing
+       it. The finale is the barrel trap that blows up the pack. Two stars all the way: no SWAT truck, no helicopter.
      - `race`: a real race, car against train, down a purpose-built strip beside the railway (the block row is cleared
        for it). Both stand on the start line, three lights count down, and on GO the car drives off while the heavy
        train pulls away. The car has a jump ramp and two nitro pads; the train has its own top speed, its own pull-away
@@ -250,7 +261,10 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `props.gd` | Trees, lamps, barrels, gas stations, pickups, rooftop props |
 | `gadgets.gd` | Spray shops, safehouses, spike strips, EMP, oil slick, shield, cash and the combo |
 | `rail.gd` | The railway: track, level crossings with lights and barrier arms, the train |
-| `fx.gd` | Particles, skid marks, sound (recorded files from `audio/` with synthesized fallbacks) |
+| `fx.gd` | Particles, skid marks, sound (recorded files from `audio/` with synthesized fallbacks), the shared fire assets and budget |
+| `burn.gd` | A burning vehicle: smoke, flames, embers and a light, in stages by health |
+| `oracle.gd` | The swarm show's eyes: plays 21 moves out against every car 3 s ahead and picks one |
+| `swarm.gd` | The swarm show: who turns up when (the pack, head-on and crossing police, the slow car to run into), how wild the clip is |
 | `audio/` | Sound effects (Ogg Vorbis): siren and rotor loops, crashes, boom, tyre screech |
 | `hud.gd` | HUD, minimap, touch controls, video overlay |
 | `shaders.gd` | Facade (four window layouts), ground, lamp light pool, car and debris shaders |

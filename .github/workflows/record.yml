@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "escape = cash, spike strips, a train at the crossing, EMP, a shield through a roadblock, an oil slick, the spray shop and a safehouse garage at the end | chase = 1 car vs a growing pack of police | heli = low police helicopter, ends with the car jumping into it | rush = cars from every direction, near misses | stunt = tower jumps, barrel corridors, falling towers | destroy = smash as much city as possible | survive = 5 stars from the start | race = a car and a train race side by side down a purpose-built strip: countdown, a ramp and nitro for the car, a surge for the train, lead changes and a photo-finish result"
+        description: "escape = cash, spike strips, a train at the crossing, EMP, a shield through a roadblock, an oil slick, the spray shop and a safehouse garage at the end | chase = 1 car vs a growing pack of police | heli = low police helicopter, ends with the car jumping into it | rush = cars from every direction, near misses | stunt = tower jumps, barrel corridors, falling towers | destroy = smash as much city as possible | survive = 5 stars from the start | race = a car and a train race side by side down a purpose-built strip: countdown, a ramp and nitro for the car, a surge for the train, lead changes and a photo-finish result | swarm = 30 to 40 police on one car from behind, the side streets and head-on, with normal traffic too; the director reads every car and steers the car through, some clips calm and some wild"
         type: choice
-        options: [escape, chase, heli, rush, stunt, destroy, survive, race]
+        options: [escape, chase, heli, rush, stunt, destroy, survive, race, swarm]
         default: escape
       orientation:
         description: "vertical = YouTube Shorts (1080x1920), horizontal = normal video (1920x1080)"
@@ -52,6 +52,10 @@ on:
         default: ""
       seed:
         description: "Random seed (blank = random). Same seed = similar run, not identical"
+        type: string
+        default: ""
+      intensity:
+        description: "swarm only: how wild the clip is, 0 (calm, few hits) to 1 (wild, several hits). Blank = from the seed"
         type: string
         default: ""
 
@@ -101,7 +105,7 @@ jobs:
           TIME: ${{ inputs.time }}
           TITLE: ${{ inputs.title }}
           SEED: ${{ matrix.seed }}
-          EXTRA_ARGS: --overlay=${{ inputs.overlay || 'clean' }}
+          EXTRA_ARGS: --overlay=${{ inputs.overlay || 'clean' }} ${{ inputs.intensity && format('--intensity={0}', inputs.intensity) || '' }}
         run: tools/record.sh "$GODOT" take
       - uses: actions/upload-artifact@v4
         with:

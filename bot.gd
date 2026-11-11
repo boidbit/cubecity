@@ -50,6 +50,7 @@ var time_sum := 0.0
 var ram_until := 0.0      # director: straight through whatever is ahead (shielded) until then
 var steady_until := 0.0   # director: hold the lane (no swerving for traffic) until then
 var booth_ok_until := 0.0 # director: lined up with a spray booth, drive between its walls
+var oracle = null         # Oracle (the swarm show): looks 3 s ahead at every car and says where to drive, how fast
 
 
 func setup(main_node) -> void:
@@ -96,13 +97,20 @@ func drive(dt: float) -> void:
 		replan_needed = true
 
 	# steering: pure pursuit on the look-ahead point, turned into an arrow press
+	var o_on: bool = oracle != null and kind == "road" and main.clock < oracle.until
 	var look := clampf(LOOK_MIN + car.speed * 0.5, LOOK_MIN, LOOK_MAX)
+	if o_on:
+		look = clampf(6.0 + car.speed * 0.3, LOOK_MIN, 16.0)     # a nearer point: a lane change shows within half a second
 	var tp := _lookahead(look)
 	if lane != 0.0:
 		if (p - lane_until).dot(lane_dir) > 8.0:
 			lane = 0.0
 		else:
 			tp += Vector3.UP.cross(lane_dir) * lane
+	if o_on and oracle.lane != 0.0:
+		var ldir := _lookahead(look + 4.0) - tp
+		if ldir.length() > 0.5:
+			tp += Vector3.UP.cross(ldir.normalized()) * oracle.lane
 	var d := tp - p
 	var alpha := wrapf(atan2(-d.x, -d.z) - atan2(-f.x, -f.z), -PI, PI)
 	var v := maxf(absf(car.fwd_speed), 2.0)
@@ -123,9 +131,11 @@ func drive(dt: float) -> void:
 		var left := p.distance_to(_flat(pts[pts.size() - 1]))
 		want = minf(minf(want, 11.0), sqrt(2.0 * 4.5 * maxf(left - 1.0, 0.0)) + 0.5)
 	if kind == "road" and main.clock >= ram_until and main.clock >= steady_until:
-		var av: Array = _avoid(f, st, want)
+		var av: Array = _avoid(f, st, want, o_on)
 		st = av[0]
 		want = av[1]
+	if o_on and oracle.speed_cap > 0.0:
+		want = minf(want, oracle.speed_cap)
 	var gas := clampf((want - car.fwd_speed) * 0.4, -1.0, 1.0)
 	if full or main.clock < ram_until:
 		gas = 1.0
@@ -140,6 +150,8 @@ func drive(dt: float) -> void:
 		if kind in ["ramp", "smash", "hit"]:
 			nitro = true
 		elif car.nitro > 35.0 and absf(alpha) < 0.12 and want > car.fwd_speed + 3.0 and _straight(p) > 90.0:
+			nitro = true
+		if o_on and oracle.nitro:
 			nitro = true
 
 	# stuck against something: reverse with the wheel turned the other way, so the
@@ -267,7 +279,7 @@ func _straight(p: Vector3) -> float:
 
 
 # Rays fanned ahead: steer away from cars and walls, brake for what is dead ahead.
-func _avoid(f: Vector3, st: float, want: float) -> Array:
+func _avoid(f: Vector3, st: float, want: float, static_only: bool = false) -> Array:
 	var space := car.get_world_3d().direct_space_state
 	var o := car.global_position + Vector3(0, 0.8, 0)
 	var reach := clampf(6.0 + car.speed * 0.9, 8.0, 38.0)
@@ -277,7 +289,7 @@ func _avoid(f: Vector3, st: float, want: float) -> Array:
 	var ahead := reach
 	for a: float in [-0.45, -0.2, 0.0, 0.2, 0.45]:
 		var dirv := f.rotated(Vector3.UP, a)
-		var q := PhysicsRayQueryParameters3D.create(o, o + dirv * reach, 1 | 2 | 4, ex)
+		var q := PhysicsRayQueryParameters3D.create(o, o + dirv * reach, 1 if static_only else (1 | 2 | 4), ex)
 		var r := space.intersect_ray(q)
 		if r.is_empty() or (r["normal"] as Vector3).y > 0.5:
 			continue

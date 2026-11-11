@@ -16,7 +16,7 @@ extends Node
 
 const TITLES := {"chase": "1 CAR vs 10 COPS", "destroy": "ONE CAR vs THE CITY", "survive": "SURVIVE 5 STARS",
 	"stunt": "THE STUNT SHOW", "heli": "ONE CAR vs A HELICOPTER", "rush": "RUSH HOUR vs ONE CAR",
-	"escape": "CAN HE ESCAPE?", "race": "CAR VS TRAIN"}
+	"escape": "CAN HE ESCAPE?", "race": "CAR VS TRAIN", "swarm": "40 COPS. ONE CAR."}
 # The escape show tries these in order, moving on when one cannot be placed from here.
 # the train goes first: it is the beat people ask for, and it needs the longest run-up
 const ESCAPE_ORDER := ["train", "spikes", "cash", "emp", "spray", "oil", "shield", "cash", "train", "emp", "oil"]
@@ -27,14 +27,14 @@ const EVENT_CAPTIONS := {
 	"roadblock": "THEY BLOCKED THE ROAD", "heli": "NOW A HELICOPTER?!", "swat": "THE SWAT TRUCK ARRIVES",
 	"big_air": "SEND IT!", "mega_jump": "NO WAY...", "trap_set": "ONE LAST TRICK...", "trap": "BOOM.",
 	"collapse": "TIMBER!", "gas": "GAS STATION = BOMB", "chain": "CHAIN REACTION!", "near_miss": "TOO CLOSE!",
-	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!", "on_fire": "NOW IT'S ON FIRE!",
+	"broke_free": "STILL ALIVE!", "heli_down": "HELICOPTER DOWN!", "swat_down": "SWAT DOWN!", "on_fire": "NOW IT'S ON FIRE!", "player_hit": "TAKES A HIT", "save": "NOT TODAY.",
 	"train_hit": "THE TRAIN DIDN'T STOP", "race_car_finish": "THE CAR CROSSED THE LINE!", "race_train_finish": "THE TRAIN CROSSED THE LINE!", "emp": "LIGHTS OUT.", "spray": "NEW CAR. WHO DIS?", "safehouse": "SAFE.",
 	"spike_cop": "OWN SPIKES!", "oil_spin": "SLIPPERY!", "gate_smash": "NO TIME TO WAIT", "shield": "UNTOUCHABLE",
 }
 const START_CAPTIONS := {
 	"chase": "ONE CAR. NO BRAKES.", "survive": "5 STARS. NO ESCAPE.", "destroy": "HOW MUCH CAN IT BREAK?",
 	"heli": "THEY SENT A HELICOPTER.", "rush": "RUSH HOUR. NO RULES.", "stunt": "NO RAMP IS TOO BIG.",
-	"escape": "ESCAPE THE CITY.", "race": "CAR VS TRAIN. GO!",
+	"escape": "ESCAPE THE CITY.", "race": "CAR VS TRAIN. GO!", "swarm": "THEY CAME FROM EVERYWHERE.",
 }
 const PRIORITY := ["trap", "heli_down", "mega_jump", "collapse", "gas"]
 const FINALE := 12.0      # seconds before the end when the protection lifts and the finale starts
@@ -119,6 +119,7 @@ var ram_cam := false
 var spikes := {}
 var spike_cam := false
 var race: Race = null        # car versus train (race.gd), race mode only
+var swarm: Swarm = null      # 30-40 police on one car (swarm.gd), swarm mode only
 
 
 func setup(main_node, cfg: Dictionary) -> void:
@@ -158,12 +159,18 @@ func setup(main_node, cfg: Dictionary) -> void:
 			start_heat = 14.0
 		"race":
 			start_heat = 0.0      # (the car's pace is set by the race itself)
+		"swarm":
+			bot.cruise = 31.0
+			start_heat = 14.0
 		_:
 			bot.cruise = 31.0
 			start_heat = 14.0
 	if scripted:
 		bot.cruise = 24.0
 		start_heat = 0.0
+	if mode == "swarm":
+		swarm = Swarm.new()
+		swarm.setup(self, cfg)
 	if mode == "race":
 		race = Race.new()
 		race.setup(self, main_node)
@@ -234,6 +241,8 @@ func start() -> void:
 			main.traffic_cap = 30
 			main.traffic_ahead = true
 			_opening_police(2)
+		"swarm":
+			swarm.start()
 		"escape":
 			# fewer cars than a chase: a pack that swarms the car at every corner leaves no room
 			# for the set pieces (the train, the spray shop, the safehouse)
@@ -482,6 +491,8 @@ func tick(dt: float) -> void:
 	# a clip must not end early: no wreck, no bust
 	main.protect = true
 	pl.dmg_scale = 0.35 if t < climax_t else 0.6
+	if swarm != null:
+		pl.dmg_scale = swarm.dmg_scale(t)
 	if main.protect and pl.hp < 15.0:
 		pl.hp = 15.0
 	if trace and t >= next_trace:
@@ -496,6 +507,8 @@ func tick(dt: float) -> void:
 		elif mode == "race":
 			extra = " phase=%s car_t=%.2f train_t=%.2f gap=%.1f lead=%s shot=%s" % [race.phase, race.car_t, race.train_t, race.nose_gap, race.lead, race.shot]
 		print(bot.debug_line(t), " cops=%d lvl=%d busted=%.2f hp=%d" % [main.alive_police(), main.level, main.busted, int(pl.hp)], extra)
+	if swarm != null:
+		swarm.tick(t, dt)
 	if scripted:
 		_scripted_heat(t)
 	else:
@@ -553,7 +566,7 @@ func _story(t: float) -> void:
 		var text: String = EVENT_CAPTIONS.get(kind, "")
 		if text == "":
 			continue
-		var gap := 4.0 if kind in ["near_miss", "collapse"] else 1e9
+		var gap := 4.0 if kind in ["near_miss", "collapse", "player_hit"] else 1e9
 		if cap_kinds.has(kind) and t - float(cap_kinds[kind]) < gap:
 			continue
 		cap_kinds[kind] = t
@@ -578,6 +591,8 @@ func _heat(t: float) -> void:
 			heat_floor = esc_low if esc_low >= 0.0 else (14.0 if f < 0.45 else 32.0)
 		"race":
 			heat_floor = 0.0
+		"swarm":
+			heat_floor = 14.0
 		_:
 			heat_floor = 90.0
 
@@ -588,6 +603,11 @@ func _beats(t: float) -> void:
 		_escape_show(t)
 		return
 	if mode == "race":
+		return
+	if mode == "swarm":
+		# the swarm comes and goes by itself (swarm.gd); at the end the barrel trap takes out the pack
+		if t >= climax_t and not done.has("trap"):
+			_try_trap(t)
 		return
 	if mode == "stunt":
 		_stunt_show(t)
@@ -993,7 +1013,26 @@ func _update_traps(t: float) -> void:
 
 # Cuts between the chase camera, the front camera (car racing at you, police behind)
 # and the helicopter view (the whole pack).
+# The swarm show: the shots that show the pack. The pack camera (high, a little ahead, looking at the police
+# behind the car), the front camera and the view from above come round again and again; the chase camera in between.
+const SWARM_SHOTS := ["pack", "chase", "front", "pack", "heli", "chase"]
+const SWARM_SHOT_LEN := 2.8
+var swarm_slot := -1
+
+
+func _swarm_camera(t: float) -> void:
+	var slot := int(t / SWARM_SHOT_LEN) % SWARM_SHOTS.size()
+	if slot == swarm_slot or main.cine_t > 0.0 or main.player.airtime > 0.3:
+		return
+	swarm_slot = slot
+	main.cam_mode = SWARM_SHOTS[slot]
+	main.cam_cut = true
+
+
 func _camera(t: float) -> void:
+	if mode == "swarm":
+		_swarm_camera(t)
+		return
 	if main.cine_t > 0.0 or mode == "race" or t < shot_end:
 		return
 	if _mega_camera(t):
@@ -1098,11 +1137,14 @@ func _break_free(dt: float) -> void:
 	for c in main.civs:
 		if is_instance_valid(c) and not c.dead and c.global_position.distance_to(pl.global_position) < 9.0:
 			crowd += 1
-	if pl.speed < 2.5 and crowd >= 2:
+	# (the swarm show has dozens of cars about: it is boxed in sooner and gets out sooner)
+	var slow := 6.0 if swarm != null else 2.5
+	var need := 3 if swarm != null else 2
+	if pl.speed < slow and crowd >= need:
 		break_t += dt
 	else:
 		break_t = maxf(0.0, break_t - dt * 2.0)
-	if (break_t < 1.3 and main.busted < 0.85) or main.clock - last_free < 3.0:
+	if (break_t < (0.9 if swarm != null else 1.3) and main.busted < 0.85) or main.clock - last_free < 3.0:
 		return
 	break_t = 0.0
 	last_free = main.clock
@@ -1158,6 +1200,8 @@ func overlay_line() -> String:
 			return "JUMPS %d   BOOMS %d   COPS %d" % [main.stats["big_air"], main.stats["chains"] + main.stats["gas"] + main.stats["collapses"], cops]
 		"escape":
 			return "CASH %d   COPS %d   COMBO x%d" % [main.gadgets.cash, cops, main.gadgets.combo]
+		"swarm":
+			return "COPS %d   NEAR MISSES %d   HITS %d" % [cops, nm_count, main.stats["player_hits"]]
 		"race":
 			return "CAR %d m   TRAIN %d m   %s" % [int(race._progress(race._car_front()) * Race.HALF_COURSE * 2.0), int(race._progress(main.rail.front) * Race.HALF_COURSE * 2.0), race.lead.to_upper()]
 	return "COPS %d   %s   %d KM/H" % [cops, clock_s, int(absf(main.player.fwd_speed) * 3.6)]
@@ -1206,6 +1250,8 @@ func summary() -> Dictionary:
 		"oil_spins": st["oil_spins"],
 		"spike_cops": st["spike_cops"],
 		"cash": st["cash"],
+		"player_hits": st["player_hits"],
+		"saves": st["saves"],
 		"sprays": st["sprays"],
 		"safehouse": st["safehouse"],
 		"combo_best": main.gadgets.combo_best,
@@ -1217,11 +1263,14 @@ func summary() -> Dictionary:
 		"beats": done,
 		"events": main.events,
 	}
+	if swarm != null:
+		s["swarm"] = swarm.summary()
 	var e: float = 4.0 * main.wrecked + 8.0 * st["collapses"] + 5.0 * st["chains"] + 6.0 * st["gas"]
 	e += 4.0 * st["big_air"] + 1.5 * st["drifts"] + 1.5 * st["smash"] + 0.5 * st["max_cops"]
 	e += 7.0 * st["mega_jump"] + 2.0 * st["near_miss"] + 12.0 * st["heli_down"]
 	e += 10.0 * st["train_hits"] + 3.0 * st["emp_hits"] + 4.0 * st["oil_spins"] + 4.0 * st["spike_cops"]
 	e += 1.0 * st["cash"] + 6.0 * st["sprays"] + 15.0 * st["safehouse"]
+	e += 2.0 * st["player_hits"] + 3.0 * st["saves"]
 	if mode == "race":
 		# a race is exciting when it is close, changes hands, and you can see it
 		e += 10.0 if race.winner != "" else -14.0

@@ -39,6 +39,7 @@ MODE_TAGS = {
     "rush": ["traffic", "near miss", "rush hour"],
     "stunt": ["car stunts", "ramp jump", "jump"],
     "race": ["car vs train", "train race", "car racing"],
+    "swarm": ["police chase", "40 cops", "chase", "near miss"],
 }
 
 HOOKS = {
@@ -50,6 +51,7 @@ HOOKS = {
     "rush": "Rush hour. Cars from every direction, police closing in, and one car threading through. How close can it get?",
     "stunt": "Ramps, jumps, explosions and falling towers: the stunt show.",
     "race": "A car races a train across the city. One ramp, one finish line—who gets there first?",
+    "swarm": "Thirty, forty police cars. From behind, from the side streets, head-on. One car threads through, and sometimes it does not get away clean.",
 }
 
 
@@ -102,6 +104,11 @@ def titles(s):
         out = [f"{misses} Near Misses in {dur} Seconds 😳🚗" if misses >= 3 else "Rush Hour Chaos: Cars From Every Direction 🚗💥",
                "Can One Car Escape Rush Hour and the Cops? 🚨",
                "Cars From Every Direction. One Narrow Escape 😳"]
+    elif mode == "swarm":
+        hits = int(s.get("player_hits", 0))
+        out = [f"{cops} Cops vs 1 Car: Every Direction 🚔😳",
+               f"{misses} Near Misses With {cops} Police Cars on His Tail 🚨" if misses >= 3 else "40 Police Cars. One Car. No Way Out? 🚨",
+               f"He Took {hits} Hits and Kept Driving 💥" if hits >= 2 else "Police From Every Side. Somehow He Made It 😳"]
     elif mode == "stunt":
         out = ["Craziest Car Stunts in a City of Cubes 🚗💥",
                "Jumping From Tower to Tower 😳" if "mega_jump" in events else "Ramps, Jumps and Explosions 💥",
@@ -158,7 +165,7 @@ def description(s):
 
 def hashtags(s):
     first = "#Shorts" if s.get("orientation", "vertical") == "vertical" else "#Gaming"
-    second = {"destroy": "#CityDestruction", "heli": "#Helicopter", "rush": "#CarChase", "stunt": "#Stunts", "escape": "#Escape", "race": "#CarVsTrain"}.get(
+    second = {"destroy": "#CityDestruction", "heli": "#Helicopter", "rush": "#CarChase", "stunt": "#Stunts", "escape": "#Escape", "race": "#CarVsTrain", "swarm": "#PoliceChase"}.get(
         s.get("mode"), "#PoliceChase")
     return [first, second, "#IndieGame"]
 
@@ -179,6 +186,7 @@ def pinned_comment(s):
         "rush": "How many near misses did you count? 👇",
         "stunt": "Which stunt was the craziest? 👇",
         "race": "Could the car beat the train? What should race next? 👇",
+        "swarm": "How many close calls did you count? 👇",
     }.get(s.get("mode"), "Would you have escaped? What should happen next? 👇")
 
 

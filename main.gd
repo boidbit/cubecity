@@ -9,6 +9,8 @@ const POLICE_CAP := [0, 3, 5, 6, 8, 10]              # by wanted level
 const BUSTED_TIME := 7.0                             # seconds boxed in before you are busted
 const WRECK_BURN_TIME := 28.0                        # seconds a wrecked police car burns before it is cleared away
 const SIRENS_AUDIBLE := 2                            # police cars that sound their siren at once
+const SIREN_LIGHTS := 10                             # ... and the nearest police cars that have their flashing light on
+const HIT_BIG := 7.0                                 # an impact this big (Car._apply_impact) on the player is a hit worth counting
 const SIREN_RANGE := 110.0                           # ...and only if this close to the player
 
 var world: World
@@ -24,6 +26,7 @@ var heli: Heli
 var heli_forced := false   # director: the helicopter is out from the start
 var police: Array[Car] = []
 var blocks: Array[Car] = []
+var wrecks: Array[Car] = []   # wrecked police cars that are still lying about (the director steers round them)
 var bot: Bot = null
 var stunts: Stunts = null
 var director: Director = null
@@ -43,6 +46,12 @@ var cubes := 0
 var cells_down := 0
 var wrecked := 0
 var heat := 0.0
+var band_gain := 0.12        # video runs: how much faster than the player a police car far behind tries to go, per metre of gap over 18 m ...
+var band_max := 12.0         # ... and at most this much faster
+var police_power := 1.0      # engine power of new police cars (the swarm show: interceptors that can actually catch a car doing 30 m/s)
+var wreck_time := WRECK_BURN_TIME   # how long a wrecked police car burns before it is cleared away (the swarm show: shorter)
+var max_attackers := 2       # police cars that press the player at once; the rest shadow (the swarm show: 1 calm .. 3 wild)
+var heat_cap := HEAT_MAX     # the director can hold the wanted level down (the swarm show: two stars, no SWAT, no helicopter)
 var level := 0
 var busted := 0.0
 var busted_peak := 0.0
@@ -80,7 +89,8 @@ var boom_times: Array[float] = []
 var events: Array = []
 var stats := {"collapses": 0, "chains": 0, "gas": 0, "big_air": 0, "drifts": 0, "smash": 0,
 	"cops_spawned": 0, "max_cops": 0, "mega_jump": 0, "near_miss": 0, "heli_down": 0,
-	"train_hits": 0, "emp_hits": 0, "oil_spins": 0, "spike_cops": 0, "cash": 0, "sprays": 0, "safehouse": 0}
+	"train_hits": 0, "emp_hits": 0, "oil_spins": 0, "spike_cops": 0, "cash": 0, "sprays": 0, "safehouse": 0,
+	"player_hits": 0, "saves": 0}
 var cam_anchor := Vector3.ZERO
 var traffic_cap := 12          # director: rush hour has far more cars
 var traffic_ahead := false     # ... and puts them on the roads ahead of the player
@@ -289,7 +299,7 @@ func _make_police(pos: Vector3, yaw: float) -> Car:
 	c.impact_threshold = 3.0
 	c.top_speed = 25.0 + level * 2.2 + randf() * 3.0
 	c.vmax = c.top_speed + 6.0
-	c.engine_max = 2500.0
+	c.engine_max = 2500.0 * police_power
 	c.target = player
 	c.pit_side = 1.0 if randf() < 0.5 else -1.0
 	add_child(c)
@@ -434,6 +444,11 @@ func _update_police(dt: float) -> void:
 		_spawn_police()
 	_assign_attackers()
 	_assign_sirens()
+	var lying: Array[Car] = []          # (rebuilt: erase() of a car that has been freed is an error in a typed array)
+	for w in wrecks:
+		if is_instance_valid(w):
+			lying.append(w)
+	wrecks = lying
 	for c in police.duplicate():
 		if not is_instance_valid(c):
 			police.erase(c)
@@ -442,10 +457,10 @@ func _update_police(dt: float) -> void:
 			c.queue_free()
 		elif not c.is_swat:
 			c.top_speed = 25.0 + level * 2.2
-			if director != null:
+			if director != null and c.banded:
 				# video runs: rubber-band the pack so it stays close enough to be filmed
 				var gap: float = c.global_position.distance_to(player.global_position)
-				c.top_speed = maxf(c.top_speed, player.speed + clampf((gap - 18.0) * 0.12, 0.0, 12.0))
+				c.top_speed = maxf(c.top_speed, player.speed + clampf((gap - 18.0) * band_gain, 0.0, band_max))
 				c.vmax = c.top_speed + 6.0
 	for c in blocks.duplicate():
 		if not is_instance_valid(c):
@@ -475,7 +490,7 @@ func _assign_attackers() -> void:
 	var pp := player.global_position
 	live.sort_custom(func(a: Car, b: Car) -> bool: return a.global_position.distance_squared_to(pp) < b.global_position.distance_squared_to(pp))
 	for i in live.size():
-		live[i].hold = i >= 2
+		live[i].hold = i >= max_attackers
 
 
 # Only the two police cars nearest the player (within SIREN_RANGE) sound their siren; the
@@ -492,11 +507,13 @@ func _assign_sirens() -> void:
 	for i in mini(live.size(), SIRENS_AUDIBLE):
 		if live[i].global_position.distance_squared_to(pp) < SIREN_RANGE * SIREN_RANGE:
 			live[i].siren_want = true
+	for i in live.size():
+		live[i].light_on = i < SIREN_LIGHTS
 
 
 # Every crime adds heat. The first one puts you on the police radar.
 func add_heat(a: float) -> void:
-	heat = minf(heat + a, HEAT_MAX)
+	heat = minf(heat + a, heat_cap)
 	if a > 0.0:
 		escape_t = 0.0
 		if level == 0:
@@ -628,6 +645,8 @@ func _update_cam(dt: float) -> void:
 			_cam_anchor(dt)
 		"front":
 			_cam_front(dt)
+		"pack":
+			_cam_pack(dt)
 		"heli":
 			_cam_heli(dt)
 		"race":
@@ -694,6 +713,18 @@ func _cam_front(dt: float) -> void:
 	cam.global_position = (target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-10.0 * dt))) + _intro_off()
 	_look(player.global_position - fwd * 5.0 + Vector3(0, 0.8, 0))
 	cam.fov = lerpf(cam.fov, 58.0 + fov_kick, 6.0 * dt)
+
+
+# The swarm show: from up high and a little ahead of the car, looking at the pack behind it.
+func _cam_pack(dt: float) -> void:
+	var fwd := -player.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	var side := fwd.cross(Vector3.UP)
+	var target := _cam_clear(player.global_position + fwd * (8.0 + player.speed * 0.12) + side * 2.2 + Vector3(0, 8.5, 0))
+	cam.global_position = (target if cam_cut else cam.global_position.lerp(target, 1.0 - exp(-8.0 * dt))) + _intro_off()
+	_look(player.global_position - fwd * 36.0 + Vector3(0, 0.3, 0))
+	cam.fov = lerpf(cam.fov, (56.0 if vertical else 64.0) + fov_kick, 6.0 * dt)
 
 
 # A fixed camera beside the action that turns to follow the car (stunt photographer).
@@ -941,9 +972,10 @@ func on_car_dead(car: Car) -> void:
 		gadgets.add_combo(0, "")
 		police.erase(car)
 		blocks.erase(car)
+		wrecks.append(car)
 		if not car.is_swat:
 			hud.banner("WRECKED +100")
-		get_tree().create_timer(WRECK_BURN_TIME).timeout.connect(func():
+		get_tree().create_timer(wreck_time).timeout.connect(func():
 			if is_instance_valid(car):
 				car.queue_free())
 
@@ -974,6 +1006,9 @@ func on_car_impact(car: Car, point: Vector3, total: float) -> void:
 	fx.crash(point, total)
 	if car.is_player:
 		shake_cam(0.2 + total * 0.03)
+		if total >= HIT_BIG:
+			stats["player_hits"] += 1
+			log_event("player_hit")
 
 
 func on_car_plow(car: Car, point: Vector3, cells: int) -> void:

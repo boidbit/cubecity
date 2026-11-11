@@ -27,7 +27,11 @@ jobs:
       - name: Fire test (headless, burning cars)
         run: tools/test_fire.sh "$GODOT" smoke-out
       - name: Determinism test (the same seed gives the same run)
-        run: tools/test_determinism.sh "$GODOT" smoke-out
+        run: |
+          tools/test_determinism.sh "$GODOT" smoke-out chase
+          tools/test_determinism.sh "$GODOT" smoke-out swarm
+      - name: Swarm test (30-40 police from every side, the director steers through)
+        run: tools/test_swarm.sh "$GODOT" smoke-out
       - name: Smoke test (headless, all bot modes)
         run: tools/smoke.sh "$GODOT" smoke-out 45
       - uses: actions/upload-artifact@v4
@@ -44,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [escape, chase, stunt, heli, rush]
+        mode: [escape, chase, stunt, heli, rush, swarm]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4

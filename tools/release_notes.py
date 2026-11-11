@@ -15,7 +15,7 @@ import release as story_release  # noqa: E402
 import upload_text  # noqa: E402
 
 MODES = {"escape": "🏁 Escape", "chase": "🚓 Police chase", "heli": "🚁 Helicopter", "rush": "🚗 Rush hour", "stunt": "🤸 Stunts",
-         "destroy": "💥 Destroy the city", "survive": "⭐ Survive 5 stars", "race": "🏁 Car vs train"}
+         "destroy": "💥 Destroy the city", "survive": "⭐ Survive 5 stars", "race": "🏁 Car vs train", "swarm": "🚔 40 cops"}
 
 
 def stats(s):

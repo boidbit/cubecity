@@ -94,6 +94,16 @@ var slip_until := 0.0      # oil slick: almost no grip until then
 var stall_until := 0.0     # EMP: engine and lights dead until then (police)
 var assist_k := 1.0        # how much of the arcade grip assist is left (oil, flat tyres)
 var reckless_until := 0.0  # director: this police car does not brake for what is ahead until then
+# Jousting (the swarm show): until line_until the car drives on down the line through line_p along
+# line_dir instead of chasing, like oncoming traffic with its sirens on, so a head-on or crossing car
+# can be seen coming and is predictable. Once the player is behind it, it turns round and chases.
+var line_p := Vector3.ZERO
+var line_dir := Vector3.ZERO
+var line_until := 0.0
+var joust_speed := 22.0    # how fast it drives down its line
+var line_passes := true    # it takes up the chase once the player is behind it (false: a slow car ahead, it stays on its line)
+var banded := true         # rubber-banded to the player's speed (main does it); a jouster is not
+var light_on := true       # main gives the siren light to the nearest few police cars only
 
 
 func build(color: Color, player: bool, k: String = "") -> void:
@@ -749,7 +759,7 @@ func _siren(delta: float) -> void:
 	siren_a.emission_energy_multiplier = 4.0 if on else 0.2
 	siren_b.emission_energy_multiplier = 0.2 if on else 4.0
 	siren_light.light_color = Color(1, 0.1, 0.1) if on else Color(0.2, 0.4, 1.0)
-	siren_light.visible = global_position.distance_squared_to(main.player.global_position) < 5000.0
+	siren_light.visible = light_on and global_position.distance_squared_to(main.player.global_position) < 5000.0
 
 
 func _ai(delta: float) -> void:
@@ -786,11 +796,21 @@ func _ai(delta: float) -> void:
 	var lead := clampf(dist / maxf(speed + 6.0, 6.0), 0.0, 1.4)
 	var aim := tpos + tvel * lead
 	var direct := false
-	if dist < 90.0:
+	var jousting: bool = main.clock < line_until
+	if jousting and line_passes and (tpos - global_position).dot(line_dir) < -6.0:
+		line_until = 0.0         # the player is behind it now: it turns round and chases
+		jousting = false
+	if jousting:
+		var along := (global_position - line_p).dot(line_dir)
+		aim = line_p + line_dir * (along + 28.0)
+		direct = true
+	elif dist < 90.0:
 		var sp := get_world_3d().direct_space_state
 		var rq := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 1.0, 0), tpos + Vector3(0, 1.0, 0), 1)
 		direct = sp.intersect_ray(rq).is_empty()
-	if not direct:
+	if jousting:
+		pass
+	elif not direct:
 		path_t -= delta
 		if path_t <= 0.0 or path.is_empty():
 			path_t = randf_range(0.7, 1.2)
@@ -844,7 +864,7 @@ func _ai(delta: float) -> void:
 		st += sin(main.clock * 6.0 + float(get_instance_id() % 97)) * 0.7
 	input_steer = clampf(st, -1.0, 1.0)
 
-	var want := top_speed
+	var want := joust_speed if jousting else top_speed
 	if absf(diff) > 0.9:
 		want = 9.0
 	elif absf(diff) > 0.45:
