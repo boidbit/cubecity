@@ -14,7 +14,7 @@ OUT=$(cd "$OUT" && pwd)
 timeout 300 "$GODOT" --headless --import > "$OUT/props-import.log" 2>&1 || true
 timeout 300 "$GODOT" --headless --fixed-fps 60 --quit-after 30000 -s tools/tests/props_test.gd -- --seed=1 > "$OUT/props-test.log" 2>&1
 rc=$?
-grep -E "^(PASS|FAIL|RESULT)" "$OUT/props-test.log"
+grep -E "^(PASS|FAIL|SKIP|INFO|RESULT)" "$OUT/props-test.log"
 status=0
 if [ $rc -ne 0 ]; then
   echo "::error::props test exited with code $rc"
