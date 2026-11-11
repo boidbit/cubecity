@@ -11,7 +11,8 @@ A mobile car-chase and destruction game made in Godot 4. The city, cars, buildin
 - Wanted level from 0 to 5 stars. Your first crime brings the police; stay out of sight to lose them.
 - Police that follow the roads, PIT manoeuvres, roadblocks, a helicopter with a spotlight, a SWAT truck boss, and sirens.
 - BUSTED meter: stay boxed in by police for 7 seconds and you are arrested.
-- Street life: trees, street lamps, parked cars and traffic that drives on the left.
+- Street life: trees, street lamps, parked cars and traffic that drives on the left. Hit a lamp or a tree and it comes
+  down: you lose about 10 % (lamp) or 22 % (tree) of your speed, a little health and get a dent, but you are never stopped dead.
 - Chain explosions from barrels, parked cars and gas stations.
 - Slow motion on big moments and a cinematic camera when a tower collapses.
 - Day/night cycle, rain, minimap and touch controls.
@@ -56,6 +57,14 @@ Touch controls: left and right arrows on the left, GAS, BRAKE, DRIFT and NITRO o
 PC controls: W/S or Up/Down to accelerate and brake, A/D or Left/Right to steer, Shift for the handbrake, N for nitro, R to restart.
 
 Steering feel is tuned by the `STEER_*` constants at the top of `car.gd`.
+
+## Tests
+
+- `tools/test_props.sh path/to/godot` is a headless physics test (no graphics card, about 15 s; CI runs it before the smoke
+  test). The car is sent into street lamps and trees at 15, 25 and 35 m/s and into one at a crawl. It must lose only a share
+  of its speed (never stop), must not hit a lamp that is a metre away, and must not be flipped or stopped by the fallen prop.
+  It exits 1 if anything fails. The test itself is `tools/tests/props_test.gd`.
+- `tools/smoke.sh path/to/godot` is the broad check: the bot plays every mode and the run fails on any script error.
 
 ## Videos for YouTube (GitHub Actions)
 
@@ -239,4 +248,4 @@ Add the printed text as a repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64
 | `shaders.gd` | Facade (four window layouts), ground, lamp light pool, car and debris shaders |
 | `story/` | Story lab: blocky characters, the open-top car, the story scheduler, screenplays |
 | `site/` | The studio page (GitHub Pages): start story videos, follow the runs, watch and download the videos |
-| `tools/` | Scripts used by the workflows: install Godot, smoke test, record, add the teaser hook, pick the best take, write the upload text |
+| `tools/` | Scripts used by the workflows: install Godot, smoke test, physics tests (`test_props.sh`, `tests/`), record, add the teaser hook, pick the best take, write the upload text |
