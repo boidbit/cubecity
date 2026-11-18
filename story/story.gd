@@ -262,12 +262,15 @@ func _park_now(t: float) -> void:
 	var pl: Car = main.player
 	stop_car = true
 	main.bot.cruise = 0.0
+	main.bot.halt = true
 	park_t = t
 	parked = true
 	street = Street.from_car(pl)
 	if main.director != null:
 		main.director.still = true
 		main.director.cue("calm")
+	# calm resets cruise speed for driving scenes; this scene must stay parked.
+	main.bot.cruise = 0.0
 	_quiet_street(true)
 	ev_log.append({"type": "parked", "t": t})
 	for who: String in to_place.keys():
@@ -763,6 +766,7 @@ func _park(t: float) -> void:
 			_quiet_street(true)
 	elif pl.speed < 0.4:
 		parked = true
+		main.bot.halt = true
 		street = Street.from_car(pl)
 		if spot_kind != "" and spot == null:
 			_put_up_set(spot_kind)
