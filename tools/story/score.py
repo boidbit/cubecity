@@ -78,9 +78,9 @@ def plan(sp, log, mood, seconds):
     t_on = None
     for item in sorted([(float(a.get("t", 0)), a.get("do", "")) for a in actions] +
                        [(float(e.get("t", 0)), e.get("type", "")) for e in events]):
-        if item[1] in ("chase", "drive_off", "fight") and t_on is None:
+        if item[1] in ("chase", "drive_off", "fight", "foot_chase") and t_on is None:
             t_on = item[0]
-        elif item[1] in ("cornered", "won") and t_on is not None:
+        elif item[1] in ("cornered", "won", "foot_chase_done") and t_on is not None:
             locks.append((t_on, item[0]))
             t_on = None
     if t_on is not None:
@@ -142,7 +142,7 @@ def plan(sp, log, mood, seconds):
         elif kind == "arrive":
             cue(t, "silence", True)
             effect(t, "riser", 0.6)
-        elif kind in ("drive_off", "chase", "police", "fight"):
+        elif kind in ("drive_off", "chase", "police", "fight", "foot_chase"):
             cue(t, "action", True)
         elif kind == "calm":
             cue(t, base)
@@ -168,6 +168,10 @@ def plan(sp, log, mood, seconds):
             effect(t, "whoosh", 0.7)
         elif kind == "won":
             cue(t, "happy", True)
+        elif kind == "foot_caught":
+            cue(t, "tension", True)
+        elif kind == "foot_escaped":
+            cue(t, base, True)
         elif kind == "hit":
             effect(t, "punch", 0.9)
         elif kind == "ko":

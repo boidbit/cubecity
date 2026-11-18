@@ -9,8 +9,8 @@ name: Story video (experiment)
 # thumbnail, the upload text and the screenplay (which you can save to story/screenplays).
 #
 # Needs repository secrets GEMINI_API_KEY (or GEMINI_API_KEY_1, _2, ... ; the next is used when one
-# runs out) for the AI writer and the Gemini voices. Without them the saved episode and the
-# free Edge voices are used.
+# runs out) for the AI writer and the Gemini voices. AI writing fails clearly without a key;
+# explicitly selected saved episodes can still use the free Edge voices.
 # On every push to story-lab it makes a small, quick preview of the saved episode instead.
 # Each run started by hand is also published as a release (tag story-<run id>) with the MP4s,
 # thumbnail and upload text, which the studio page (site/, on GitHub Pages) plays and downloads.
@@ -33,12 +33,12 @@ on:
       template:
         description: "Story recipe for the AI writer (auto = it decides from the mood and your idea)"
         type: choice
-        options: [auto, kidnap_rescue, jealous_reveal, date, proposal]
+        options: [auto, kidnap_rescue, jealous_reveal, date, proposal, police_foot_chase]
         default: auto
       script:
         description: "ai = Gemini writes a new episode; otherwise a saved episode from story/screenplays"
         type: choice
-        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin]
+        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin, ep7_foot_chase]
         default: ai
       language:
         type: choice
@@ -126,7 +126,7 @@ jobs:
           pip install --quiet edge-tts numpy
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
           n=$(python3 -c "import sys; sys.path.insert(0, 'tools/story'); import gemini; print(len(gemini.keys()))")
-          if [ "$n" -gt 0 ]; then echo "Gemini keys found: $n"; else echo "::warning::No GEMINI_API_KEY secret: using the saved episode and the free voices"; fi
+          if [ "$n" -gt 0 ]; then echo "Gemini keys found: $n"; else echo "::warning::No GEMINI_API_KEY secret: AI writing requires a key; saved scripts can use free voices"; fi
       - name: Write the episode
         id: write
         run: |
@@ -134,6 +134,11 @@ jobs:
           if [ "$SCRIPT" = ai ]; then
             python3 tools/story/write.py --out story-out/screenplay.json --type "$STORY_TYPE" --idea "$IDEA" --language "$LANGUAGE" --template "$TEMPLATE"
           else
+            if [ -n "$IDEA" ]; then
+              echo "::error::An idea needs script=ai. Clear the idea to replay a saved episode."
+              echo '### Story not started: select script=ai to use your idea, or clear the idea to replay a saved episode.' >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
             cp "story/screenplays/$SCRIPT.json" story-out/screenplay.json
             python3 -c "import json; print('time=' + json.load(open('story-out/screenplay.json')).get('time', 'dusk'))" >> "$GITHUB_OUTPUT"
           fi
@@ -163,6 +168,8 @@ jobs:
           export EXTRA_ARGS="--story=$PWD/story-out/timed.json --story_log=$PWD/take/story_log.json"
           mkdir -p take
           tools/record.sh "$GODOT" take
+      - name: Verify the recorded story
+        run: python3 tools/story/verify.py story-out/timed.json take/story_log.json take/godot.log
       - name: Mix voices and write the upload text
         run: |
           mkdir -p video
@@ -191,6 +198,7 @@ jobs:
               print("\n`story_nomusic.mp4` has no music: put a trending sound under it in the app.")
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: story-video-${{ github.run_number }}
           path: |

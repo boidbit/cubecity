@@ -1,0 +1,182 @@
+{
+  "id": "ep7_foot_chase",
+  "title": "BABU & SHONA",
+  "episode": "GALATFEHMI KI DAUD",
+  "end_text": "ROZ BHAAGO BABU!",
+  "mood": "funny",
+  "time": "day",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "props": [],
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      },
+      "look": {
+        "style": "man",
+        "skin": "#c98b5e",
+        "hair": "#241b16",
+        "shirt": "#b49a65",
+        "pants": "#776440",
+        "hair_style": "short",
+        "acc": [
+          "cap",
+          "mustache",
+          "badge"
+        ]
+      }
+    }
+  },
+  "beats": [
+    {
+      "say": "babu",
+      "sub": "Arre! Police mere peeche kyun aa rahi hai?",
+      "tts": "अरे! पुलिस मेरे पीछे क्यों आ रही है?",
+      "emotion": "scared",
+      "react": "shock",
+      "id": "b01"
+    },
+    {
+      "do": "foot_chase",
+      "who": "police",
+      "to": "babu",
+      "dur": 10.0,
+      "outcome": "caught"
+    },
+    {
+      "say": "babu",
+      "sub": "Gaadi ghar par hai, phir bhi challan katega?",
+      "tts": "गाड़ी घर पर है, फिर भी चालान कटेगा?",
+      "emotion": "scared",
+      "react": "shock",
+      "id": "b02"
+    },
+    {
+      "say": "police",
+      "sub": "Ruko bhai! Ek minute toh suno!",
+      "tts": "रुको भाई! एक मिनट तो सुनो!",
+      "emotion": "angry",
+      "react": "shock",
+      "id": "b03"
+    },
+    {
+      "say": "babu",
+      "sub": "Sir, paidal bhaagne ka license nahi lagta!",
+      "tts": "सर, पैदल भागने का लाइसेंस नहीं लगता!",
+      "emotion": "scared",
+      "react": "shock",
+      "id": "b04"
+    },
+    {
+      "wait_for": "foot_chase_done",
+      "max_wait": 14.0
+    },
+    {
+      "say": "police",
+      "sub": "Pakad liya! Main toh jogging partner dhoondh raha tha!",
+      "tts": "पकड़ लिया! मैं तो जॉगिंग पार्टनर ढूंढ रहा था!",
+      "emotion": "happy",
+      "react": "shock",
+      "id": "b05"
+    },
+    {
+      "say": "babu",
+      "sub": "Partner? Mujhe laga meri giraftari hone wali hai!",
+      "tts": "पार्टनर? मुझे लगा मेरी गिरफ्तारी होने वाली है!",
+      "emotion": "shock",
+      "react": "shock",
+      "id": "b06"
+    },
+    {
+      "say": "police",
+      "sub": "Kal subah phir milna. Daud achchi lagate ho!",
+      "tts": "कल सुबह फिर मिलना। दौड़ अच्छी लगाते हो!",
+      "emotion": "happy",
+      "react": "shock",
+      "id": "b07"
+    },
+    {
+      "say": "babu",
+      "sub": "Shona, ab roz police se milna padega!",
+      "tts": "शोना, अब रोज़ पुलिस से मिलना पड़ेगा!",
+      "emotion": "cry",
+      "react": "shock",
+      "id": "b08"
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "say": "shona",
+      "sub": "Wah Babu! Dar ke aage fitness hai!",
+      "tts": "वाह बाबू! डर के आगे फिटनेस है!",
+      "emotion": "laugh",
+      "react": "shock",
+      "id": "b09"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "Police ke darr se jogging shuru!",
+      "Babu ki paidal police chase",
+      "Dar ke aage fitness hai!"
+    ],
+    "description": "Babu police ko dekhkar paidal bhaag pada. Par officer ko kuch aur hi chahiye tha!",
+    "hashtags": [
+      "#shorts",
+      "#babushona",
+      "#comedy",
+      "#animation"
+    ]
+  },
+  "start_on_foot": true
+}

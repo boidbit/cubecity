@@ -18,7 +18,7 @@ extends RefCounted
 # Events: car_arrived, grabbed, fled, cornered, won.
 
 const Van := preload("res://story/van.gd")
-const KINDS := ["arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot"]
+const KINDS := ["arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot", "foot_chase"]
 const POPS := ["DHISHUM!", "POW!", "BAM!", "DHISHKYAON!"]
 
 var s                        # the story node
@@ -37,6 +37,7 @@ var trace_t := 0.0
 var stop_wait := 0.0
 var corner_next := ""         # cut it off as soon as the car is close enough
 var jump_lip := Vector3.INF   # the chase's ramp: the camera films the flight from beside it
+var foot_chase := {}         # officer and runner; independent of the vehicle chase
 
 
 func setup(story) -> void:
@@ -92,6 +93,40 @@ func run(a: Dictionary, t: float) -> bool:
 	var car_id := str(a.get("car", ""))
 	var v = cars.get(car_id, null)
 	match kind:
+		"foot_chase":
+			if s.street == null or not s.parked:
+				return false
+			var runner = s._rig_of(to)
+			var officer = s._rig_of(who)
+			if runner == null or officer == null:
+				push_error("foot_chase requires a runner and a visible police cast definition")
+				return true
+			if runner.seated or not s.exits.is_empty():
+				return false
+			if not foot_chase.is_empty():
+				return false
+			var street = s.street
+			var at: float = street.along(runner.global_position)
+			var direction := 1.0 if street.hi - at >= at - street.lo else -1.0
+			var goal: float = street.hi - 1.0 if direction > 0.0 else street.lo + 1.0
+			var duration := clampf(float(a.get("dur", 8.0)), 4.0, 12.0)
+			# Keep both on the clear walking lane; reserve enough room for the officer behind.
+			var behind: float = street.clamp_along(at - direction * 4.0)
+			officer.visible = true
+			officer.stand_at(street.point(behind), 0.0)
+			officer.face_point = Vector3.INF
+			runner.face_point = Vector3.INF
+			runner.stand_up()
+			runner.run_pace = clampf(absf(goal - at) / (duration * runner.RUN_SPEED), 0.25, 1.0)
+			runner.walk_to([street.point(goal)], true)
+			runner.set_state("scared", "idle", runner.speaking)
+			officer.set_state("angry", "idle", officer.speaking)
+			foot_chase = {"who": who, "to": to, "t0": t, "until": t + duration,
+				"outcome": str(a.get("outcome", "escape")), "next": t, "direction": direction}
+			shot = {}
+			s.cam_new = true
+			_event("foot_chase_started", t)
+			return true
 		"arrive":
 			if v == null:
 				return true
@@ -301,6 +336,7 @@ func _board(k: String, car_id: String) -> void:
 
 func tick(dt: float, t: float) -> void:
 	_chase_tick(dt, t)
+	_foot_chase_tick(t)
 	_fight_tick(t)
 	# nobody walks into (or is knocked back into) a parked van
 	for r in s.rigs.values() + s.extras.values():
@@ -323,6 +359,64 @@ func tick(dt: float, t: float) -> void:
 	if not shot.is_empty() and t > float(shot["until"]):
 		shot = {}
 		s.cam_new = true
+
+
+# Follow the runner's current position, keeping the pair in frame until the scripted result.
+# Movement is bounded by this block's pavement, just like ordinary walk/run actions.
+func _foot_chase_tick(t: float) -> void:
+	if foot_chase.is_empty():
+		return
+	var runner = s._rig_of(foot_chase["to"])
+	var officer = s._rig_of(foot_chase["who"])
+	var finishing: bool = t >= float(foot_chase["until"])
+	var gap: float = runner.global_position.distance_to(officer.global_position)
+	if finishing:
+		runner.path.clear()
+		if foot_chase["outcome"] == "escape":
+			_finish_foot_chase("foot_escaped", t)
+			return
+		if gap <= 1.35:
+			_finish_foot_chase("foot_caught", t)
+			return
+		if t > float(foot_chase["until"]) + 3.5:
+			# Do not claim a capture that never happened.
+			push_error("foot_chase: police could not reach the runner")
+			_finish_foot_chase("foot_escaped", t)
+			return
+	if t >= float(foot_chase["next"]):
+		foot_chase["next"] = t + 0.12
+		var direction: float = foot_chase["direction"]
+		var target: float = s.street.along(runner.global_position) - direction * (0.8 if finishing else 2.5)
+		officer.run_pace = 1.0 if finishing else clampf(runner.run_pace + (gap - 3.2) * 0.12, 0.2, 1.2)
+		officer.walk_to([s.street.point(target)], true)
+	# Keep the acting consistent between dialogue lines, too.
+	if not runner.speaking:
+		runner.set_state("scared", "idle", false)
+	if not officer.speaking:
+		officer.set_state("angry", "idle", false)
+
+
+func _finish_foot_chase(result: String, t: float) -> void:
+	var runner = s._rig_of(foot_chase["to"])
+	var officer = s._rig_of(foot_chase["who"])
+	for r in [runner, officer]:
+		r.path.clear()
+		r.run_pace = 1.0
+		r.speed_now = 0.0
+		r.running = false
+	if result == "foot_caught":
+		runner.face_point = officer.global_position
+		officer.face_point = runner.global_position
+		runner.set_state("shock", "up", runner.speaking)
+		officer.set_state("smug", "point", officer.speaking)
+		_pop("PAKAD LIYA!", runner.head.global_position + Vector3(0, 0.6, 0), Color(1, 0.85, 0.2))
+	else:
+		officer.kneel()       # out of breath: gives up, while the runner is still ahead
+		runner.set_state("happy", "idle", runner.speaking)
+	_event(result, t)
+	_event("foot_chase_done", t)
+	foot_chase = {}
+	s.cam_new = true
 
 
 # The leads' car follows the van's trail, keeping a gap; stops behind it once it is cornered.

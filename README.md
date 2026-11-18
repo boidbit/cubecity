@@ -170,10 +170,24 @@ Episodes are no longer only a couple in a car:
 - **Dark humour:** the `dark` mood asks the AI writer for deadpan dark comedy (terrible things taken
   absurdly calmly, misplaced priorities, karma, savage but loving roasts), with a hard list of topics
   it never touches. A second Gemini pass reads the draft against that list and rewrites what breaks it,
-  and a word check (for every mood) never lets a banned word out: the saved episode is used instead.
+  and a word check (for every mood) rejects banned words. If a valid rewrite cannot be produced,
+  the run fails with a reason instead of substituting a saved episode.
   Its own music (a sly minor-key tiptoe) and a pale, high-contrast grade.
-- **Templates:** the workflow's `template` input (kidnap_rescue, jealous_reveal, date, proposal) gives the AI
-  writer a recipe; `ep5_kidnap` and `ep6_cousin` are saved examples.
+- **Templates:** the workflow's `template` input (kidnap_rescue, jealous_reveal, date, proposal,
+  police_foot_chase) gives the AI writer a recipe; `ep5_kidnap`, `ep6_cousin` and `ep7_foot_chase`
+  are saved examples.
+- **On-foot police chase:** select `script=ai`, `template=police_foot_chase`, and give an idea such as
+  "Babu police se paidal bhag raha hai; police bhi paidal peeche hai". Or choose `script=ep7_foot_chase`
+  with an empty idea to try the saved demo without AI writing. A uniformed officer pursues Babu or Shona
+  on the pavement, with a camera tracking both, dialogue during the chase, action music, and a capture
+  or escape. The chase stays inside one city block; rooftops, wall climbing and entering buildings
+  are not supported. The car stays parked during this action.
+- **No replacement stories:** AI writing now stops on a missing key, API/quota failure, unsupported
+  request, or invalid screenplay after a retry. The run summary explains why; its artifact includes
+  `story-out/generation_error.json` and any AI drafts. It never silently plays the pizza episode.
+  An explicit on-foot police chase is checked for the correct action before recording, and the
+  recording is checked for its actual result before publishing. Saved scripts replay as written;
+  entering an idea with a saved script is an error, so it cannot be silently ignored.
 
 - **Make an episode:** Actions -> "Story video (experiment)" -> Run workflow. Pick the mood
   (funny, romantic, cringe, happy, sad, action, twist), type an idea if you have one, and Gemini
@@ -203,7 +217,7 @@ Episodes are no longer only a couple in a car:
   - Build it locally: `pip install pyyaml && tools/site/build.py _site`, then serve `_site/`.
 - **Gemini keys:** add them as repository secrets `GEMINI_API_KEY` or `GEMINI_API_KEY_1` ... `_5`
   (Settings -> Secrets and variables -> Actions); when one runs out of quota the next is used.
-  Without a key the saved episode and the free Edge voices are used.
+  AI writing requires a key. Without one, explicitly select a saved episode and use the free Edge voices.
 - **Gemini voices and quota:** the free plan allows about 10 speech requests a day per key. The
   two main characters are spoken as one conversation in a single request and cut into lines
   (`tools/story/dialogue.py`), police lines are one request each, and every clip is cached, so an
@@ -211,6 +225,18 @@ Episodes are no longer only a couple in a car:
 - **Keep an episode:** copy `screenplay.json` from the run into `story/screenplays/` and add its
   name to the `script` choice in `.github/workflows/story.yml`.
 - **Screenplay format:** see the top of `story/story.gd` (lines, actions, endings, props).
+- **Foot-chase beat:** `{"do":"foot_chase","who":"police","to":"babu","dur":8,"outcome":"caught"}`.
+  `to` can also be `shona`, `outcome` can be `escape`, and `dur` is 4-12 seconds (capture can take up
+  to 3.5 extra seconds to reach the runner). Use `start_on_foot:true` to begin on the pavement;
+  otherwise the writer inserts parking and exiting. The writer adds a uniformed `police` cast look
+  automatically. Put dialogue after the beat, then `{"wait_for":"foot_chase_done"}` before the payoff.
+  The writer also inserts this wait before conflicting movement or the ending. Events are
+  `foot_chase_started`, `foot_caught` / `foot_escaped`, and `foot_chase_done`. This is separate from
+  `police` (police cars) and `chase` (following the villains' van). Use `happy` or `cliffhanger` afterward;
+  `end:caught` remains the car-arrest ending.
+- **Story checks:** `python3 -m unittest discover -s tools/tests -p 'test_story_writer.py' -v` tests
+  AI failure handling, intent and recording validation offline. CI also runs the actual Godot scene
+  for both runners and both chase outcomes using `tools/tests/story_test.gd`.
 - **Try it locally:** `godot -- --bot=chase --duration=70 --story=1`
 
 ## Android build

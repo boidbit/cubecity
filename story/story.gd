@@ -22,6 +22,8 @@ extends Node
 #                         hands out "prop", by default what the stall sells)
 #         action:         arrive, grab, drive_off, chase, corner, fight, punch, look, appear,
 #                         shot (see story/action.gd); events car_arrived, grabbed, fled, cornered, won
+#         on-foot chase:  foot_chase (who: police, to: babu | shona, dur: 4-12, outcome: caught | escape)
+#                         events foot_chase_started, foot_caught / foot_escaped, foot_chase_done
 #                         events for "on" / "wait_for": parked, exited, arrived, seated
 # "cast" entries with a "look" and no seat are side characters: they start on the pavement
 # ("start": {"at": ahead | back | near:<who>, "dist"}), inside a story car ("start": {"car"}),
@@ -469,6 +471,12 @@ func _schedule(t: float) -> void:
 		elif b.has("wait_for"):
 			if not b.has("_from"):
 				b["_from"] = t
+				if str(b["wait_for"]) == "foot_chase_done":
+					# Dialogue can outlast the pursuit. Remember its result even if it ended
+					# more than 1.5 seconds before this wait was reached.
+					for action: Dictionary in acted:
+						if action["do"] == "foot_chase":
+							b["_from"] = float(action["t"])
 			var from2: float = b["_from"]
 			if _event_since(str(b["wait_for"]), from2 - 1.5) or t - from2 > float(b.get("max_wait", 9.0)):
 				bi += 1
@@ -524,7 +532,7 @@ func _do(b: Dictionary, t: float) -> void:
 				park_t = t
 				spot_kind = str(b.get("at", ""))
 		"exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer", "hold", "give", \
-				"arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot":
+				"arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot", "foot_chase":
 			var a := b.duplicate()
 			a.erase("do")
 			a.merge({"kind": kind, "who": str(b.get("who", "both")), "to": str(b.get("to", "")),
@@ -1212,6 +1220,9 @@ func _nearest_police() -> Car:
 # While somebody talks the camera rides with the car and films the speaker; between lines
 # and in the air it is left to the game's own director. Endings and a flying prop keep it.
 func _camera(dt: float, t: float) -> void:
+	if not act.foot_chase.is_empty():
+		_foot_chase_camera(dt)
+		return
 	if not act.shot.is_empty():
 		_drama_camera(dt, t)
 		return
@@ -1461,6 +1472,18 @@ static func _spring(x: Vector3, v: Vector3, target: Vector3, omega: float, dt: f
 	var e := exp(-omega * dt)
 	var tmp := (v + d * omega) * dt
 	return [target + (d + tmp) * e, (v - tmp * omega) * e]
+
+
+func _foot_chase_camera(dt: float) -> void:
+	cam_on = true
+	var runner: Rig = _rig_of(str(act.foot_chase["to"]))
+	var officer: Rig = _rig_of(str(act.foot_chase["who"]))
+	var mid := (runner.global_position + officer.global_position) * 0.5
+	var gap := runner.global_position.distance_to(officer.global_position)
+	# Road-side tracking two-shot, wide enough for both even in portrait videos.
+	var distance := maxf(8.5, gap * (2.0 if main.vertical else 1.3))
+	var pos: Vector3 = mid - street.outward() * distance + street.dir * 2.5 + Vector3(0, 2.5, 0)
+	_put_camera(pos, mid + Vector3(0, 0.6, 0), 52.0, 14.0, dt)
 
 
 func _foot_camera(dt: float, t: float) -> void:

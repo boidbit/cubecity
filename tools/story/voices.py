@@ -284,6 +284,7 @@ def simulate(sp):
     """Rough length of the story: lines back to back, waits, parking and walking, the jump and the ending."""
     t = float(sp.get("start", 2.8))
     gap = float(sp.get("gap", 0.3))
+    foot_chase_duration = 0.0
     for b in sp.get("beats", []):
         if "say" in b:
             t += b["dur"] + gap + (2.5 if b.get("on") else 0.0)
@@ -293,6 +294,11 @@ def simulate(sp):
             t += 3.5
         elif b.get("do") == "park":
             t += 7.0      # finding a straight bit of kerb and stopping
+        elif b.get("do") == "foot_chase":
+            foot_chase_duration = float(b.get("dur", 8)) + 4.0
+        elif b.get("wait_for") == "foot_chase_done":
+            t += foot_chase_duration  # conservative: dialogue may overlap the chase
+            foot_chase_duration = 0.0
         elif b.get("wait_for") in ("exited", "seated"):
             t += 5.5      # walking round the car
         elif b.get("wait_for") == "arrived":

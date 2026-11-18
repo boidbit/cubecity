@@ -76,3 +76,50 @@ jobs:
           name: preview-${{ matrix.mode }}
           path: preview/
           retention-days: 7
+
+  story:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Story writer regression tests (offline)
+        run: python3 -m unittest discover -s tools/tests -p 'test_story_writer.py' -v
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install recording tools on the GitHub runner
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg fonts-dejavu-core libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
+          pip install --quiet numpy
+          echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: On-foot chase runtime test (capture and escape)
+        run: bash tools/run_test.sh "$GODOT" story story-checks --bot=chase --duration=180 --orientation=vertical --story=res://story/screenplays/ep7_foot_chase.json
+      - name: Record the saved on-foot story demo
+        env:
+          MODE: chase
+          ORIENTATION: vertical
+          FPS: "30"
+          SEED: "7"
+          SCALE: "0.5"
+          TIME: day
+        run: |
+          mkdir -p story-demo story-checks
+          python3 tools/story/voices.py story/screenplays/ep7_foot_chase.json story-demo --provider none
+          export DURATION=$(python3 -c "import json; print(json.load(open('story-demo/timed.json'))['duration_hint'])")
+          export EXTRA_ARGS="--story=$PWD/story-demo/timed.json --story_log=$PWD/story-checks/story_log.json"
+          tools/record.sh "$GODOT" story-checks
+          python3 tools/story/verify.py story-demo/timed.json story-checks/story_log.json story-checks/godot.log
+          python3 tools/story/mix.py story-checks/video.mp4 story-checks/story_log.json story-demo/timed.json story-checks/story-demo.mp4 --music action
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: story-chase-checks
+          path: |
+            story-checks/
+            story-demo/timed.json
+          retention-days: 7
