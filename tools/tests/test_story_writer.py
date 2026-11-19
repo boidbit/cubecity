@@ -146,6 +146,34 @@ class WriterTests(unittest.TestCase):
         self.assertTrue(write.needs_foot_chase("", "police_foot_chase"))
 
 
+class SceneTests(unittest.TestCase):
+    def setUp(self):
+        self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))
+
+    def test_short_sketch_locations_and_reaction(self):
+        for location in ("college_gate", "bus_stop", "park"):
+            ai = {"format": "short", "start_on_foot": True, "start_spot": location,
+                  "cast": {"babu": {"name": "A", "look": {"style": "boy", "shirt": "#2266ee"}},
+                           "shona": {"name": "B", "look": {"style": "girl", "shirt": "#ffdc22"}}},
+                  "beats": [{"say": "babu", "sub": "Why did you block me?"},
+                            {"say": "shona", "sub": "Too many good morning messages!"},
+                            {"do": "reaction", "who": "babu", "effect": "shock_freeze", "dur": 1.2},
+                            {"end": "happy"}]}
+            sp, issues = write.clean(ai, self.base, "funny")
+            self.assertEqual(issues, [])
+            self.assertEqual(sp["start_spot"], location)
+            self.assertEqual(sp["cast"]["babu"]["name"], "A")
+            self.assertEqual(sp["cast"]["shona"]["look"]["shirt"], "#ffdc22")
+            reaction = next(i for i, b in enumerate(sp["beats"]) if b.get("do") == "reaction")
+            self.assertEqual(sp["beats"][reaction + 1], {"wait": 1.2})
+
+    def test_unknown_reaction_is_rejected(self):
+        ai = draft()
+        ai["beats"].insert(0, {"do": "reaction", "who": "babu", "effect": "teleport"})
+        _, issues = write.clean(ai, self.base, "funny")
+        self.assertIn("unsupported reaction actor or effect", issues)
+
+
 class RecordingTests(unittest.TestCase):
     def test_catch_must_really_happen(self):
         log = {"end": 40, "events": [{"type": k} for k in ["foot_chase_started", "foot_caught", "foot_chase_done"]]}
