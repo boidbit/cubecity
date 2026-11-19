@@ -351,12 +351,12 @@ func _shot(t: float) -> void:
 	elif t < 8.45:
 		_set_shot(car + Vector3(7.6, 2.1, 2.6), middle + Vector3(-1.8, 0.80, 0.0), 53)
 	elif t < 11.6:
-		_set_shot(middle + Vector3(16.0, 8.3, 5.9), middle + Vector3(2.3, 6.3, 1.9), 56)
+		_set_shot(middle + Vector3(24.0, 11.8, 7.7), middle + Vector3(2.3, 6.4, 1.9), 51)
 	elif t < 12.88:
 		_set_shot(car + Vector3(-6.7, 1.75, 2.7), car + Vector3(1.4, 0.75, 0.4), 48)
 	elif t < 14.63:
 		var bump := sin((t - 13.05) * 32.0) * maxf(0.0, 0.24 - absf(t - 13.05) * 0.28)
-		_set_shot(Vector3(39.4, 6.6 + bump, 9.7), Vector3(28.0, 3.5, -7.4), 53)
+		_set_shot(Vector3(39.4, 6.6 + bump, 6.9), Vector3(28.0, 3.5, -7.4), 55)
 	elif t < 17.2:
 		_set_shot(car + Vector3(7.7, 4.5, 9.1), car + Vector3(-0.9, 0.78, -5.0), 56)
 	elif t < 19.8:
