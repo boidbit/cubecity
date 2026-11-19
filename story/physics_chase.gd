@@ -5,7 +5,7 @@ extends "res://main.gd"
 const Roadster := preload("res://story/roadster.gd")
 const RAMP_START := Vector3(-69.0, 0.0, -3.0)
 const FORWARD := Vector3.LEFT
-const RUN_SECONDS := 11.0
+const RUN_SECONDS := 11.62
 var ramp_lip: Vector3
 var pursuer: Car
 var samples: Array[Dictionary] = []
@@ -54,6 +54,18 @@ func _ready() -> void:
 	pursuer = spawn_police_at(Vector3(3.4, 0.9, 57.0), 0.0, 1.5)
 	pursuer.dmg_scale = 0.3
 	cam_cut = true
+
+func _cam_chase(dt: float) -> void:
+	var p := player.global_position
+	var fwd := -player.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	cam_dir = cam_dir.lerp(fwd, 1.0 - exp(-5.0 * dt)).normalized()
+	var focus := p - cam_dir * 2.5 + Vector3.UP * 0.9
+	var wanted := _cam_clear(p - cam_dir * 17.8 + Vector3.UP * 7.0)
+	cam.global_position = wanted if cam_cut else cam.global_position.lerp(wanted, 1.0 - exp(-9.0 * dt))
+	_look(focus)
+	cam.fov = 53.0
 
 func _process(delta: float) -> void:
 	super._process(delta)

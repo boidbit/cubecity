@@ -6,8 +6,8 @@ import math
 import statistics
 from pathlib import Path
 
-START = 1.0
-END = 11.0
+START = 1.6
+END = 11.6
 
 
 def speed(sample):
@@ -25,7 +25,7 @@ def verify(data):
     lip, _, _ = data["ramp_lip"]
     ramp = [s for s in frames if lip + 1 < s["position"][0] < x0 - 2
             and abs(s["position"][2] - zs) < 2.5
-            and s["contacts"] >= 1 and s["position"][1] > 1.15]
+            and s["contacts"] >= 1 and s["position"][1] > 0.35 and s["velocity"][1] > 0.8]
     if len(ramp) < 2:
         raise ValueError("The wheels never climbed the ramp while in contact.")
     takeoff = next((s for s in frames if s["t"] > ramp[0]["t"] and s["contacts"] == 0

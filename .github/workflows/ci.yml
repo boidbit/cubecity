@@ -165,7 +165,7 @@ jobs:
           ORIENTATION: vertical
           TIME: dusk
           FPS: "60"
-          DURATION: "11"
+          DURATION: "12"
           SEED: "7"
           SCALE: "0.5"
         run: |
@@ -173,7 +173,8 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' physics-preview/recording/godot.log; then exit 1; fi
           python3 tools/tests/verify_physics_chase.py physics-preview/recording/summary.json physics-preview/verified.json
           python3 tools/story/music.py physics-preview/music.wav --mood action --seconds 10 --seed 7 --intro 0
-          ffmpeg -v error -y -ss 1 -i physics-preview/recording/video.mp4 -i physics-preview/music.wav -t 10 -filter_complex "[0:a]highpass=f=70,volume=0.55[drive];[1:a]volume=0.42[music];[drive][music]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.92[a]" -map 0:v -map "[a]" -c:v libx264 -preset medium -crf 21 -c:a aac -movflags +faststart physics-preview/physics-chase.mp4
+          start=$(python3 -c "import json; print(json.load(open('physics-preview/verified.json'))['preview_start_s'])")
+          ffmpeg -v error -y -ss "$start" -i physics-preview/recording/video.mp4 -i physics-preview/music.wav -t 10 -filter_complex "[0:a]highpass=f=70,volume=0.55[drive];[1:a]volume=0.42[music];[drive][music]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.92[a]" -map 0:v -map "[a]" -c:v libx264 -preset medium -crf 21 -c:a aac -movflags +faststart physics-preview/physics-chase.mp4
           ffprobe -v error -show_entries stream=codec_type,avg_frame_rate:format=duration -of json physics-preview/physics-chase.mp4 > physics-preview/media.json
           python3 -c "import json; from pathlib import Path; p=json.loads(Path('physics-preview/media.json').read_text()); assert 9.98 <= float(p['format']['duration']) <= 10.05; assert any(s['codec_type']=='video' and s['avg_frame_rate']=='60/1' for s in p['streams']); assert any(s['codec_type']=='audio' for s in p['streams'])"
           jump=$(python3 -c "import json; print(max(0, json.load(open('physics-preview/verified.json'))['takeoff_s'] - .48))")
