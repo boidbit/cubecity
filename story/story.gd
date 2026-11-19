@@ -251,7 +251,7 @@ func _start_on_foot() -> void:
 	main.player.linear_velocity = Vector3.ZERO
 	_park_now(0.0)
 	var initial_spot := str(data.get("start_spot", ""))
-	if initial_spot != "":
+	if initial_spot in ["college_gate", "bus_stop", "park"]:
 		_put_up_set(initial_spot)
 	for k: String in rigs:
 		var r: Rig = rigs[k]
