@@ -135,3 +135,60 @@ jobs:
             story-checks/story-test.log
             story-demo/timed.json
           retention-days: 7
+
+  physics-chase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Install Godot and recording tools
+        timeout-minutes: 4
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 update -q
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 install -y -q --no-install-recommends xvfb xauth ffmpeg libgl1-mesa-dri python3-numpy
+          echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Drive the ramp at normal speed and check the wheels
+        run: |
+          mkdir -p physics-preview
+          timeout 120 "$GODOT" --headless --import --path . > physics-preview/import.log 2>&1
+          timeout 75 "$GODOT" --headless --fixed-fps 60 --resolution 540x960 res://story/physics_chase.tscn -- --seed=7 --time=dusk --orientation=vertical --summary="$PWD/physics-preview/headless.json" > physics-preview/headless.log 2>&1
+          if grep -E 'SCRIPT ERROR|Parse Error' physics-preview/headless.log; then exit 1; fi
+          python3 tools/tests/verify_physics_chase.py physics-preview/headless.json physics-preview/headless-check.json
+      - name: Record the uninterrupted ten-second clip with music
+        env:
+          MODE: chase
+          STORY_SCENE: physics_chase
+          ORIENTATION: vertical
+          TIME: dusk
+          FPS: "60"
+          DURATION: "11"
+          SEED: "7"
+          SCALE: "0.5"
+        run: |
+          tools/record.sh "$GODOT" physics-preview/recording
+          if grep -E 'SCRIPT ERROR|Parse Error' physics-preview/recording/godot.log; then exit 1; fi
+          python3 tools/tests/verify_physics_chase.py physics-preview/recording/summary.json physics-preview/verified.json
+          python3 tools/story/music.py physics-preview/music.wav --mood action --seconds 10 --seed 7 --intro 0
+          ffmpeg -v error -y -ss 1 -i physics-preview/recording/video.mp4 -i physics-preview/music.wav -t 10 -filter_complex "[0:a]highpass=f=70,volume=0.55[drive];[1:a]volume=0.42[music];[drive][music]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.92[a]" -map 0:v -map "[a]" -c:v libx264 -preset medium -crf 21 -c:a aac -movflags +faststart physics-preview/physics-chase.mp4
+          ffprobe -v error -show_entries stream=codec_type,avg_frame_rate:format=duration -of json physics-preview/physics-chase.mp4 > physics-preview/media.json
+          python3 -c "import json; from pathlib import Path; p=json.loads(Path('physics-preview/media.json').read_text()); assert 9.98 <= float(p['format']['duration']) <= 10.05; assert any(s['codec_type']=='video' and s['avg_frame_rate']=='60/1' for s in p['streams']); assert any(s['codec_type']=='audio' for s in p['streams'])"
+          jump=$(python3 -c "import json; print(max(0, json.load(open('physics-preview/verified.json'))['takeoff_s'] - .48))")
+          ffmpeg -v error -y -ss "$jump" -i physics-preview/physics-chase.mp4 -vf "fps=8,scale=162:288,tile=4x3" -frames:v 1 -update 1 physics-preview/contact-sheet.jpg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-physics-chase
+          path: |
+            physics-preview/physics-chase.mp4
+            physics-preview/contact-sheet.jpg
+            physics-preview/verified.json
+            physics-preview/media.json
+            physics-preview/headless*.json
+            physics-preview/*.log
+            physics-preview/recording/summary.json
+            physics-preview/recording/godot.log
+          retention-days: 7

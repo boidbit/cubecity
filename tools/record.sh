@@ -36,6 +36,7 @@ scene_args=()
 case "${STORY_SCENE:-}" in
   "") ;;
   campus_action) scene_args=(res://story/campus_action.tscn) ;;
+  physics_chase) scene_args=(res://story/physics_chase.tscn) ;;
   *) echo "::error::Unknown story scene: $STORY_SCENE"; exit 1 ;;
 esac
 start=$(date +%s)
