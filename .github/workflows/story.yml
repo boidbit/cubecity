@@ -33,12 +33,12 @@ on:
       template:
         description: "Story recipe for the AI writer (auto = it decides from the mood and your idea)"
         type: choice
-        options: [auto, kidnap_rescue, jealous_reveal, date, proposal, police_foot_chase]
+        options: [auto, kidnap_rescue, jealous_reveal, date, proposal, police_foot_chase, campus_action]
         default: auto
       script:
         description: "ai = Gemini writes a new episode; otherwise a saved episode from story/screenplays"
         type: choice
-        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin, ep7_foot_chase, ep8_college_gate, ep8_bus_stop, ep8_park, ep9_college_gate_chase]
+        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin, ep7_foot_chase, ep8_college_gate, ep8_bus_stop, ep8_park, ep9_college_gate_chase, ep10_campus_action]
         default: ai
       language:
         type: choice
@@ -166,6 +166,7 @@ jobs:
           echo "SEED_USED=$SEED" >> "$GITHUB_ENV"
           if [ "$PREVIEW" = true ]; then export SCALE=0.5 FPS=30; fi
           export EXTRA_ARGS="--story=$PWD/story-out/timed.json --story_log=$PWD/take/story_log.json"
+          export STORY_SCENE=$(python3 -c "import json; print(json.load(open('story-out/timed.json')).get('scene', ''))")
           mkdir -p take
           tools/record.sh "$GODOT" take
       - name: Verify the recorded story
@@ -175,7 +176,7 @@ jobs:
           mkdir -p video
           python3 tools/story/mix.py take/video.mp4 take/story_log.json story-out/timed.json video/story.mp4 --music "$MUSIC"
           python3 tools/story/text.py story-out/timed.json video/upload.txt
-          t=$(python3 -c "import json; l=json.load(open('take/story_log.json'))['lines']; print(l[1]['t'] + 1.2 if len(l) > 1 else 6)")
+          t=$(python3 -c "import json; log=json.load(open('take/story_log.json')); l=log['lines']; print(13.18 if any(e['type']=='van_barrel_blast' for e in log['events']) else (l[1]['t'] + 1.2 if len(l) > 1 else 6))")
           ffmpeg -y -loglevel error -ss "$t" -i video/story.mp4 -frames:v 1 -q:v 2 video/thumbnail.jpg
           cp story-out/screenplay.json video/screenplay.json
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"

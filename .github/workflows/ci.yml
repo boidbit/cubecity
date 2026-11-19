@@ -99,7 +99,7 @@ jobs:
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
       - name: On-foot chase runtime test (capture and escape)
         run: bash tools/run_test.sh "$GODOT" story story-checks --bot=chase --duration=180 --orientation=vertical --story=res://story/screenplays/ep7_foot_chase.json
-      - name: Render the voiced college gate chase with music
+      - name: Render and verify the 28-second campus action film
         env:
           MODE: chase
           ORIENTATION: vertical
@@ -107,26 +107,28 @@ jobs:
           SEED: "7"
           SCALE: "0.5"
           TIME: dusk
+          STORY_SCENE: campus_action
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY || secrets.GEMINI_KEY || secrets.GEMINI || secrets.GEMINI_API_KEY_1 || vars.GEMINI_API_KEY }}
         run: |
           mkdir -p story-demo story-checks
-          python3 tools/story/voices.py story/screenplays/ep9_college_gate_chase.json story-demo --provider auto
+          python3 tools/story/voices.py story/screenplays/ep10_campus_action.json story-demo --provider auto
           export DURATION=$(python3 -c "import json; print(json.load(open('story-demo/timed.json'))['duration_hint'])")
           export EXTRA_ARGS="--story=$PWD/story-demo/timed.json --story_log=$PWD/story-checks/story_log.json"
           tools/record.sh "$GODOT" story-checks
           python3 tools/story/verify.py story-demo/timed.json story-checks/story_log.json story-checks/godot.log
-          python3 tools/story/mix.py story-checks/video.mp4 story-checks/story_log.json story-demo/timed.json story-checks/college-gate-chase.mp4 --music action
-          python3 tools/tests/check_college_chase.py story-demo/timed.json story-checks/story_log.json
-          ffprobe -v error -show_entries stream=codec_type:format=duration -of json story-checks/college-gate-chase.mp4
-          test ! -e story-checks/college-gate-chase_nomusic.mp4
+          python3 tools/story/mix.py story-checks/video.mp4 story-checks/story_log.json story-demo/timed.json story-checks/campus-action.mp4 --music action
+          ffprobe -v error -show_entries stream=codec_type:format=duration -of json story-checks/campus-action.mp4
+          test ! -e story-checks/campus-action_nomusic.mp4
+          ffmpeg -v error -y -i story-checks/campus-action.mp4 -vf "fps=1/2,scale=162:288,tile=7x2" -frames:v 1 -update 1 story-checks/contact-sheet.jpg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: college-gate-cinematic
+          name: campus-action-film
           path: |
-            story-checks/college-gate-chase.mp4
+            story-checks/campus-action.mp4
+            story-checks/contact-sheet.jpg
             story-checks/story_log.json
-            story-checks/story_score.txt
+            story-checks/campus-action_score.txt
             story-checks/godot.log
             story-checks/story-test.log
             story-demo/timed.json

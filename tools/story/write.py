@@ -50,7 +50,8 @@ MALE_VOICES = ["Algenib", "Charon", "Fenrir", "Orus", "Achird", "Iapetus", "Umbr
 FEMALE_VOICES = ["Kore", "Aoede", "Callirrhoe", "Autonoe", "Despina", "Erinome", "Laomedeia", "Achernar",
                  "Gacrux", "Pulcherrima", "Vindemiatrix", "Sulafat", "Zephyr"]
 RESERVED = {"babu", "shona", "police", "vendor", "both", "all"}
-TEMPLATES = {"kidnap_rescue": "kidnap & rescue (villains in the van, a chase, a fight)",
+TEMPLATES = {"campus_action": "a staged campus car chase with helicopter, blast and railway crossing",
+             "kidnap_rescue": "kidnap & rescue (villains in the van, a chase, a fight)",
              "jealous_reveal": "jealous reveal (a misunderstanding on foot, a twist, they make up)",
              "date": "a date at a place (bench, ice cream or chai)",
              "proposal": "a proposal out of the car",
@@ -862,17 +863,23 @@ def main():
                   + (DARK_MODE if mood == "dark" else ""))
         if needs_foot_chase(a.idea, a.template):
             prompt += "\nRequired: show an on-foot police chase using foot_chase with who=police. Keep the requested runner on foot."
+        campus = a.template == "campus_action"
+        system = SYSTEM
+        if campus:
+            import campus_action
+            system = campus_action.SYSTEM
+            prompt = f"Creator idea: {a.idea.strip() or 'Surprise me within the fixed campus route'}.\nLanguage: {a.language}."
         feedback = ""
         for attempt in range(2):
             try:
-                ai, model = gemini.write_json(prompt + feedback, SYSTEM, temperature=1.0)
+                ai, model = gemini.write_json(prompt + feedback, system, temperature=1.0)
             except Exception as e:
                 print(f"::warning::Gemini could not write the episode: {e}")
                 failure = f"Gemini request failed: {e}. Check the key, quota and provider availability, then retry."
                 break
             with open(os.path.join(out_dir, f"ai_answer_{attempt + 1}.json"), "w", encoding="utf-8") as f:
                 json.dump(ai, f, ensure_ascii=False, indent=1)
-            if mood == "dark" and isinstance(ai, dict):
+            if not campus and mood == "dark" and isinstance(ai, dict):
                 # dark humour is where the platforms' rules bite: a second read against the rules
                 try:
                     fixed, _ = gemini.write_json(REVIEW + "\n\n" + json.dumps(ai, ensure_ascii=False), temperature=0.3)
@@ -886,11 +893,14 @@ def main():
                 failure = "Unsupported story request: " + str(ai["unsupported_reason"])
                 break
             try:
-                cand, problems = clean(ai if isinstance(ai, dict) else {}, base, mood)
-                problems.extend(intent_problems(cand, a.idea, a.template))
+                if campus:
+                    cand, problems = campus_action.compile_story(ai), []
+                else:
+                    cand, problems = clean(ai if isinstance(ai, dict) else {}, base, mood)
+                    problems.extend(intent_problems(cand, a.idea, a.template))
             except (TypeError, ValueError, KeyError, AttributeError) as e:
                 failure = f"The AI returned malformed screenplay data: {e}"
-                feedback = "\nYour last response contained invalid field types. Return a complete valid screenplay JSON."
+                feedback = f"\nYour last response could not be used: {e}. Return valid JSON."
                 continue
             bad = unsafe_words(ai)
             if bad:

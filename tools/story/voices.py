@@ -370,8 +370,12 @@ def main():
         else:
             l["dur"] = round(est_dur(l), 2)
             l["audio"] = ""
+    if sp.get("scene") == "campus_action":
+        for line in spoken(sp):
+            if float(line["at"]) + line["dur"] > 28.0:
+                sys.exit("The campus reveal line is too long for the 28-second cut.")
     sp["provider"] = used
-    plain, worst = simulate(sp)
+    plain, worst = (28.0, 28.0) if sp.get("scene") == "campus_action" else simulate(sp)
     sp["est_end"] = round(plain, 1)
     sp["duration_hint"] = int(math.ceil(worst + 4.0))
     with open(os.path.join(a.out, "timed.json"), "w", encoding="utf-8") as f:

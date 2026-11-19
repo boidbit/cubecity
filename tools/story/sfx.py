@@ -10,7 +10,7 @@ import numpy as np
 from music import SR, add, env, reverb, sting
 
 NAMES = ["boing", "wahwah", "rimshot", "scratch", "crickets", "whoosh", "riser", "heartbeat",
-         "sparkle", "punch", "bonk", "slide_up", "slide_down", "ding", "sting"]
+         "sparkle", "punch", "bonk", "slide_up", "slide_down", "ding", "sting", "tyre_skid", "rotor_pass", "blast_hit", "facade_fall", "train_horn", "train_pass", "barrier_snap"]
 
 
 def _t(dur):
@@ -170,6 +170,40 @@ def ding(rng=None):
     return 0.35 * (np.sin(2 * np.pi * f * t) + 0.4 * np.sin(2 * np.pi * f * 2.0 * t) + 0.2 * np.sin(2 * np.pi * f * 3.01 * t)) * np.exp(-t * 3.5)
 
 
+def campus_effect(name, rng):
+    """Short foreground cues for the staged campus film."""
+    if name == "tyre_skid":
+        t = _t(1.02)
+        squeal = _tone(1120 - 420 * t + 75 * np.sin(46 * t), (1.0, 0.25))
+        return (0.65 * squeal + 0.35 * _noise(len(t), rng, -1)) * env(len(t), 0.09, 0.36)
+    if name == "rotor_pass":
+        t = _t(2.6)
+        blades = (0.5 + 0.5 * np.sin(2 * np.pi * 13 * t)) ** 2
+        return blades * (0.68 * _tone(58 - 11 * t, (1.0, 0.32)) + _noise(len(t), rng, 3)) * env(len(t), 0.14, 0.48)
+    if name == "blast_hit":
+        t = _t(1.48)
+        boom = _tone(35 + 61 * np.exp(-t * 17), (1.0, 0.29))
+        return (boom * np.exp(-t * 4) + _noise(len(t), rng, 3) * np.exp(-t * 5.7)) * env(len(t), 0.006, 0.24)
+    if name == "facade_fall":
+        out = np.zeros(int(1.85 * SR))
+        for hit in (0.05, 0.22, 0.36, 0.58, 0.75, 1.0):
+            t = _t(0.55)
+            thump = _tone(43 + 48 * np.exp(-t * 18), (1.0, 0.4))
+            add(out, (thump * 0.5 + _noise(len(t), rng, 2)) * np.exp(-t * 12) * env(len(t), 0.004, 0.12), hit)
+        return out
+    if name == "train_horn":
+        t = _t(1.62)
+        chord = sum(_tone(np.full_like(t, pitch) * (1.04 - t * 0.058), (1.0, 0.43, 0.22))
+                    for pitch in (196, 247, 294))
+        return chord * env(len(t), 0.11, 0.36)
+    if name == "barrier_snap":
+        t = _t(0.35)
+        return (_noise(len(t), rng, -1) + 0.6 * _tone(170 - 125 * t, (1.0, 0.2))) * np.exp(-t * 19) * env(len(t), 0.004, 0.08)
+    t = _t(2.8)
+    wheels = np.sin(2 * np.pi * 42 * t) * (0.5 + 0.5 * np.sin(2 * np.pi * 5 * t)) ** 2
+    return (0.59 * wheels + 0.75 * _noise(len(t), rng, 2)) * env(len(t), 0.24, 0.57)
+
+
 def make(name, rng=None):
     rng = rng or np.random.default_rng(1)
     gen = {
@@ -179,8 +213,8 @@ def make(name, rng=None):
         "bonk": lambda: bonk(rng), "slide_up": lambda: slide(True), "slide_down": lambda: slide(False),
         "ding": lambda: ding(rng), "sting": lambda: sting().astype(float),
     }.get(name)
-    if gen is None:
+    if gen is None and name not in NAMES:
         return np.zeros(1)
-    x = np.asarray(gen(), dtype=float)
+    x = np.asarray(gen() if gen else campus_effect(name, rng), dtype=float)
     peak = np.max(np.abs(x)) or 1.0
     return x / peak * 0.8

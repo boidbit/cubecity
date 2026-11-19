@@ -72,7 +72,8 @@ def main(video, log_path, timed_path, out, music="auto"):
         return 0
 
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", video]
-    parts = ["[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[g]"]
+    location_sound = "volume=0," if sp.get("scene") == "campus_action" else ""
+    parts = [f"[0:a]{location_sound}aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[g]"]
     for i, (path, t, cut, radio) in enumerate(clips, start=1):
         cmd += ["-i", path]
         f = f"[{i}:a]"

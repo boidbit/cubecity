@@ -62,6 +62,10 @@ def _timeline(sp, log):
 def plan(sp, log, mood, seconds):
     """Decides the cues [(t, cue, hard)] and the effects [(t, name, gain)]."""
     lines, actions, events, end_at = _timeline(sp, log)
+    if sp.get("scene") == "campus_action":
+        cues = [(float(a["t"]), a["type"], True) for a in actions if a.get("do") == "music"]
+        fx = [(float(a["t"]), a["type"], 0.88) for a in actions if a.get("do") == "sfx"]
+        return _tidy(cues, seconds), _tidy_fx(fx)
     comic = mood in COMIC_MOODS
     base = BASE.get(mood, "calm")
     cues = [(0.0, base, True)]
