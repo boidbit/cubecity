@@ -145,12 +145,8 @@ jobs:
         with:
           path: ~/godot
           key: godot-4.4.1-stable
-      - name: Install Godot and recording tools
-        timeout-minutes: 4
-        run: |
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 update -q
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 install -y -q --no-install-recommends xvfb xauth ffmpeg libgl1-mesa-dri python3-numpy
-          echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Locate Godot
+        run: echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
       - name: Drive the ramp at normal speed and check the wheels
         run: |
           mkdir -p physics-preview
@@ -158,6 +154,17 @@ jobs:
           timeout 75 "$GODOT" --headless --fixed-fps 60 --resolution 540x960 res://story/physics_chase.tscn -- --seed=7 --time=dusk --orientation=vertical --summary="$PWD/physics-preview/headless.json" > physics-preview/headless.log 2>&1
           if grep -E 'SCRIPT ERROR|Parse Error' physics-preview/headless.log; then exit 1; fi
           python3 tools/tests/verify_physics_chase.py physics-preview/headless.json physics-preview/headless-check.json
+      - name: Install recording tools on the runner
+        timeout-minutes: 4
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v xvfb-run >/dev/null; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=12 update -q
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=12 install -y -q --no-install-recommends xvfb xauth ffmpeg libgl1-mesa-dri
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet --timeout 15 --retries 2 numpy
       - name: Record the uninterrupted ten-second clip with music
         env:
           MODE: chase
