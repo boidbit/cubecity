@@ -131,6 +131,9 @@ var act                          # Action: other cars, grabbing, the chase, figh
 var to_place := {}               # who -> {"at", "dist"}: side characters waiting for the street
 var grade                        # Grade: the colour grade for the mood
 
+var reaction_until := {}
+var reaction_nodes: Array = []
+
 var ui_name: Label
 var ui_sub: Label
 var ui_title: Label
@@ -247,6 +250,9 @@ func _make_side_cast() -> void:
 func _start_on_foot() -> void:
 	main.player.linear_velocity = Vector3.ZERO
 	_park_now(0.0)
+	var initial_spot := str(data.get("start_spot", ""))
+	if initial_spot != "":
+		_put_up_set(initial_spot)
 	for k: String in rigs:
 		var r: Rig = rigs[k]
 		var st: Dictionary = cast[k].get("start", {})
@@ -512,6 +518,8 @@ func _do(b: Dictionary, t: float) -> void:
 	var arg := float(b.get("stars", b.get("arg", 0.0)))
 	acted.append({"do": kind, "t": snappedf(t, 0.01), "type": str(b.get("type", ""))})
 	match kind:
+		"reaction":
+			_reaction(b, t)
 		"prop_show":
 			_prop_show(str(b.get("prop", "")))
 		"prop_hide":
@@ -645,7 +653,9 @@ func _put_up_set(kind: String) -> void:
 		else:
 			b = k
 	spot = Spots.build(kind, street, street.along(main.player.global_position), main, main, a, b)
-	if spot == null or kind == "bench":
+	if spot != null:
+		ev_log.append({"type": "location_" + kind, "t": main.clock})
+	if spot == null or kind not in ["chai", "icecream"]:
 		return
 	var c: Dictionary = cast.get("vendor", {})
 	var look: Dictionary = c.get("look", {"style": "boy", "skin": "#c98b5e", "hair": "#1d1714", "shirt": "#f3efe4"})
@@ -1181,6 +1191,10 @@ func _write_log() -> void:
 # ------------------------------------------------------------ characters
 
 func _animate(dt: float, t: float) -> void:
+	for item: Dictionary in reaction_nodes.duplicate():
+		if t >= float(item["until"]):
+			item["node"].queue_free()
+			reaction_nodes.erase(item)
 	var talking := not cur.is_empty()
 	var env: Array = cur.get("env", [])
 	for r: Rig in rigs.values() + extras.values():
@@ -1202,7 +1216,8 @@ func _animate(dt: float, t: float) -> void:
 			var calm := "happy" if extras.has(r.who) else "neutral"
 			if t - last_end > calm_after and r.emotion != calm and not (ending == "happy" and end_ready):
 				r.set_state(calm, "idle", false)
-		r.update(dt, null)
+		if t >= float(reaction_until.get(r.who, 0.0)):
+			r.update(dt, null)
 	if wheel != null:
 		wheel.rotation.y = -main.player.steer_smooth * 1.8
 
@@ -1731,3 +1746,41 @@ func _ui(t: float) -> void:
 	ui_ep.modulate.a = a
 	if done:
 		ui_end.modulate.a = clampf((t - done_t) / 0.6, 0.0, 1.0)
+
+# A timed reaction bundle: expression, camera, visible accent and a score cue share one timestamp.
+func _reaction(b: Dictionary, t: float) -> void:
+	var who := str(b.get("who", "babu"))
+	var r := _rig_of(who)
+	if r == null:
+		return
+	var duration := clampf(float(b.get("dur", 1.2)), 0.5, 3.0)
+	var effect := str(b.get("effect", "shock_freeze"))
+	r.set_state("shock" if effect != "sparkle" else "happy", "up", false)
+	r.update(0.016, null)
+	if effect == "shock_freeze":
+		reaction_until[who] = t + duration
+	var accent := Label3D.new()
+	accent.text = "!" if effect == "shock_freeze" else ("*" if effect == "sparkle" else "...")
+	accent.font_size = 120
+	accent.pixel_size = 0.006
+	accent.modulate = Color(1, 0.85, 0.15) if effect != "sweat" else Color(0.3, 0.8, 1)
+	accent.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	r.head.add_child(accent)
+	accent.position = Vector3(0.4, 0.8, 0)
+	reaction_nodes.append({"node": accent, "until": t + duration})
+	if effect in ["shock_freeze", "sweat"]:
+		var drop := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = 0.07
+		mesh.height = 0.22
+		drop.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.75, 1)
+		drop.material_override = mat
+		r.head.add_child(drop)
+		drop.position = Vector3(0.29, 0.38, -0.23)
+		reaction_nodes.append({"node": drop, "until": t + duration})
+	act.shot = {"type": "zoom", "who": who, "t0": t, "until": t + duration}
+	cam_new = true
+	acted.append({"do": "sfx", "type": "scratch" if effect == "shock_freeze" else "sparkle", "t": t})
+	ev_log.append({"type": "reaction_" + effect, "t": t})

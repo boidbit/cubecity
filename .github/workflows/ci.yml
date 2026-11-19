@@ -115,6 +115,25 @@ jobs:
           tools/record.sh "$GODOT" story-checks
           python3 tools/story/verify.py story-demo/timed.json story-checks/story_log.json story-checks/godot.log
           python3 tools/story/mix.py story-checks/video.mp4 story-checks/story_log.json story-demo/timed.json story-checks/story-demo.mp4 --music action
+      - name: Render and verify the three location sketches
+        env:
+          MODE: chase
+          ORIENTATION: vertical
+          FPS: "30"
+          SEED: "7"
+          SCALE: "0.35"
+          TIME: dusk
+        run: |
+          for location in college_gate bus_stop park; do
+            out="story-checks/$location"
+            python3 tools/story/voices.py "story/screenplays/ep8_$location.json" "$out" --provider none
+            export DURATION=$(python3 -c "import json; print(json.load(open('$out/timed.json'))['duration_hint'])")
+            export EXTRA_ARGS="--story=$PWD/$out/timed.json --story_log=$PWD/$out/story_log.json"
+            tools/record.sh "$GODOT" "$out"
+            python3 tools/story/verify.py "$out/timed.json" "$out/story_log.json" "$out/godot.log"
+            python3 -c "import json; e=[x['type'] for x in json.load(open('$out/story_log.json'))['events']]; assert 'location_$location' in e; assert 'reaction_shock_freeze' in e"
+            python3 tools/story/mix.py "$out/video.mp4" "$out/story_log.json" "$out/timed.json" "$out/sketch.mp4" --music funny
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:

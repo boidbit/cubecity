@@ -27,9 +27,9 @@ ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers"
            "park", "exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug",
            "dance", "cheer", "hold", "give",
            "arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot",
-           "foot_chase"]
+           "foot_chase", "reaction"]
 FOOT = ["walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer"]
-SPOTS = ["bench", "icecream", "chai"]       # sets put up where the car parks (park "at")
+SPOTS = ["bench", "icecream", "chai", "college_gate", "bus_stop", "park"]       # sets put up where the car parks (park "at")
 STALLS = ["icecream", "chai"]               # these come with a vendor who can speak
 CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "train", "prop_fly"]   # need the car to be driving
 EVENTS = ["takeoff", "big_air", "prop_fly", "near_miss", "cop_wrecked", "roadblock",
@@ -174,6 +174,12 @@ RECIPES (use one when the idea or the template fits; fill in the dialogue and th
 Props (P): pizza, flowers, gift, ring, teddy, icecream, chai. List the ones in the car at the start in "props".
 
 WRITING RULES:
+- For a 10-15 second sketch set "format":"short"; 2-4 short lines are allowed.
+- Custom lead names and looks go in cast.babu and cast.shona (internal actor ids); use names for display labels.
+  A/B in the creator script map to babu/shona. Preserve their given dialogues and clothing colours.
+- Extra start_spot / park at locations: college_gate, bus_stop, park (outdoor pavement sets).
+- Reaction bundle: {"do":"reaction","who":"babu","effect":"shock_freeze","dur":1.2} combines shock,
+  sweat, freeze, zoom and record scratch. Other effects: sweat, sparkle. Do not add a duplicate wait.
 - The creator's explicit actions, travel mode, characters and premise are requirements. Preserve them.
   Never replace a requested on-foot chase with driving, or invent pizza/theft as a substitute premise.
   If a required action cannot be staged using the vocabulary above, answer
@@ -390,7 +396,10 @@ class Stage:
         """The kidnap / chase / fight vocabulary. Returns True when handled."""
         act = d["do"]
         who, to = d.get("who", ""), d.get("to", "")
-        if act == "foot_chase":
+        if act == "reaction":
+            self.beats.append(d)
+            self.beats.append({"wait": d["dur"]})
+        elif act == "foot_chase":
             if self.chasing or who != "police" or to not in ("babu", "shona") or to in self.in_van:
                 self.problems.append("invalid foot_chase: use police pursuing babu or shona on the pavement")
                 return True
@@ -547,6 +556,13 @@ def clean(ai, base, mood):
     """A screenplay the game can play, built from the model's answer. Returns (screenplay, problems)."""
     sp = copy.deepcopy(base)
     problems = []
+    for lead in ("babu", "shona"):
+        requested = ai.get("cast", {}).get(lead, {}) if isinstance(ai.get("cast"), dict) else {}
+        if isinstance(requested, dict) and requested.get("look"):
+            checked = side_cast({"actor": requested}, problems)["actor"]
+            sp["cast"][lead]["look"] = checked["look"]
+            if requested.get("name"):
+                sp["cast"][lead]["name"] = checked["name"]
     names = ai.get("names") if isinstance(ai.get("names"), dict) else {}
     for k in ("babu", "shona"):
         if names.get(k):
@@ -634,6 +650,13 @@ def clean(ai, base, mood):
                 problems.append(f"unknown action {act!r}")
                 continue
             d = {"do": act}
+            if act == "reaction":
+                d["who"] = b.get("who", "babu")
+                d["effect"] = b.get("effect", "shock_freeze")
+                if d["who"] not in speakers or d["effect"] not in ("shock_freeze", "sweat", "sparkle"):
+                    problems.append("unsupported reaction actor or effect")
+                    continue
+                d["dur"] = max(0.5, min(3.0, float(b.get("dur", 1.2))))
             if act == "police":
                 d["stars"] = max(1, min(3, int(b.get("stars", 1) or 1)))
             if act.startswith("prop_"):
@@ -727,7 +750,8 @@ def clean(ai, base, mood):
         sp["cast"]["police"]["look"] = copy.deepcopy(POLICE_LOOK)
         sp["cast"]["police"].pop("radio", None)
     lines = sum(1 for b in beats if "say" in b)
-    if lines < 6:
+    minimum = 2 if ai.get("format") == "short" else 6
+    if lines < minimum:
         problems.append(f"only {lines} lines (need 9 to 14)")
     while sum(1 for b in beats if "say" in b) > 16:
         for i in range(len(beats) - 1, -1, -1):

@@ -6,7 +6,7 @@ extends RefCounted
 # Positions use the Street: `a` along the road, `off` metres from the walking lane toward the
 # buildings (the pavement runs from about off -2.3 at the kerb to +0.7 at the building line).
 
-const KINDS := ["bench", "icecream", "chai"]
+const KINDS := ["bench", "icecream", "chai", "college_gate", "bus_stop", "park"]
 const AHEAD := 5.0            # the set stands this far ahead of the parked car
 const BENCH_H := 0.45         # seat height
 
@@ -81,6 +81,8 @@ static func build(kind_id: String, st, car_along: float, parent: Node3D, main, w
 			s._icecream(who_a, who_b)
 		"chai":
 			s._chai(who_a, who_b)
+		"college_gate", "bus_stop", "park":
+			s._location(who_a, who_b)
 	return s
 
 
@@ -183,3 +185,22 @@ func _clear(main) -> void:
 func free_set() -> void:
 	if is_instance_valid(root):
 		root.queue_free()
+
+func _location(who_a: String, who_b: String) -> void:
+	_bench(who_a, who_b)
+	match kind:
+		"college_gate":
+			for edge in [-2.0, 2.0]:
+				_box(Vector3(0.45, 3.0, 0.4), at + edge, 0.5, 1.5, Color(0.65, 0.32, 0.22))
+			_box(Vector3(4.5, 0.4, 0.45), at, 0.5, 3.0, Color(0.65, 0.32, 0.22))
+			_sign("CITY COLLEGE", at, 0.2, 3.0, Color(1, 0.95, 0.7))
+		"bus_stop":
+			for edge in [-1.6, 1.6]:
+				_box(Vector3(0.09, 2.5, 0.09), at + edge, 0.55, 1.25, Color(0.2, 0.3, 0.4))
+			_box(Vector3(3.6, 0.12, 1.5), at, 0.0, 2.55, Color(0.2, 0.5, 0.8))
+			_sign("BUS STOP", at, -0.6, 2.6, Color.WHITE)
+		"park":
+			for edge in [-2.0, 2.0]:
+				_box(Vector3(0.18, 1.5, 0.18), at + edge, 0.4, 0.75, Color(0.4, 0.25, 0.12))
+				_box(Vector3(1.1, 1.0, 0.6), at + edge, 0.4, 1.8, Color(0.2, 0.55, 0.25))
+			_sign("CITY PARK", at, 0.45, 2.6, Color(0.8, 1, 0.7))

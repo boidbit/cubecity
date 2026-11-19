@@ -38,7 +38,7 @@ on:
       script:
         description: "ai = Gemini writes a new episode; otherwise a saved episode from story/screenplays"
         type: choice
-        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin, ep7_foot_chase]
+        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin, ep7_foot_chase, ep8_college_gate, ep8_bus_stop, ep8_park]
         default: ai
       language:
         type: choice
