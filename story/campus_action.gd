@@ -137,7 +137,7 @@ func _lighting() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("#b8d3fa")
-	env.ambient_light_energy = 0.59
+	env.ambient_light_energy = 0.51
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.fog_enabled = true
 	env.fog_light_color = Color("#b7a4b0")
@@ -147,7 +147,7 @@ func _lighting() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-29, -130, 0)
 	sun.light_color = Color("#ffd3ac")
-	sun.light_energy = 1.15
+	sun.light_energy = 0.91
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 95
 	add_child(sun)
@@ -550,7 +550,7 @@ func _shot(t: float, scene_time: float) -> void:
 	elif t < 8.5:
 		_set_shot(car + Vector3(-4.4, 1.8, 4.9), middle + Vector3(0.2, 0.75, -0.3), 61)
 	elif t < 11.6:
-		_set_shot(middle + Vector3(-12.4, 7.0, 14.6), middle + Vector3(-2.0, 5.5, 0.8), 60)
+		_set_shot(middle + Vector3(-16.0, 10.0, 20.0), middle + Vector3(-3.0, 6.6, 3.0), 64)
 	elif t < 12.88:
 		_set_shot(car + Vector3(-2.8, 1.45, -7.4), car + Vector3(0, 0.60, 0.8), 52)
 	elif t < 14.48:
@@ -561,7 +561,7 @@ func _shot(t: float, scene_time: float) -> void:
 	elif t < 19.8:
 		_set_shot(middle + Vector3(4.7, 3.4, 12.9), middle + Vector3(5.3, 0.9, -0.7), 57)
 	elif t < 22.98:
-		_set_shot(Vector3(66.3, 7.7, -91.0), Vector3(78.4, 0.7, -100.8), 57)
+		_set_shot(Vector3(63, 16.0, -130), Vector3(79.4, 0.7, -100.2), 65)
 	elif t < 24.65:
 		_set_shot(car + Vector3(4.3, 1.85, 4.6), car + Vector3(0, 0.87, -0.15), 48)
 	elif t < 26.33:

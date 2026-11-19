@@ -120,7 +120,7 @@ jobs:
           ffprobe -v error -show_entries stream=codec_type:format=duration -of json story-checks/campus-action.mp4
           test ! -e story-checks/campus-action_nomusic.mp4
           python3 -c "import json; from pathlib import Path; cues=json.loads(Path('story-checks/story_log.json').read_text())['actions']; score=Path('story-checks/campus-action_score.txt').read_text().splitlines(); assert sum('sfx:' in line for line in score) == sum(c['do'] == 'sfx' for c in cues), 'The mix dropped a timed effect'"
-          ffmpeg -v error -y -i story-checks/campus-action.mp4 -vf "fps=1/2,scale=162:288,tile=7x2" -frames:v 1 -update 1 story-checks/contact-sheet.jpg
+          ffmpeg -v error -y -i story-checks/campus-action.mp4 -vf "select=eq(n\\,18)+eq(n\\,156)+eq(n\\,285)+eq(n\\,399)+eq(n\\,427)+eq(n\\,673)+eq(n\\,696)+eq(n\\,760)+eq(n\\,810),scale=216:384,tile=3x3" -frames:v 1 -update 1 story-checks/contact-sheet.jpg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
