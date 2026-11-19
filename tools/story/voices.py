@@ -372,8 +372,22 @@ def main():
             l["audio"] = ""
     if sp.get("scene") == "campus_action":
         for line in spoken(sp):
-            if float(line["at"]) + line["dur"] > 28.0:
-                sys.exit("The campus reveal line is too long for the 28-second cut.")
+            available = 27.92 - float(line["at"])
+            if line["dur"] <= available:
+                continue
+            tempo = line["dur"] / available
+            if tempo > 1.22:
+                sys.exit("The campus reveal line is too long for the 28-second cut. Use fewer words.")
+            original = os.path.join(a.out, line["audio"])
+            adjusted = original + ".retimed.wav"
+            result = sh(["ffmpeg", "-y", "-v", "error", "-i", original, "-af", f"atempo={tempo:.4f}", adjusted])
+            if result.returncode != 0:
+                sys.exit("Could not fit the campus reveal audio into its shot.")
+            os.replace(adjusted, original)
+            duration, envelope = analyze(original)
+            line.update(dur=round(duration, 2), env=envelope)
+            if float(line["at"]) + duration > 28.0:
+                sys.exit("The retimed campus reveal still runs past the end of the film.")
     sp["provider"] = used
     plain, worst = (28.0, 28.0) if sp.get("scene") == "campus_action" else simulate(sp)
     sp["est_end"] = round(plain, 1)
