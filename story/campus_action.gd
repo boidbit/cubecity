@@ -484,7 +484,7 @@ func _frame(t: float) -> void:
 	beam.visible = heli.visible
 	beam.position = (light_origin + ground_target) * 0.5
 	var beam_axis := light_origin - ground_target
-	beam.basis = Basis(Quaternion(Vector3.UP, beam_axis.normalized())).scaled_local(Vector3(1, beam_axis.length(), 1))
+	beam.basis = Basis(Quaternion(Vector3.UP, beam_axis.normalized())) * Basis.from_scale(Vector3(1, beam_axis.length(), 1))
 
 	var rail_time := scene_time - 22.40
 	train.position = Vector3(RAIL_X, 0, TURN_Z - rail_time * 21.5 - 0.50)
