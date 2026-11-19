@@ -165,6 +165,9 @@ func setup(main_node, cfg: Dictionary) -> void:
 	reactions = data.get("reactions", [])
 	start_t = float(data.get("start", start_t))
 	gap = float(data.get("gap", gap))
+	if data.get("cinematic", false):
+		gap = minf(gap, 0.12)
+		start_t = minf(start_t, 0.45)
 	_dress_car()
 	_make_cast()
 	act = Action.new()
@@ -302,6 +305,8 @@ func _place_on_foot(who: String, at: String, dist: float) -> void:
 		off = 0.35
 	elif at == "spot" and spot != null and spot.stand.has(who):
 		a = street.along(spot.stand[who])
+		if data.get("cinematic", false):
+			off = street.offset(spot.stand[who])
 	elif rigs.has(who):
 		a += (0.7 if r.driver else -0.7) * f
 	var p: Vector3 = street.point(street.clamp_along(a), off)
@@ -1155,7 +1160,7 @@ func _end_line(t: float, cut: bool) -> void:
 	cur = {}
 	last_end = t
 	line_gap = gap
-	if big and not cut and ending == "":
+	if big and not cut and ending == "" and not data.get("cinematic", false):
 		var listener: Rig = _other(who) if rigs.has(who) else null
 		if listener == null:
 			var bd := 9.0
@@ -1502,6 +1507,10 @@ func _foot_chase_camera(dt: float) -> void:
 	# Road-side tracking two-shot, wide enough for both even in portrait videos.
 	var distance := maxf(8.5, gap * (2.0 if main.vertical else 1.3))
 	var pos: Vector3 = mid - street.outward() * distance + street.dir * 2.5 + Vector3(0, 2.5, 0)
+	if act.foot_chase["staged"]:
+		var along: Vector3 = Vector3.RIGHT if street.along_x else Vector3.BACK
+		var sweep := smoothstep(0.0, 5.0, main.clock - float(act.foot_chase["t0"]))
+		pos = mid - street.outward() * distance + along * float(act.foot_chase["direction"]) * lerpf(2.8, -2.0, sweep) + Vector3(0, 1.4, 0)
 	_put_camera(pos, mid + Vector3(0, 0.6, 0), 52.0, 14.0, dt)
 
 
@@ -1742,6 +1751,8 @@ func _blocks(r: Rig, from: Vector3, to: Vector3) -> bool:
 
 func _ui(t: float) -> void:
 	var a := 1.0 if t < 1.8 else clampf(1.0 - (t - 1.8) / 0.8, 0.0, 1.0)
+	if data.get("cinematic", false):
+		a = 0.0
 	ui_title.modulate.a = a
 	ui_ep.modulate.a = a
 	if done:

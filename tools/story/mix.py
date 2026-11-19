@@ -61,6 +61,11 @@ def main(video, log_path, timed_path, out, music="auto"):
         if os.path.exists(path):
             clips.append((path, float(p["t"]), p.get("cut"), bool(who.get("radio"))))
     mood = (sp.get("mood") or "romantic") if music == "auto" else music
+    if sp.get("cinematic"):
+        if len(clips) != len(spoken):
+            sys.exit("Cinematic mix requires every dialogue clip to be recorded and available.")
+        if mood == "none":
+            sys.exit("Cinematic mix requires background music. Select auto or a music mood.")
     if not clips and mood == "none":
         print("no voice clips and no music: keeping the game sound")
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", video, "-c", "copy", out])
@@ -144,7 +149,7 @@ def main(video, log_path, timed_path, out, music="auto"):
             maps += ["-map", "[bare]", "-ar", "48000", bare]
         run(cmd + ["-filter_complex", ";".join(parts)] + maps)
         outs = [(mix, out)]
-        if has_music:
+        if has_music and not sp.get("cinematic"):
             outs.append((bare, os.path.splitext(out)[0] + "_nomusic.mp4"))
         for wav, dst in outs:
             af = run([sys.executable, os.path.join(HERE, "..", "loudnorm.py"), wav]).stdout.strip()
@@ -154,7 +159,7 @@ def main(video, log_path, timed_path, out, music="auto"):
                 enc += ["-af", af]
             run(enc + ["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", dst])
     print(f"mixed {n} voice clips{', the music' if has_music else ''} and the sound effects into {out}"
-          + (" (and a copy without the music)" if has_music else ""))
+          + (" (and a copy without the music)" if has_music and not sp.get("cinematic") else ""))
     return 0
 
 

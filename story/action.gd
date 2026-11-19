@@ -112,17 +112,27 @@ func run(a: Dictionary, t: float) -> bool:
 			var duration := clampf(float(a.get("dur", 8.0)), 4.0, 12.0)
 			# Keep both on the clear walking lane; reserve enough room for the officer behind.
 			var behind: float = street.clamp_along(at - direction * 4.0)
+			var staged := bool(s.data.get("cinematic", false))
+			var lane: float = -0.65 if staged else 0.0
 			officer.visible = true
-			officer.stand_at(street.point(behind), 0.0)
+			officer.stand_at(street.point(behind, lane), 0.0)
+			officer.staged_run = staged
+			officer.following_runner = staged
+			runner.staged_run = staged
 			officer.face_point = Vector3.INF
 			runner.face_point = Vector3.INF
 			runner.stand_up()
 			runner.run_pace = clampf(absf(goal - at) / (duration * runner.RUN_SPEED), 0.25, 1.0)
-			runner.walk_to([street.point(goal)], true)
+			if staged:
+				# Leave time for the start and braking steps before the reveal.
+				runner.run_pace = clampf(absf(goal - at) / (maxf(duration - 0.9, 2.0) * runner.RUN_SPEED), 0.35, 1.0)
+				goal = at + direction * minf(absf(goal - at), runner.run_pace * runner.RUN_SPEED * (duration - 1.0))
+			runner.walk_to([street.point(goal, lane)], true)
 			runner.set_state("scared", "idle", runner.speaking)
 			officer.set_state("angry", "idle", officer.speaking)
 			foot_chase = {"who": who, "to": to, "t0": t, "until": t + duration,
-				"outcome": str(a.get("outcome", "escape")), "next": t, "direction": direction}
+				"outcome": str(a.get("outcome", "escape")), "next": t + (0.25 if staged else 0.0),
+				"direction": direction, "staged": staged, "lane": lane}
 			shot = {}
 			s.cam_new = true
 			_event("foot_chase_started", t)
@@ -370,12 +380,17 @@ func _foot_chase_tick(t: float) -> void:
 	var officer = s._rig_of(foot_chase["who"])
 	var finishing: bool = t >= float(foot_chase["until"])
 	var gap: float = runner.global_position.distance_to(officer.global_position)
+	var staged := bool(foot_chase["staged"])
+	if staged and finishing:
+		officer.following_runner = false
+		if not runner.arrived() and t < float(foot_chase["until"]) + 1.0:
+			finishing = false
 	if finishing:
 		runner.path.clear()
 		if foot_chase["outcome"] == "escape":
 			_finish_foot_chase("foot_escaped", t)
 			return
-		if gap <= 1.35:
+		if gap <= 1.35 and (not staged or officer.speed_now < 1.55):
 			_finish_foot_chase("foot_caught", t)
 			return
 		if t > float(foot_chase["until"]) + 3.5:
@@ -388,7 +403,10 @@ func _foot_chase_tick(t: float) -> void:
 		var direction: float = foot_chase["direction"]
 		var target: float = s.street.along(runner.global_position) - direction * (0.8 if finishing else 2.5)
 		officer.run_pace = 1.0 if finishing else clampf(runner.run_pace + (gap - 3.2) * 0.12, 0.2, 1.2)
-		officer.walk_to([s.street.point(target)], true)
+		if staged and not finishing:
+			# Aim ahead of the current position so retargeting does not produce a stutter.
+			target += direction * minf(0.65, float(runner.speed_now) * 0.15)
+		officer.walk_to([s.street.point(target, float(foot_chase["lane"]))], true)
 	# Keep the acting consistent between dialogue lines, too.
 	if not runner.speaking:
 		runner.set_state("scared", "idle", false)
@@ -404,12 +422,14 @@ func _finish_foot_chase(result: String, t: float) -> void:
 		r.run_pace = 1.0
 		r.speed_now = 0.0
 		r.running = false
+		r.following_runner = false
 	if result == "foot_caught":
 		runner.face_point = officer.global_position
 		officer.face_point = runner.global_position
 		runner.set_state("shock", "up", runner.speaking)
 		officer.set_state("smug", "point", officer.speaking)
-		_pop("PAKAD LIYA!", runner.head.global_position + Vector3(0, 0.6, 0), Color(1, 0.85, 0.2))
+		if not foot_chase["staged"]:
+			_pop("PAKAD LIYA!", runner.head.global_position + Vector3(0, 0.6, 0), Color(1, 0.85, 0.2))
 	else:
 		officer.kneel()       # out of breath: gives up, while the runner is still ahead
 		runner.set_state("happy", "idle", runner.speaking)

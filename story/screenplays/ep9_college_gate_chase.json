@@ -1,0 +1,161 @@
+{
+  "id": "ep9_college_gate_chase",
+  "title": "SHONA & OFFICER",
+  "episode": "TIFFIN CHASE",
+  "end_text": "BHAAGO, TIFFIN BACHAO!",
+  "mood": "action",
+  "time": "dusk",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "props": [],
+  "start": 0.4,
+  "gap": 0.12,
+  "cast": {
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+2%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#f5c841",
+        "height": 0.91,
+        "build": "slim",
+        "outfit": "kurta",
+        "hair_style": "ponytail",
+        "pants": "#35386a"
+      },
+      "start": {
+        "at": "spot"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+0%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 20,
+        "style": "A calm, slightly amused officer speaking conversational Hindi, with clear short phrases."
+      },
+      "look": {
+        "style": "man",
+        "skin": "#c98b5e",
+        "hair": "#241b16",
+        "shirt": "#b49a65",
+        "pants": "#776440",
+        "hair_style": "short",
+        "acc": [
+          "cap",
+          "mustache",
+          "badge"
+        ],
+        "height": 1.12,
+        "build": "big",
+        "outfit": "uniform"
+      }
+    }
+  },
+  "beats": [
+    {
+      "do": "shot",
+      "type": "wide",
+      "who": "shona",
+      "dur": 1.5
+    },
+    {
+      "music": "tension"
+    },
+    {
+      "id": "b01",
+      "say": "police",
+      "sub": "Ruko! Tumhara bag!",
+      "tts": "रुको! तुम्हारा बैग!",
+      "emotion": "neutral",
+      "react": "shock"
+    },
+    {
+      "do": "foot_chase",
+      "who": "police",
+      "to": "shona",
+      "dur": 9,
+      "outcome": "caught"
+    },
+    {
+      "id": "b02",
+      "say": "shona",
+      "sub": "Arre, maine kya kiya?",
+      "tts": "अरे, मैंने क्या किया?",
+      "emotion": "scared",
+      "react": "neutral"
+    },
+    {
+      "wait": 0.7
+    },
+    {
+      "id": "b03",
+      "say": "police",
+      "sub": "Pehle meri baat toh suno!",
+      "tts": "पहले मेरी बात तो सुनो!",
+      "emotion": "neutral",
+      "react": "think"
+    },
+    {
+      "wait_for": "foot_chase_done",
+      "max_wait": 12
+    },
+    {
+      "id": "b04",
+      "say": "police",
+      "sub": "Bag khula hai. Tiffin gir gaya.",
+      "tts": "बैग खुला है। टिफ़िन गिर गया।",
+      "emotion": "neutral",
+      "react": "shock"
+    },
+    {
+      "do": "reaction",
+      "who": "shona",
+      "effect": "shock_freeze",
+      "dur": 0.65
+    },
+    {
+      "wait": 0.65
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "id": "b05",
+      "say": "shona",
+      "sub": "Samosa toh bach gaya na?",
+      "tts": "समोसा तो बच गया ना?",
+      "emotion": "shy",
+      "react": "happy"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "Shona ka tiffin chase"
+    ],
+    "description": "College gate se shuru hui ek galatfehmi.",
+    "hashtags": [
+      "#shorts",
+      "#desicomedy"
+    ]
+  },
+  "start_on_foot": true,
+  "cinematic": true,
+  "start_spot": "college_gate"
+}

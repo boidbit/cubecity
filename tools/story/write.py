@@ -174,6 +174,9 @@ RECIPES (use one when the idea or the template fits; fill in the dialogue and th
 Props (P): pizza, flowers, gift, ring, teddy, icecream, chai. List the ones in the car at the start in "props".
 
 WRITING RULES:
+- A college_gate chase is a short film. Open on the hook, use short spoken lines (one thought each),
+  and save the reaction for the reveal. Skip generic exposition and long ellipses. Place the runner
+  at "spot". Use look.outfit="kurta" for a kurta and choose a height and build for each lead.
 - For a 10-15 second sketch set "format":"short"; 2-4 short lines are allowed.
 - Custom lead names and looks go in cast.babu and cast.shona (internal actor ids); use names for display labels.
   A/B in the creator script map to babu/shona. Preserve their given dialogues and clothing colours.
@@ -298,6 +301,10 @@ def side_cast(ai_cast, problems):
             look["hair_style"] = look_in["hair_style"]
         if look_in.get("build") in BUILDS:
             look["build"] = look_in["build"]
+        if isinstance(look_in.get("height"), (float, int)) and not isinstance(look_in["height"], bool):
+            look["height"] = max(0.75, min(1.2, look_in["height"]))
+        if look_in.get("outfit") in ("kurta", "uniform"):
+            look["outfit"] = look_in["outfit"]
         acc = [a for a in (look_in.get("acc") or []) if a in ACCESSORIES][:3]
         if acc:
             look["acc"] = acc
@@ -749,6 +756,9 @@ def clean(ai, base, mood):
     if any(b.get("do") == "foot_chase" for b in beats):
         sp["cast"]["police"]["look"] = copy.deepcopy(POLICE_LOOK)
         sp["cast"]["police"].pop("radio", None)
+        if sp.get("start_spot") == "college_gate":
+            sp["cinematic"] = True
+            sp["cast"]["police"]["look"].update(build="big", height=1.12, outfit="uniform")
     lines = sum(1 for b in beats if "say" in b)
     minimum = 2 if ai.get("format") == "short" else 6
     if lines < minimum:

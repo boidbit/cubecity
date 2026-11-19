@@ -331,6 +331,10 @@ def main():
 
     order = {"auto": ["gemini", "edge", "espeak", "none"], "gemini": ["gemini", "edge", "none"],
              "edge": ["edge", "none"], "espeak": ["espeak", "none"], "none": ["none"]}[a.provider]
+    if sp.get("cinematic"):
+        if a.provider not in ("auto", "gemini", "edge"):
+            sys.exit("Cinematic stories require spoken dialogue. Select auto, gemini or edge.")
+        order = [p for p in order if p in ("gemini", "edge")]
     used, results = "none", {}
     for prov in order:
         if prov == "gemini":
@@ -355,6 +359,8 @@ def main():
             break
         except Exception as e:
             print(f"::warning::voice provider {prov} failed: {e}")
+    if sp.get("cinematic") and any(not results.get(line_id) for line_id in ids):
+        sys.exit("Cinematic dialogue could not be synthesized. Check the voice provider and retry.")
     for l in spoken(sp):
         r = results.get(l["id"])
         if r:

@@ -95,50 +95,39 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg fonts-dejavu-core libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
-          pip install --quiet numpy
+          pip install --quiet numpy edge-tts
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
       - name: On-foot chase runtime test (capture and escape)
         run: bash tools/run_test.sh "$GODOT" story story-checks --bot=chase --duration=180 --orientation=vertical --story=res://story/screenplays/ep7_foot_chase.json
-      - name: Record the saved on-foot story demo
+      - name: Render the voiced college gate chase with music
         env:
           MODE: chase
           ORIENTATION: vertical
           FPS: "30"
           SEED: "7"
           SCALE: "0.5"
-          TIME: day
+          TIME: dusk
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY || secrets.GEMINI_KEY || secrets.GEMINI || secrets.GEMINI_API_KEY_1 || vars.GEMINI_API_KEY }}
         run: |
           mkdir -p story-demo story-checks
-          python3 tools/story/voices.py story/screenplays/ep7_foot_chase.json story-demo --provider none
+          python3 tools/story/voices.py story/screenplays/ep9_college_gate_chase.json story-demo --provider auto
           export DURATION=$(python3 -c "import json; print(json.load(open('story-demo/timed.json'))['duration_hint'])")
           export EXTRA_ARGS="--story=$PWD/story-demo/timed.json --story_log=$PWD/story-checks/story_log.json"
           tools/record.sh "$GODOT" story-checks
           python3 tools/story/verify.py story-demo/timed.json story-checks/story_log.json story-checks/godot.log
-          python3 tools/story/mix.py story-checks/video.mp4 story-checks/story_log.json story-demo/timed.json story-checks/story-demo.mp4 --music action
-      - name: Render and verify the three location sketches
-        env:
-          MODE: chase
-          ORIENTATION: vertical
-          FPS: "30"
-          SEED: "7"
-          SCALE: "0.35"
-          TIME: dusk
-        run: |
-          for location in college_gate bus_stop park; do
-            out="story-checks/$location"
-            python3 tools/story/voices.py "story/screenplays/ep8_$location.json" "$out" --provider none
-            export DURATION=$(python3 -c "import json; print(json.load(open('$out/timed.json'))['duration_hint'])")
-            export EXTRA_ARGS="--story=$PWD/$out/timed.json --story_log=$PWD/$out/story_log.json"
-            tools/record.sh "$GODOT" "$out"
-            python3 tools/story/verify.py "$out/timed.json" "$out/story_log.json" "$out/godot.log"
-            python3 -c "import json; e=[x['type'] for x in json.load(open('$out/story_log.json'))['events']]; assert 'location_$location' in e; assert 'reaction_shock_freeze' in e"
-            python3 tools/story/mix.py "$out/video.mp4" "$out/story_log.json" "$out/timed.json" "$out/sketch.mp4" --music funny
-          done
+          python3 tools/story/mix.py story-checks/video.mp4 story-checks/story_log.json story-demo/timed.json story-checks/college-gate-chase.mp4 --music action
+          python3 tools/tests/check_college_chase.py story-demo/timed.json story-checks/story_log.json
+          ffprobe -v error -show_entries stream=codec_type:format=duration -of json story-checks/college-gate-chase.mp4
+          test ! -e story-checks/college-gate-chase_nomusic.mp4
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: story-chase-checks
+          name: college-gate-cinematic
           path: |
-            story-checks/
+            story-checks/college-gate-chase.mp4
+            story-checks/story_log.json
+            story-checks/story_score.txt
+            story-checks/godot.log
+            story-checks/story-test.log
             story-demo/timed.json
           retention-days: 7

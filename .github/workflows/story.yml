@@ -38,7 +38,7 @@ on:
       script:
         description: "ai = Gemini writes a new episode; otherwise a saved episode from story/screenplays"
         type: choice
-        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin, ep7_foot_chase, ep8_college_gate, ep8_bus_stop, ep8_park]
+        options: [ai, ep1_date_night, ep2_dangerous_question, ep3_proposal, ep4_icecream, ep5_kidnap, ep6_cousin, ep7_foot_chase, ep8_college_gate, ep8_bus_stop, ep8_park, ep9_college_gate_chase]
         default: ai
       language:
         type: choice
@@ -195,7 +195,8 @@ jobs:
               print("```")
               print(open("video/story_score.txt").read().strip())
               print("```")
-              print("\n`story_nomusic.mp4` has no music: put a trending sound under it in the app.")
+              if os.path.exists("video/story_nomusic.mp4"):
+                  print("\n`story_nomusic.mp4` has no music: put a trending sound under it in the app.")
           PY
       - uses: actions/upload-artifact@v4
         if: always()
