@@ -57,6 +57,7 @@ var pose := "seated"        # seated, stand, sit, bench, kneel, fall, dance, che
 var path: Array[Vector3] = []
 var running := false
 var pace := 1.0             # walking speed multiplier (brisk walk to and from the car)
+var run_pace := 1.0         # chase pacing; ordinary runs retain their normal speed
 var speed_now := 0.0
 var stride := 0.0
 var face_point := Vector3.INF    # stand facing this (and look at it); INF = no target
@@ -252,9 +253,12 @@ func _accessories(acc: Array, hair: Color, shirt: Color) -> void:
 	for a in acc:
 		match str(a):
 			"cap":
-				var c := shirt.lerp(Color(0.85, 0.15, 0.15), 0.6)
+				var c := shirt.darkened(0.2) if who == "police" else shirt.lerp(Color(0.85, 0.15, 0.15), 0.6)
 				_box(head, Vector3(0.58, 0.14, 0.58), Vector3(0, 0.6, 0.0), c)
 				_box(head, Vector3(0.44, 0.04, 0.24), Vector3(0, 0.55, -0.38), c)
+			"badge":
+				_box(torso, Vector3(0.09, 0.12, 0.025), Vector3(-0.13, 0.32, -0.14), Color(1, 0.8, 0.15))
+				_box(head, Vector3(0.09, 0.08, 0.025), Vector3(0, 0.6, -0.3), Color(1, 0.8, 0.15))
 			"hat":
 				_box(head, Vector3(0.78, 0.04, 0.78), Vector3(0, 0.6, 0.0), dark)
 				_box(head, Vector3(0.5, 0.22, 0.5), Vector3(0, 0.73, 0.0), dark)
@@ -621,7 +625,7 @@ func _locomotion(dt: float) -> void:
 				rotation.y = then_yaw
 				then_pose = ""
 		else:
-			want_speed = RUN_SPEED if running else WALK_SPEED * pace
+			want_speed = RUN_SPEED * run_pace if running else WALK_SPEED * pace
 			rotation.y = lerp_angle(rotation.y, atan2(-d.x, -d.z), minf(10.0 * dt, 1.0))
 			var step := minf(speed_now * dt, d.length())
 			global_position += d.normalized() * step

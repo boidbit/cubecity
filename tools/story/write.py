@@ -4,7 +4,7 @@
 The model is told exactly what the game can do (lines, emotions, police, a jump, props,
 endings) and must answer in JSON. The answer is checked and cleaned up (unknown actions
 dropped, lengths limited, one ending, ids added). If it is still not usable, or there is
-no key, the saved episode in --base is used instead, so the workflow always has a story.
+no key, generation fails with diagnostics. A saved episode is only played when selected.
 
 Usage: tools/story/write.py --out story-out/screenplay.json [--type funny] [--idea "..."]
                             [--language hinglish] [--base story/screenplays/ep1_date_night.json]
@@ -26,15 +26,16 @@ ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers"
            "prop_show", "prop_fly", "prop_hide", "slowmo", "stop", "go",
            "park", "exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug",
            "dance", "cheer", "hold", "give",
-           "arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot"]
+           "arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot",
+           "foot_chase"]
 FOOT = ["walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer"]
 SPOTS = ["bench", "icecream", "chai"]       # sets put up where the car parks (park "at")
 STALLS = ["icecream", "chai"]               # these come with a vendor who can speak
 CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "train", "prop_fly"]   # need the car to be driving
 EVENTS = ["takeoff", "big_air", "prop_fly", "near_miss", "cop_wrecked", "roadblock",
           "parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won",
-          "train_crossed", "train_passed"]
-WAIT_FOR = ["parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won"]
+          "train_crossed", "train_passed", "foot_chase_started", "foot_chase_done", "foot_caught", "foot_escaped"]
+WAIT_FOR = ["parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won", "foot_chase_done"]
 SHOTS = ["zoom", "pov", "wide"]
 MUSIC_CUES = ["calm", "romantic", "happy", "comic", "sad", "tension", "action", "silence"]
 SFX_NAMES = ["boing", "wahwah", "rimshot", "scratch", "crickets", "whoosh", "riser", "heartbeat", "sparkle",
@@ -52,7 +53,8 @@ RESERVED = {"babu", "shona", "police", "vendor", "both", "all"}
 TEMPLATES = {"kidnap_rescue": "kidnap & rescue (villains in the van, a chase, a fight)",
              "jealous_reveal": "jealous reveal (a misunderstanding on foot, a twist, they make up)",
              "date": "a date at a place (bench, ice cream or chai)",
-             "proposal": "a proposal out of the car"}
+             "proposal": "a proposal out of the car",
+             "police_foot_chase": "an on-foot police chase: start_on_foot, foot_chase with who=police, no car chase"}
 MAX_SIDE = 3
 CAR_COLORS = {"van": "#26262b"}
 PLACES = ["ahead", "back", "car", "other", "spot"]
@@ -63,6 +65,8 @@ VENDOR = {"name": "BHAIYA", "color": "#f0a020",
                     "espeak_pitch": 40, "style": "a cheerful, chatty Indian street vendor"},
           "look": {"style": "boy", "skin": "#c98b5e", "hair": "#1d1714", "shirt": "#f3efe4"}}
 TIMES = ["day", "dusk", "night"]
+POLICE_LOOK = {"style": "man", "skin": "#c98b5e", "hair": "#241b16", "shirt": "#b49a65",
+               "pants": "#776440", "hair_style": "short", "acc": ["cap", "mustache", "badge"]}
 MOOD_ENDING = {"happy": "happy", "romantic": "happy", "funny": "happy", "cringe": "happy", "dark": "cliffhanger",
                "sad": "crash", "action": "caught", "twist": "cliffhanger", "drama": "happy"}
 MOOD_TIME = {"sad": "night", "romantic": "dusk", "happy": "day", "action": "dusk", "dark": "night"}
@@ -71,12 +75,13 @@ SYSTEM = """You write episodes of a short animated comedy-drama series for YouTu
 The show is made in a blocky 3D city game (everything is cubes, like Minecraft or Roblox).
 
 THE SET-UP (fixed, the game cannot do anything else):
-- Two main characters start in a pink open-top car: "babu" (boy) drives, "shona" (girl) sits next to him.
+- Two main characters are "babu" (boy) and "shona" (girl). By default babu drives a pink car.
+  When the idea is on foot, set start_on_foot=true: they begin on the pavement, not in the car.
 - The car drives through the city while they talk. They can also pull over and get out for a scene on the
   pavement (a proposal, a fight, a sulk, a race on foot), then get back in and drive on, or end the episode there.
 - Police cars, a police helicopter, roadblocks and traffic exist, but they are SIDE characters: bring them in only
   when your story needs them. A quiet story with no police at all is fine.
-- "police" can also speak (over a megaphone), at most 2 short lines.
+- "police" can also speak (over a megaphone in car chases, in person during foot_chase), at most 3 short lines.
 - When they stop at an ice-cream cart or a chai stall, its "vendor" (a street vendor, "Bhaiya") can speak too,
   at most 3 short lines: funny, chatty, he comments on the couple.
 
@@ -110,6 +115,17 @@ WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
    enter_car (add "who": W; back into their seats), then go to drive on.
    The order is: park, exit_car, the scene on foot, then either enter_car + go or the ending.
    Car actions (police, jump, roadblock, crossers, boom, train, prop_fly) only work while they are driving.
+   ON-FOOT POLICE CHASE:
+   {"do": "foot_chase", "who": "police", "to": "babu" | "shona", "dur": 4-12,
+    "outcome": "caught" | "escape"}
+   A visible uniformed police officer runs after the runner along the pavement. The runner flees,
+   the officer follows their changing position, and the camera tracks both. No police car is used.
+   The officer is built automatically; do not add police as a custom side character.
+   They can speak DURING the chase, then {"wait_for": "foot_chase_done"} waits for its result.
+   caught = the officer reaches the runner and stops them; escape = the officer gives up.
+   Use a happy or cliffhanger ending afterward (the separate end=caught is a CAR arrest).
+   Use this action for an idea about running from police on foot; ordinary run + police is NOT equivalent.
+   The chase stays on one block's pavement; no jumping walls, rooftops or entering buildings.
    SIDE CHARACTERS ("cast", optional, at most 3; ids are short lowercase words like "rahul", "goon1", "papa"):
      "cast": {"rahul": {"name": "RAHUL", "gender": "male", "role": "Shona's cousin, nerdy and loud",
                         "look": {"style": S, "skin": "#c98b5e", "hair": "#2b1d16", "shirt": "#f2f2f2", "pants": "#3a4a6a",
@@ -158,6 +174,10 @@ RECIPES (use one when the idea or the template fits; fill in the dialogue and th
 Props (P): pizza, flowers, gift, ring, teddy, icecream, chai. List the ones in the car at the start in "props".
 
 WRITING RULES:
+- The creator's explicit actions, travel mode, characters and premise are requirements. Preserve them.
+  Never replace a requested on-foot chase with driving, or invent pizza/theft as a substitute premise.
+  If a required action cannot be staged using the vocabulary above, answer
+  {"unsupported_reason": "explain which requested action is unsupported"} instead of changing the story.
 - 9 to 16 lines in total, each line at most 12 words. Talky episodes last about 40 seconds, action ones about 60.
 - A real story: the first line is a hook (a problem, a promise or a question), then trouble that grows,
   a twist, a payoff that fits the mood, and a last line that is a punchline or an emotional moment.
@@ -179,7 +199,7 @@ LANGUAGE:
 
 ANSWER with one JSON object only:
 {"title": "BABU & SHONA", "episode": "the episode's own title, 2-4 words, no number", "end_text": "teaser for next part, max 4 words",
- "names": {"babu": "BABU", "shona": "SHONA"}, "time": "day|dusk|night", "props": ["pizza"],
+ "names": {"babu": "BABU", "shona": "SHONA"}, "time": "day|dusk|night", "props": [],
  "cast": { optional side characters }, "start_on_foot": false,
  "beats": [ ... ],
  "upload": {"titles": ["3 catchy titles, max 60 chars, 1-2 emojis"], "description": "2 short lines",
@@ -313,6 +333,12 @@ class Stage:
         self.cars = set()       # story cars used
         self.van_gone = False   # the van has driven off
         self.chasing = False
+        self.foot_duration = 0.0
+
+    def finish_foot_chase(self):
+        if self.foot_duration:
+            self.wait("foot_chase_done", self.foot_duration + 4)
+            self.foot_duration = 0.0
 
     def wait(self, ev, max_wait):
         if not (self.beats and self.beats[-1].get("wait_for") == ev):
@@ -364,7 +390,14 @@ class Stage:
         """The kidnap / chase / fight vocabulary. Returns True when handled."""
         act = d["do"]
         who, to = d.get("who", ""), d.get("to", "")
-        if act == "arrive":
+        if act == "foot_chase":
+            if self.chasing or who != "police" or to not in ("babu", "shona") or to in self.in_van:
+                self.problems.append("invalid foot_chase: use police pursuing babu or shona on the pavement")
+                return True
+            self.get_out({to})
+            self.beats.append(d)
+            self.foot_duration = d["dur"]
+        elif act == "arrive":
             if self.chasing:
                 return True
             self.park()
@@ -448,6 +481,8 @@ class Stage:
 
     def do(self, d):
         act = d["do"]
+        if self.foot_duration and act not in ("shot", "look", "hold", "give", "slowmo"):
+            self.finish_foot_chase()
         if self.action(d):
             return
         names = {"babu", "shona"} if d.get("who", "both") == "both" or act == "hug" else self.names(d["who"])
@@ -492,7 +527,9 @@ class Stage:
     def wait_for(self, ev):
         # the waits for getting out and in, the van and the fight are added where they belong;
         # "arrived" only after a walk or run
-        if ev == "parked" and self.parked and not self.out:
+        if ev == "foot_chase_done":
+            self.finish_foot_chase()
+        elif ev == "parked" and self.parked and not self.out:
             self.wait("parked", 22)
         elif ev == "arrived" and self.walking:
             self.wait("arrived", 12)
@@ -611,7 +648,7 @@ def clean(ai, base, mood):
                 d["who"] = who if ok else ("babu" if act in ("kneel", "fall") else "both")
                 if b.get("car") == "van":
                     d["car"] = "van"
-            if act in ("arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot"):
+            if act in ("arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot", "foot_chase"):
                 for k in ("who", "to", "at"):
                     if isinstance(b.get(k), str):
                         d[k] = b[k].lower().replace(" ", "")
@@ -628,6 +665,14 @@ def clean(ai, base, mood):
                         d["dist"] = 10.0
                 if b.get("ko"):
                     d["ko"] = True
+                if act == "foot_chase":
+                    d.setdefault("who", "police")
+                    d.setdefault("to", "babu")
+                    try:
+                        d["dur"] = max(4.0, min(12.0, float(b.get("dur", 8))))
+                    except (TypeError, ValueError):
+                        d["dur"] = 8.0
+                    d["outcome"] = b.get("outcome") if b.get("outcome") in ("caught", "escape") else "escape"
             if act == "hold":
                 if b.get("prop") not in PROPS:
                     continue
@@ -667,15 +712,20 @@ def clean(ai, base, mood):
         elif "end" in b:
             if endings:
                 continue
+            stage.finish_foot_chase()
             endings += 1
             beats.append({"end": ending_for(b["end"] if b["end"] in ENDINGS else MOOD_ENDING.get(mood, "happy"), stage)})
     if endings == 0:
+        stage.finish_foot_chase()
         problems.append("no ending")
         # put an ending before the last line so there is still a closing line
         at = len(beats) - 1 if beats else 0
         beats.insert(max(at, 0), {"end": ending_for(MOOD_ENDING.get(mood, "happy"), stage)})
     if stage.cars:
         sp["cars"] = {c: {"color": CAR_COLORS[c]} for c in stage.cars}
+    if any(b.get("do") == "foot_chase" for b in beats):
+        sp["cast"]["police"]["look"] = copy.deepcopy(POLICE_LOOK)
+        sp["cast"]["police"].pop("radio", None)
     lines = sum(1 for b in beats if "say" in b)
     if lines < 6:
         problems.append(f"only {lines} lines (need 9 to 14)")
@@ -697,6 +747,57 @@ def clean(ai, base, mood):
     return sp, problems
 
 
+def needs_foot_chase(idea, template="auto"):
+    """Catch explicit English/Hinglish/Hindi requests; the template is an unambiguous override."""
+    if template == "police_foot_chase":
+        return True
+    police = re.search(r"\b(police|pulis|cop|cops|officer)\b|पुलिस", idea, re.I)
+    if not police:
+        return False
+    if re.search(r"\b(on[ -]foot|foot chase|paidal|pedal)\b|पैदल", idea, re.I):
+        return True
+    if re.search(r"\b(car|gaadi|gadi|van|bike|truck)\b|गाड़ी|गाडी|कार", idea, re.I):
+        return False
+    return bool(re.search(r"\b(walking|running|runs?|bhag\w*|bhaag\w*|daud\w*)\b|भाग|दौड़", idea, re.I))
+
+
+def intent_problems(sp, idea, template="auto"):
+    if not needs_foot_chase(idea, template):
+        return []
+    chases = [b for b in sp.get("beats", []) if b.get("do") == "foot_chase" and b.get("who") == "police"]
+    if not chases:
+        return ["The requested on-foot police chase is missing. Use foot_chase with who=police; do not substitute a car chase."]
+    issues = []
+    named = [who for who, pattern in (("babu", r"\bbabu\b|बाबू"), ("shona", r"\bshona\b|शोना"))
+             if re.search(pattern, idea, re.I)]
+    if len(named) == 1 and not any(b.get("to") == named[0] for b in chases):
+        issues.append(f"The requested runner is {named[0]}; keep that character in the foot_chase.")
+    mixed_transport = re.search(r"\b(car|gaadi|gadi|van|bike|truck)\b|गाड़ी|गाडी|कार", idea, re.I)
+    if template == "police_foot_chase" or not mixed_transport:
+        if not sp.get("start_on_foot"):
+            issues.append("The requested on-foot story must start_on_foot, not open with driving.")
+        if any(b.get("do") in CAR_ONLY + ["chase", "drive_off", "go"] for b in sp.get("beats", [])):
+            issues.append("Do not add a vehicle chase to the requested on-foot story.")
+    return issues
+
+
+def generation_failed(out, reason, idea):
+    """Leave an actionable failure in Actions and artifacts, never a replacement screenplay."""
+    reason = clip(reason, 1800)
+    # Avoid an older output being mistaken for this failed generation on a local rerun.
+    if os.path.isfile(out):
+        os.remove(out)
+    with open(os.path.join(os.path.dirname(os.path.abspath(out)), "generation_error.json"), "w", encoding="utf-8") as f:
+        json.dump({"status": "failed", "reason": reason, "idea": idea, "fallback_used": False}, f, ensure_ascii=False, indent=2)
+    print("::error::Story generation failed: " + reason.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as f:
+            f.write("### Story generation failed\n\n" + reason + "\n\nNo video was recorded and no saved episode was substituted. "
+                    "Fix the issue and retry, or explicitly select a saved script.\n")
+    return 1
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -704,7 +805,7 @@ def main():
     ap.add_argument("--idea", default="")
     ap.add_argument("--language", default="hinglish", choices=["hinglish", "hindi", "english"])
     ap.add_argument("--episode", default="")
-    ap.add_argument("--template", default="auto", help="auto, kidnap_rescue, jealous_reveal, date, proposal")
+    ap.add_argument("--template", default="auto", choices=["auto", *TEMPLATES])
     ap.add_argument("--base", default=os.path.join(HERE, "..", "..", "story", "screenplays", "ep1_date_night.json"))
     a = ap.parse_args()
     with open(a.base, encoding="utf-8") as f:
@@ -713,9 +814,10 @@ def main():
     out_dir = os.path.dirname(os.path.abspath(a.out))
     os.makedirs(out_dir, exist_ok=True)
 
-    sp, used = None, "saved episode"
+    sp, used = None, ""
+    failure = "The AI did not return a valid screenplay."
     if not gemini.key():
-        print("::warning::no Gemini key (GEMINI_API_KEY): using the saved episode")
+        return generation_failed(a.out, "No Gemini API key was found. Add GEMINI_API_KEY (or GEMINI_API_KEY_1 ... _5) to repository secrets for script=ai.", a.idea)
     else:
         prompt = (f"Write a new episode.\nStory type / mood: {mood}.\n"
                   f"Idea from the creator: {a.idea.strip() or 'your choice, surprise me'}.\n"
@@ -724,12 +826,15 @@ def main():
                   + f"Suggested ending for this mood: {MOOD_ENDING.get(mood, 'your choice')}."
                   + (f"\nUse this recipe: {TEMPLATES[a.template]}" if a.template in TEMPLATES else "")
                   + (DARK_MODE if mood == "dark" else ""))
+        if needs_foot_chase(a.idea, a.template):
+            prompt += "\nRequired: show an on-foot police chase using foot_chase with who=police. Keep the requested runner on foot."
         feedback = ""
         for attempt in range(2):
             try:
                 ai, model = gemini.write_json(prompt + feedback, SYSTEM, temperature=1.0)
             except Exception as e:
                 print(f"::warning::Gemini could not write the episode: {e}")
+                failure = f"Gemini request failed: {e}. Check the key, quota and provider availability, then retry."
                 break
             with open(os.path.join(out_dir, f"ai_answer_{attempt + 1}.json"), "w", encoding="utf-8") as f:
                 json.dump(ai, f, ensure_ascii=False, indent=1)
@@ -743,25 +848,36 @@ def main():
                         ai = fixed
                 except Exception as e:
                     print(f"::warning::standards review failed ({e}): keeping the draft")
-            cand, problems = clean(ai if isinstance(ai, dict) else {}, base, mood)
+            if isinstance(ai, dict) and ai.get("unsupported_reason"):
+                failure = "Unsupported story request: " + str(ai["unsupported_reason"])
+                break
+            try:
+                cand, problems = clean(ai if isinstance(ai, dict) else {}, base, mood)
+                problems.extend(intent_problems(cand, a.idea, a.template))
+            except (TypeError, ValueError, KeyError, AttributeError) as e:
+                failure = f"The AI returned malformed screenplay data: {e}"
+                feedback = "\nYour last response contained invalid field types. Return a complete valid screenplay JSON."
+                continue
             bad = unsafe_words(ai)
             if bad:
                 problems.append("unsafe words: " + ", ".join(bad))
             lines = sum(1 for b in cand["beats"] if "say" in b)
             print(f"{model}: {lines} lines, problems: {problems or 'none'}")
-            serious = [p for p in problems if p.startswith("only") or p == "no ending"]
+            serious = [p for p in problems if not p.startswith("line too long:")]
+            failure = "The generated screenplay failed validation: " + "; ".join(serious)
             if bad:
                 feedback = ("\n\nYour last answer used words that can never go out (" + ", ".join(bad)
                             + "). Write the episode again without them, keeping the tone. Answer with the full JSON.")
-                continue           # never used, even on the last try: the saved episode is safer
-            if not serious or (attempt == 1 and lines >= 6):
+                continue
+            if not serious:
                 sp, used = cand, model
                 break
             feedback = ("\n\nYour last answer had these problems, fix them: " + "; ".join(problems)
                         + ". Answer with the full JSON again.")
     if sp is None:
-        sp = base
+        return generation_failed(a.out, failure, a.idea)
     sp["writer"] = used
+    sp["creator_idea"] = a.idea
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump(sp, f, ensure_ascii=False, indent=1)
     lines = [b for b in sp.get("beats", []) if "say" in b]
