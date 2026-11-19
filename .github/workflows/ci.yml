@@ -92,10 +92,11 @@ jobs:
           path: ~/godot
           key: godot-4.4.1-stable
       - name: Install recording tools on the GitHub runner
+        timeout-minutes: 4
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg fonts-dejavu-core libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
-          pip install --quiet numpy edge-tts
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update -q
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y -q --no-install-recommends xvfb xauth ffmpeg fonts-dejavu-core libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
+          pip install --quiet --timeout 15 --retries 2 numpy edge-tts
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
       - name: On-foot chase runtime test (capture and escape)
         run: bash tools/run_test.sh "$GODOT" story story-checks --bot=chase --duration=180 --orientation=vertical --story=res://story/screenplays/ep7_foot_chase.json
