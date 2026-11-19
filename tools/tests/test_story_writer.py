@@ -38,14 +38,36 @@ class WriterTests(unittest.TestCase):
         self.out = case_dir / "screenplay.json"
         self.summary = case_dir / "summary.md"
 
-    def generate(self, answers=None, key="test-key", idea="Babu police se paidal bhag raha hai"):
-        args = ["write.py", "--out", str(self.out), "--idea", idea]
+    def generate(self, answers=None, key="test-key", idea="Babu police se paidal bhag raha hai", template="auto"):
+        args = ["write.py", "--out", str(self.out), "--idea", idea, "--template", template]
         with patch.object(sys, "argv", args), patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(self.summary), "GITHUB_OUTPUT": ""}), \
                 patch.object(write.gemini, "key", return_value=key), \
                 patch.object(write.gemini, "write_json", side_effect=answers) as api, \
                 contextlib.redirect_stdout(io.StringIO()):
             result = write.main()
         return result, api.call_count
+
+    def test_campus_idea_preserves_stunts_and_changes_visible_props(self):
+        draft = {"episode": "MEDAL MISSION", "hook": "THE TRAIN IS HERE",
+                 "mission": "SAVE THE COLLEGE MEDAL", "prize": "medal", "reveal_prop": "books",
+                 "sub": "These are my books!", "tts": "These are my books!", "end_text": "THE VAN HAS THE MEDAL"}
+        result, calls = self.generate([(draft, "mock-model")], idea="Save the college medal, reveal books",
+                                      template="campus_action")
+        self.assertEqual((result, calls), (0, 1))
+        saved = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual((saved["scene"], saved["prize"], saved["reveal_prop"]),
+                         ("campus_action", "medal", "books"))
+        self.assertEqual(next(b["sub"] for b in saved["beats"] if "say" in b), draft["sub"])
+        self.assertIn("train_horn", [b.get("sfx") for b in saved["beats"]])
+        self.assertIn("blast_hit", [b.get("sfx") for b in saved["beats"]])
+
+    def test_campus_rejects_unsupported_prop_without_replaying_demo(self):
+        draft = {"episode": "MEDAL MISSION", "hook": "THE TRAIN IS HERE",
+                 "mission": "SAVE THE COLLEGE MEDAL", "prize": "medal", "reveal_prop": "robot",
+                 "sub": "That is a robot!", "tts": "That is a robot!", "end_text": "THE VAN HAS THE MEDAL"}
+        result, calls = self.generate([(draft, "mock-model")] * 2, idea="Reveal a robot", template="campus_action")
+        self.assertEqual(calls, 2)
+        self.assertIn("wrong bag", self.assert_failed(result)["reason"])
 
     def assert_failed(self, result):
         self.assertEqual(result, 1)
