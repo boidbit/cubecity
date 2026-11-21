@@ -1,0 +1,159 @@
+{
+  "id": "ep13_heli_down",
+  "title": "BABU & SHONA",
+  "episode": "SHONA KI GAADI",
+  "end_text": "PAPA KO PATA CHALA?",
+  "mood": "action",
+  "time": "dusk",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "props": [],
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      },
+      "start": {
+        "at": "back",
+        "dist": 22
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      },
+      "start": {
+        "at": "ahead",
+        "dist": 3
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    }
+  },
+  "beats": [
+    {
+      "say": "babu",
+      "sub": "Shona! Ye gaadi tumne kiski uthayi?!",
+      "tts": "शोना! ये गाड़ी तुमने किसकी उठाई?!",
+      "emotion": "shock",
+      "react": "smug",
+      "id": "b01"
+    },
+    {
+      "say": "shona",
+      "sub": "Papa ki! Unhe pata nahi chalega. Shayad.",
+      "tts": "पापा की! उन्हें पता नहीं चलेगा। शायद।",
+      "emotion": "smug",
+      "react": "worried",
+      "id": "b02"
+    },
+    {
+      "do": "police",
+      "stars": 2
+    },
+    {
+      "say": "babu",
+      "sub": "Police peeche hai! Shona, speed badhao!",
+      "tts": "पुलिस पीछे है! शोना, स्पीड बढ़ाओ!",
+      "emotion": "scared",
+      "react": "smug",
+      "id": "b03"
+    },
+    {
+      "do": "heli_down"
+    },
+    {
+      "say": "shona",
+      "sub": "Helicopter?! Pakad ke rakhna!",
+      "tts": "हेलीकॉप्टर?! पकड़ के रखना!",
+      "emotion": "excited",
+      "react": "scared",
+      "id": "b04"
+    },
+    {
+      "say": "babu",
+      "sub": "Shona! Ramp! RAMP!",
+      "tts": "शोना! रैम्प! रैम्प!",
+      "emotion": "scared",
+      "react": "excited",
+      "id": "b05"
+    },
+    {
+      "say": "shona",
+      "sub": "Helicopter gira diya! Dhamaka!",
+      "tts": "हेलीकॉप्टर गिरा दिया! धमाका!",
+      "emotion": "laugh",
+      "react": "shock",
+      "on": "heli_down",
+      "max_wait": 45,
+      "id": "b06"
+    },
+    {
+      "say": "babu",
+      "sub": "Ab papa ko kaun batayega?",
+      "tts": "अब पापा को कौन बताएगा?",
+      "emotion": "worried",
+      "react": "laugh",
+      "id": "b07"
+    },
+    {
+      "do": "calm"
+    },
+    {
+      "end": "happy"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "Shona ne helicopter gira diya 🚁💥",
+      "Papa ki gaadi, police aur helicopter 😂"
+    ],
+    "description": "Shona papa ki gaadi le gayi. Phir police aur helicopter!",
+    "hashtags": [
+      "#shorts",
+      "#desicomedy"
+    ]
+  }
+}

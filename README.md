@@ -147,6 +147,10 @@ ready-made side characters (papa, mummy, dadi, bhai, dost, saheli, teacher, uncl
 delivery; up to 4 in an episode) and an episode can use two places (get back in, drive on, park somewhere
 else). The AI writer is nudged each time to use some of them (`variety_hint` in `tools/story/write.py`).
 `story/screenplays/ep11_comic_kit.json` shows it all and is part of the smoke test.
+Helicopter takedown and Shona at the wheel: `{"do": "heli_down"}` calls the helicopter and the car jumps a ramp into it
+(the same jump as the `heli` mode; if it has not worked within 40 s the helicopter is brought down anyway, so a story
+can count on it); lines can wait for it with `"on": "heli_down"`. The AI answer's `"driver": "shona"` puts her at the wheel.
+`ep13_heli_down.json` is the example (in the smoke test).
 Kids mode: `story_type` = `kids` in the story workflow writes a children's episode (ages about 4-9): a hook in the
 first line, a catchphrase said three times, a small riddle, slapstick that hurts nobody, a kind lesson and a
 question to the children at the end. No police, chases, fights, slaps, villains or romance (the writer is told so,

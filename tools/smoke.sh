@@ -88,6 +88,20 @@ PY
     echo "::error::the comic-kit story did not play through (a slap, gestures, two places)"
     status=1
   fi
+  # shona drives, the police and a helicopter come, the car jumps into the helicopter (or it is brought down anyway)
+  run bot-story-heli --fixed-fps 60 --quit-after $(( 130 * 60 )) -- \
+    --bot=chase --duration=110 --seed=11 --story=res://story/screenplays/ep13_heli_down.json --story_log="$OUT/story_heli.out"
+  if ! python3 - "$OUT/story_heli.out" <<'PY'
+import json, sys
+log = json.load(open(sys.argv[1]))
+seen = {e["type"] for e in log.get("events", [])}
+print(f"helicopter story: {len(log['lines'])} lines, heli_down {'heli_down' in seen}, ending {log['ending']}")
+sys.exit(0 if "heli_down" in seen and len(log["lines"]) >= 7 and log["ending"] == "happy" else 1)
+PY
+  then
+    echo "::error::the helicopter story did not play through (no takedown)"
+    status=1
+  fi
   # the kids episode: nothing violent, a catchphrase, a question at the end
   run bot-story-kids --fixed-fps 60 --quit-after $(( 70 * 60 )) -- \
     --bot=chase --duration=55 --seed=11 --story=res://story/screenplays/ep12_kids_gubbara.json --story_log="$OUT/story_kids.out"

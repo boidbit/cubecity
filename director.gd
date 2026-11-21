@@ -86,6 +86,8 @@ var next_pass := 6.0
 # Story lab: with --story the director stages nothing by itself. The story calls cue() when
 # its script needs police, a jump, the helicopter... so the action supports the story.
 var scripted := false
+const HELI_DOWN_SECS := 40.0     # the story asked for a takedown: the longest it may take
+var heli_force_t := -1.0
 var heat_cap := 100.0
 var calm_at := -1.0
 var still := false        # the story has stopped the car on purpose (an ending): no breaking free
@@ -332,6 +334,28 @@ func cue(kind: String, arg: float = 0.0) -> bool:
 				cue("police", 1.0)
 		"heli_off":
 			main.heli_forced = false
+		"heli_down":
+			# the story's helicopter takedown: the same jump into the helicopter as the heli show, planned on
+			# demand; if it has not worked within HELI_DOWN_SECS the helicopter is brought down anyway
+			main.heli_forced = true
+			main.heli.low = true
+			if heat_floor < 1.0:
+				cue("police", 1.0)
+			if heli_force_t < 0.0:
+				heli_force_t = main.clock + HELI_DOWN_SECS
+			if not jump.is_empty():
+				return true
+			if bot.busy() or main.player.airtime > 0.0 or main.heli.down:
+				return false
+			if _plan_mega():
+				jump = {"lip": mega_info["lip"], "dir": mega_info["dir"], "lip_h": Stunts.RAMP_H + Stunts.KICK_H, "hover_d": 30.0, "hover_up": 3.0}
+			elif _plan_ramp():
+				jump = {"lip": cam_jump["lip"], "dir": cam_jump["dir"], "lip_h": 2.3, "hover_d": 22.0, "hover_up": 2.6}
+			else:
+				return false
+			jump_stage = 0
+			jump_t = main.clock
+			return true
 		"jump":
 			# arg: seconds the story has been waiting. A kicker on the straight ahead first;
 			# after a while any ramp in reach (which can take longer to drive to).
@@ -852,9 +876,17 @@ func _heli_show(t: float) -> void:
 # Waits for the bot to near the ramp, parks the helicopter where the jump will pass, then
 # aims it at the point the car will really reach once it has left the roof.
 func _heli_tick(t: float) -> void:
-	if mode != "heli" or jump.is_empty():
-		return
 	var heli: Heli = main.heli
+	if heli_force_t >= 0.0:
+		if heli.down or heli.state in ["crash", "wreck"]:
+			heli_force_t = -1.0
+		elif main.clock > heli_force_t and heli.visible:
+			heli_force_t = -1.0
+			jump = {}
+			heli._shot_down()           # the jump did not work out in time: the story still needs it
+			return
+	if jump.is_empty():
+		return
 	if heli.down or heli.state in ["crash", "wreck"]:
 		if heli.state == "wreck" or heli.down:
 			jump = {}

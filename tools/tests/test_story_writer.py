@@ -140,6 +140,41 @@ class GeminiFallbackTests(unittest.TestCase):
             g.write_json("hi")
 
 
+class HeliDownTests(unittest.TestCase):
+    def setUp(self):
+        self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))
+
+    def draft(self, extra=None, driver="shona"):
+        say = lambda w, n: {"say": w, "sub": f"Line number {n} here.", "emotion": "shock"}
+        return {"episode": "Heli", "driver": driver, "beats": [say("babu", 1), say("shona", 2)] + (extra or [{"do": "heli_down"}])
+                + [say("shona", n) for n in range(3, 11)] + [{"end": "happy"}]}
+
+    def test_the_helicopter_is_called_first_and_the_story_waits_for_it_to_fall(self):
+        sp, problems = write.clean(self.draft(), self.base, "twist")
+        kinds = [b.get("do") or ("wait:" + b["wait_for"] if "wait_for" in b else "say") for b in sp["beats"]]
+        self.assertEqual(kinds[2:5], ["heli", "heli_down", "wait:heli_down"])
+        self.assertEqual(problems, [])
+
+    def test_shona_can_drive(self):
+        sp, _ = write.clean(self.draft(), self.base, "twist")
+        self.assertEqual((sp["cast"]["shona"]["seat"], sp["cast"]["babu"]["seat"]), ("driver", "passenger"))
+        sp, _ = write.clean(self.draft(driver="babu"), self.base, "twist")
+        self.assertEqual((sp["cast"]["shona"]["seat"], sp["cast"]["babu"]["seat"]), ("passenger", "driver"))
+
+    def test_no_takedown_while_parked_or_for_kids(self):
+        park = [{"do": "park"}, {"do": "exit_car", "who": "both"}, {"do": "heli_down"}]
+        sp, problems = write.clean(self.draft(park), self.base, "twist")
+        self.assertTrue(any("while the car is parked" in p for p in problems))
+        sp, _ = write.clean(self.draft(), self.base, "happy", kids=True)
+        self.assertNotIn("heli_down", [b.get("do") for b in sp["beats"]])
+
+    def test_the_game_knows_the_new_cue_and_event(self):
+        d = (ROOT / "director.gd").read_text(encoding="utf-8")
+        self.assertIn('"heli_down":', d)
+        self.assertIn("heli_down", write.EVENTS)
+        self.assertIn("heli_down", write.WAIT_FOR)
+
+
 class KidsModeTests(unittest.TestCase):
     def setUp(self):
         self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))

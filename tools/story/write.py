@@ -30,17 +30,17 @@ ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers"
            "arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot",
            "foot_chase", "reaction",
            "slap", "push", "shrug", "facepalm", "clap", "wave", "spin", "hop", "bow", "phone", "hide", "faint",
-           "stumble", "point_at"]
+           "stumble", "point_at", "heli_down"]
 # comic gestures: one person (optionally turned towards "to"), on foot
 GESTURE_ACTS = ["shrug", "facepalm", "clap", "wave", "spin", "hop", "bow", "phone", "hide", "faint", "stumble", "point_at"]
 FOOT = ["walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer"] + GESTURE_ACTS
 SPOTS = ["bench", "icecream", "chai", "college_gate", "bus_stop", "park"]       # sets put up where the car parks (park "at")
 STALLS = ["icecream", "chai"]               # these come with a vendor who can speak
-CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "train", "prop_fly"]   # need the car to be driving
+CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "train", "prop_fly", "heli_down"]   # need the car to be driving
 EVENTS = ["takeoff", "big_air", "prop_fly", "near_miss", "cop_wrecked", "roadblock",
           "parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won",
-          "train_crossed", "train_passed", "foot_chase_started", "foot_chase_done", "foot_caught", "foot_escaped"]
-WAIT_FOR = ["parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won", "foot_chase_done"]
+          "train_crossed", "train_passed", "heli_down", "foot_chase_started", "foot_chase_done", "foot_caught", "foot_escaped"]
+WAIT_FOR = ["parked", "exited", "arrived", "seated", "car_arrived", "grabbed", "fled", "cornered", "won", "foot_chase_done", "heli_down"]
 SHOTS = ["zoom", "pov", "wide"]
 MUSIC_CUES = ["calm", "romantic", "happy", "comic", "sad", "tension", "action", "silence"]
 SFX_NAMES = ["boing", "wahwah", "rimshot", "scratch", "crickets", "whoosh", "riser", "heartbeat", "sparkle",
@@ -64,7 +64,7 @@ TEMPLATES = {"campus_action": "a staged campus car chase with helicopter, blast 
 MAX_SIDE = 4
 # KIDS MODE: nothing that could be copied into a fight, no villains, no police, no romance. The writer is told so in
 # KIDS_MODE; whatever still comes back is dropped here
-KIDS_BANNED = ["slap", "push", "fight", "punch", "grab", "police", "calm", "heli", "heli_off", "roadblock", "foot_chase",
+KIDS_BANNED = ["heli_down", "slap", "push", "fight", "punch", "grab", "police", "calm", "heli", "heli_off", "roadblock", "foot_chase",
                "drive_off", "chase", "corner", "arrive", "boom", "crossers", "kneel", "hug"]
 KIDS_PRESETS_OUT = ["goon", "doctor"]
 CAR_COLORS = {"van": "#26262b"}
@@ -151,7 +151,9 @@ WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
      train_crossed (the car has just crossed the railway ahead of a train), train_passed (the train has gone by).
 2. An action: {"do": A} where A is one of:
    police (add "stars": 1-3, police start chasing them), calm (the police give up and leave),
-   heli / heli_off (police helicopter), jump (a ramp appears on the road and the car jumps it),
+   heli / heli_off (police helicopter), heli_down (the car jumps a ramp into the helicopter and brings it down in a
+     ball of fire: needs the car driving and the police chasing; it takes 10-40 seconds, so put "on": "heli_down" on
+     the line that celebrates it, and give the lines before it something to say about the helicopter), jump (a ramp appears on the road and the car jumps it),
    roadblock (police block the road ahead), crossers (two cars cut across just in front: a near miss),
    train (the car heads for a level crossing and goes over just ahead of a passing train: flashing gates, a loud horn),
    boom (barrels explode behind the car and knock out the police), slowmo (2 seconds of slow motion),
@@ -278,7 +280,7 @@ LANGUAGE:
 
 ANSWER with one JSON object only:
 {"title": "BABU & SHONA", "episode": "the episode's own title, 2-4 words, no number", "end_text": "teaser for next part, max 4 words",
- "names": {"babu": "BABU", "shona": "SHONA"}, "time": "day|dusk|night", "props": [],
+ "names": {"babu": "BABU", "shona": "SHONA"}, "time": "day|dusk|night", "props": [], "driver": "babu" (or "shona": she drives the car),
  "cast": { optional side characters }, "start_on_foot": false,
  "beats": [ ... ],
  "upload": {"titles": ["3 catchy titles, max 60 chars, 1-2 emojis"], "description": "2 short lines",
@@ -440,6 +442,7 @@ class Stage:
         self.cars = set()       # story cars used
         self.van_gone = False   # the van has driven off
         self.chasing = False
+        self.heli_seen = False  # the police helicopter has been called
         self.foot_duration = 0.0
 
     def finish_foot_chase(self):
@@ -626,6 +629,16 @@ class Stage:
             self.parked, self.stop_at = False, -1
             self.beats.append(d)
         else:
+            if act == "heli":
+                self.heli_seen = True
+            if act == "heli_down":
+                # the helicopter must be there first; the lines after it wait until it is down
+                if not self.heli_seen:
+                    self.beats.append({"do": "heli"})
+                    self.heli_seen = True
+                self.beats.append(d)
+                self.wait("heli_down", 45)
+                return
             if act in FOOT:
                 self.get_out(names)
                 self.walking = self.walking or act in ("walk", "run")
@@ -672,6 +685,9 @@ def clean(ai, base, mood, kids=False):
     sp["episode"] = clip(ai.get("episode") or "NEW EPISODE", 34).upper()
     sp["end_text"] = clip(ai.get("end_text") or "PART 2 JALDI...", 28).upper()
     sp["mood"] = mood
+    if ai.get("driver") == "shona":
+        # shona at the wheel, babu beside her
+        sp["cast"]["shona"]["seat"], sp["cast"]["babu"]["seat"] = "driver", "passenger"
     if kids:
         sp["audience"] = "kids"
     sp["time"] = ai.get("time") if ai.get("time") in TIMES else MOOD_TIME.get(mood, "dusk")

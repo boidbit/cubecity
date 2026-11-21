@@ -560,7 +560,7 @@ func _do(b: Dictionary, t: float) -> void:
 				"dist": float(b.get("dist", 8.0)), "prop": str(b.get("prop", "")), "from": t, "until": t + 25.0}, true)
 			pending.append(a)
 		_:
-			pending.append({"kind": kind, "arg": arg, "from": t, "until": t + ACTION_TRIES})
+			pending.append({"kind": kind, "arg": arg, "from": t, "until": t + (45.0 if kind == "heli_down" else ACTION_TRIES)})
 	print("STORYDO ", kind, " t=", snappedf(t, 0.01))
 
 
