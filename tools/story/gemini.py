@@ -137,6 +137,11 @@ def pick(kind, override=""):
     """Best available model for "text" (writing) or "tts" (speech)."""
     if override:
         return override if override.startswith("models/") else "models/" + override
+    return ranked(kind)[0]
+
+
+def ranked(kind):
+    """The models for "text" or "tts", best first (the next ones are fallbacks when the best is overloaded)."""
     skip = ("tts", "image", "embedding", "live", "audio", "learnlm", "robotics", "computer", "gemma", "veo", "imagen")
     cands = []
     for m in models():
@@ -156,7 +161,7 @@ def pick(kind, override=""):
     if not cands:
         raise GeminiError(f"no Gemini {kind} model is available for this key")
     cands.sort(reverse=True)
-    return cands[0][1]
+    return [name for _, name in cands]
 
 
 def _text_of(r):
@@ -170,12 +175,23 @@ def _text_of(r):
 
 def write_json(prompt, system="", temperature=1.0, model=""):
     """Asks for a JSON answer. Returns (parsed JSON, model name)."""
-    m = pick("text", model or os.environ.get("GEMINI_TEXT_MODEL", ""))
+    override = model or os.environ.get("GEMINI_TEXT_MODEL", "")
+    # an overloaded model ("503: high demand") does not stop the episode: after a few tries the next best one answers
+    order = [pick("text", override)] if override else ranked("text")[:3]
     body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {"responseMimeType": "application/json", "temperature": temperature}}
     if system:
         body["systemInstruction"] = {"parts": [{"text": system}]}
-    r = call(f"/{m}:generateContent", body)
+    r = None
+    for n, m in enumerate(order):
+        last = n == len(order) - 1
+        try:
+            r = call(f"/{m}:generateContent", body, tries=5 if last else 3)
+            break
+        except GeminiError as e:
+            if last or e.status not in (429, 500, 502, 503, 504):
+                raise
+            print(f"  {m} is overloaded ({e.status}): trying {order[n + 1]}")
     text = _text_of(r)
     if not text:
         raise GeminiError("empty answer: " + json.dumps(r)[:400])

@@ -98,6 +98,48 @@ class ComicKitTests(unittest.TestCase):
         self.assertTrue(any(f'"{p}"' in hint for p in write.PRESETS))
 
 
+class GeminiFallbackTests(unittest.TestCase):
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / "tools" / "story"))
+        import gemini
+        self.g = gemini
+
+    def test_an_overloaded_model_hands_over_to_the_next_one(self):
+        g = self.g
+        ok = {"candidates": [{"content": {"parts": [{"text": "{\"a\": 1}"}]}}]}
+        seen = []
+
+        def fake_call(path, body, tries=5, **kw):
+            seen.append((path, tries))
+            if "model-a" in path:
+                raise g.GeminiError("HTTP 503: high demand", status=503)
+            return ok
+        with patch.object(g, "ranked", return_value=["models/model-a", "models/model-b", "models/model-c"]), \
+                patch.object(g, "call", side_effect=fake_call), contextlib.redirect_stdout(io.StringIO()):
+            out, model = g.write_json("hi")
+        self.assertEqual((out, model), ({"a": 1}, "models/model-b"))
+        self.assertEqual([p.split("/")[2].split(":")[0] for p, _ in seen], ["model-a", "model-b"])
+
+    def test_a_real_error_is_not_swallowed(self):
+        g = self.g
+
+        def fake_call(path, body, tries=5, **kw):
+            raise g.GeminiError("HTTP 400: bad request", status=400)
+        with patch.object(g, "ranked", return_value=["models/model-a", "models/model-b"]), \
+                patch.object(g, "call", side_effect=fake_call), self.assertRaises(g.GeminiError):
+            g.write_json("hi")
+
+    def test_every_model_busy_still_fails(self):
+        g = self.g
+
+        def fake_call(path, body, tries=5, **kw):
+            raise g.GeminiError("HTTP 503", status=503)
+        with patch.object(g, "ranked", return_value=["models/a", "models/b"]), \
+                patch.object(g, "call", side_effect=fake_call), contextlib.redirect_stdout(io.StringIO()), \
+                self.assertRaises(g.GeminiError):
+            g.write_json("hi")
+
+
 class KidsModeTests(unittest.TestCase):
     def setUp(self):
         self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))
