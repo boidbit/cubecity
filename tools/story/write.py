@@ -20,15 +20,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import gemini  # noqa: E402
 
-EMOTIONS = ["neutral", "smug", "love", "shock", "angry", "sad", "happy", "laugh", "cry", "shy", "scared", "think"]
+EMOTIONS = ["neutral", "smug", "love", "shock", "angry", "sad", "happy", "laugh", "cry", "shy", "scared", "think",
+            "excited", "jealous", "worried", "proud"]
 GESTURES = ["talk", "up", "point", "wave", "idle"]
 ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers", "boom", "train",
            "prop_show", "prop_fly", "prop_hide", "slowmo", "stop", "go",
            "park", "exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug",
            "dance", "cheer", "hold", "give",
            "arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot",
-           "foot_chase", "reaction"]
-FOOT = ["walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer"]
+           "foot_chase", "reaction",
+           "slap", "push", "shrug", "facepalm", "clap", "wave", "spin", "hop", "bow", "phone", "hide", "faint",
+           "stumble", "point_at"]
+# comic gestures: one person (optionally turned towards "to"), on foot
+GESTURE_ACTS = ["shrug", "facepalm", "clap", "wave", "spin", "hop", "bow", "phone", "hide", "faint", "stumble", "point_at"]
+FOOT = ["walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer"] + GESTURE_ACTS
 SPOTS = ["bench", "icecream", "chai", "college_gate", "bus_stop", "park"]       # sets put up where the car parks (park "at")
 STALLS = ["icecream", "chai"]               # these come with a vendor who can speak
 CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "train", "prop_fly"]   # need the car to be driving
@@ -56,15 +61,58 @@ TEMPLATES = {"campus_action": "a staged campus car chase with helicopter, blast 
              "date": "a date at a place (bench, ice cream or chai)",
              "proposal": "a proposal out of the car",
              "police_foot_chase": "an on-foot police chase: start_on_foot, foot_chase with who=police, no car chase"}
-MAX_SIDE = 3
+MAX_SIDE = 4
 CAR_COLORS = {"van": "#26262b"}
 PLACES = ["ahead", "back", "car", "other", "spot"]
 ENDINGS = ["happy", "caught", "crash", "cliffhanger"]
-PROPS = ["pizza", "flowers", "gift", "ring", "teddy", "icecream", "chai"]
+PROPS = ["pizza", "flowers", "gift", "ring", "teddy", "icecream", "chai",
+         "phone", "balloon", "cake", "umbrella", "bag", "camera", "megaphone"]
 VENDOR = {"name": "BHAIYA", "color": "#f0a020",
           "voice": {"gemini": "Fenrir", "edge": "hi-IN-MadhurNeural", "rate": "+12%", "pitch": "-6Hz",
                     "espeak_pitch": 40, "style": "a cheerful, chatty Indian street vendor"},
           "look": {"style": "boy", "skin": "#c98b5e", "hair": "#1d1714", "shirt": "#f3efe4"}}
+# a library of side characters: the writer can say {"papa": {"preset": "papa"}} (or just use the id) and gets the
+# look, the role and the voice style; anything it writes itself wins over the preset
+PRESETS = {
+    "papa": {"gender": "male", "role": "Shona's strict, funny papa; overprotective", "voice": "Charon",
+             "look": {"style": "oldman", "skin": "#c98b5e", "hair": "#cfcfcf", "shirt": "#e8d8b0", "pants": "#4a4a52",
+                      "hair_style": "bald", "outfit": "kurta", "acc": ["mustache", "glasses"]}},
+    "mummy": {"gender": "female", "role": "a loud, loving mummy who notices everything", "voice": "Kore",
+              "look": {"style": "woman", "skin": "#d99d78", "hair": "#2b1d16", "shirt": "#c0392b", "pants": "#7a2a2a",
+                       "hair_style": "bun", "acc": ["bindi"]}},
+    "dadi": {"gender": "female", "role": "a sharp-tongued dadi with a heart of gold", "voice": "Achernar",
+             "look": {"style": "oldwoman", "skin": "#c98b5e", "hair": "#e6e6e6", "shirt": "#f3efe4", "pants": "#8a6a8a",
+                      "hair_style": "bun", "acc": ["glasses", "bindi"]}},
+    "bhai": {"gender": "male", "role": "Shona's big brother: tall, suspicious and protective", "voice": "Orus",
+             "look": {"style": "boy", "skin": "#b9784f", "hair": "#1d1714", "shirt": "#1b1b22", "pants": "#2c2c34",
+                      "build": "big", "acc": ["sunglasses"]}},
+    "dost": {"gender": "male", "role": "Babu's best friend, a goofy gossip who ruins plans", "voice": "Alnilam",
+             "look": {"style": "boy", "skin": "#e3a373", "hair": "#3b2a1a", "shirt": "#f1c40f", "pants": "#34495e",
+                      "hair_style": "spiky", "acc": ["cap"]}},
+    "saheli": {"gender": "female", "role": "Shona's best friend, dramatic and nosy", "voice": "Aoede",
+               "look": {"style": "girl", "skin": "#f0b48f", "hair": "#2b1d16", "shirt": "#9b59b6", "pants": "#2c3e50",
+                        "hair_style": "ponytail"}},
+    "teacher": {"gender": "female", "role": "a strict college teacher who catches everyone", "voice": "Despina",
+                "look": {"style": "woman", "skin": "#c98b5e", "hair": "#241b16", "shirt": "#3d6a5a", "pants": "#2c3e50",
+                         "hair_style": "bun", "acc": ["glasses"]}},
+    "uncle": {"gender": "male", "role": "a nosy neighbourhood uncle who has an opinion on everything", "voice": "Rasalgethi",
+              "look": {"style": "man", "skin": "#c98b5e", "hair": "#2b2b2b", "shirt": "#d6c9a0", "pants": "#555555",
+                       "build": "big", "acc": ["mustache", "tie"]}},
+    "aunty": {"gender": "female", "role": "a gossiping neighbourhood aunty", "voice": "Laomedeia",
+              "look": {"style": "woman", "skin": "#d99d78", "hair": "#3a2a20", "shirt": "#e84393", "pants": "#6c3483",
+                       "hair_style": "bun", "acc": ["bindi"]}},
+    "kid": {"gender": "male", "role": "a cheeky kid who knows too much", "voice": "Sadachbia",
+            "look": {"style": "kid", "skin": "#e3a373", "hair": "#1d1714", "shirt": "#e67e22", "pants": "#2980b9"}},
+    "goon": {"gender": "male", "role": "a clumsy, loud goon", "voice": "Fenrir",
+             "look": {"style": "man", "skin": "#b9784f", "hair": "#111111", "shirt": "#1c1c20", "pants": "#1c1c20",
+                      "build": "big", "acc": ["mask", "sunglasses"]}},
+    "doctor": {"gender": "male", "role": "a calm doctor who delivers news badly", "voice": "Algenib",
+               "look": {"style": "man", "skin": "#c98b5e", "hair": "#241b16", "shirt": "#f5f5f5", "pants": "#bcd2e8",
+                        "acc": ["glasses", "tie"]}},
+    "delivery": {"gender": "male", "role": "a food-delivery boy who is always late", "voice": "Achird",
+                 "look": {"style": "boy", "skin": "#c98b5e", "hair": "#1d1714", "shirt": "#e74c3c", "pants": "#222222",
+                          "acc": ["cap"]}},
+}
 TIMES = ["day", "dusk", "night"]
 POLICE_LOOK = {"style": "man", "skin": "#c98b5e", "hair": "#241b16", "shirt": "#b49a65",
                "pants": "#776440", "hair_style": "short", "acc": ["cap", "mustache", "badge"]}
@@ -89,7 +137,8 @@ THE SET-UP (fixed, the game cannot do anything else):
 WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
 1. A line: {"say": "babu"|"shona"|"police"|"vendor", "emotion": E, "react": E, "gesture": G, "sub": "...", "tts": "..."}
    - emotion = how the speaker looks, react = how the other one looks while listening.
-   - E is one of: neutral, smug, love, shock, angry, sad, happy, laugh, cry, shy, scared, think.
+   - E is one of: neutral, smug, love, shock, angry, sad, happy, laugh, cry, shy, scared, think, excited, jealous,
+     worried, proud.
      G is one of: talk, up, point, wave, idle. The faces and bodies act these out, so use the strong ones
      (cry, shock, angry, love, shy, scared) where the story turns, and give the listener a "react" that fits.
    - Optional "on": wait for a moment in the action before saying the line: takeoff (the car leaves a ramp,
@@ -127,11 +176,22 @@ WHAT A SCREENPLAY CAN CONTAIN ("beats", played in order):
    Use a happy or cliffhanger ending afterward (the separate end=caught is a CAR arrest).
    Use this action for an idea about running from police on foot; ordinary run + police is NOT equivalent.
    The chase stays on one block's pavement; no jumping walls, rooftops or entering buildings.
-   SIDE CHARACTERS ("cast", optional, at most 3; ids are short lowercase words like "rahul", "goon1", "papa"):
+   COMIC ACTIONS ON FOOT (who = "babu" | "shona" | a side character id; they must be out of the car):
+     slap ("who" walks up to "to" and slaps them: THAPPAD! and a stagger), push ("who" shoves "to": DHAKKA!),
+     shrug (a "who knows" shrug), facepalm (hand to the forehead), clap, wave (a big wave), spin (twirls for joy),
+     hop (a jump for joy), bow (a dramatic bow), phone (takes a call: a phone in the hand, until "stand"),
+     hide (ducks down, hands over the head, until "stand"), faint (swoons onto the back, until "stand"),
+     stumble (trips and catches themselves), point_at (points at "to"). The gestures take an optional "to": the
+     person they turn towards. Use them for the jokes: a slap after a bad line, a facepalm after a silly one, a
+     faint at the reveal, hide when papa turns up, a bow after a victory. Do not use the same one twice in a row.
+   SIDE CHARACTERS ("cast", optional, at most 4; ids are short lowercase words like "rahul", "goon1", "papa"):
      "cast": {"rahul": {"name": "RAHUL", "gender": "male", "role": "Shona's cousin, nerdy and loud",
                         "look": {"style": S, "skin": "#c98b5e", "hair": "#2b1d16", "shirt": "#f2f2f2", "pants": "#3a4a6a",
                                  "hair_style": H, "build": B, "acc": [A, ...]},
                         "start": {"at": "ahead" | "back" | "near:<id>", "dist": metres} or {"car": "van"}}}
+     READY-MADE SIDE CHARACTERS: instead of a look, write {"papa": {"preset": "papa"}} (or just use the id) for one of:
+     papa, mummy, dadi, bhai (big brother), dost (babu's friend), saheli (shona's friend), teacher, uncle, aunty, kid,
+     goon, doctor, delivery. They come with a look and a voice; add "name", "role" or "start" as you like.
      S: boy, girl, man, woman, oldman, oldwoman, kid. H: short, long, bald, spiky, bun, ponytail. B: slim, normal, big.
      A (up to 3): cap, hat, glasses, sunglasses, mustache, beard, mask, tie, scarf, bindi. Villains look good "big", in
      dark clothes with a mask or sunglasses. They speak with "say": "<id>" (at most 4 lines each) and take "who": "<id>".
@@ -172,7 +232,7 @@ RECIPES (use one when the idea or the template fits; fill in the dialogue and th
   zoom on the hero -> pov -> the hero runs up angry -> the twist (cousin, brother, teacher ...) -> they make up.
 - date / proposal / fight-and-patch-up: drive and talk, park at a place, the scene on foot, a sweet or funny ending.
    Put 1-3 lines AFTER the ending: they are the last words.
-Props (P): pizza, flowers, gift, ring, teddy, icecream, chai. List the ones in the car at the start in "props".
+Props (P): pizza, flowers, gift, ring, teddy, icecream, chai, phone, balloon, cake, umbrella, bag, camera, megaphone. List the ones in the car at the start in "props".
 
 WRITING RULES:
 - A college_gate chase is a short film. Open on the hook, use short spoken lines (one thought each),
@@ -193,8 +253,12 @@ WRITING RULES:
   a twist, a payoff that fits the mood, and a last line that is a punchline or an emotional moment.
 - Show, do not explain the game: never talk about "the game", "bots", "ramps appearing" or "levels".
 - Every action you use must matter to the story, and the lines around it must react to it.
-- At most one scene out of the car, and only when the story is better for it (getting out takes a few seconds).
-  A scene out of the car works best at a place (bench, icecream, chai).
+- At most two scenes out of the car, at DIFFERENT places, and only when the story is better for it (getting out takes
+  a few seconds; between the scenes they get back in, "enter_car" then "go", and park again with another "at").
+  A scene out of the car works best at a place (bench, icecream, chai, bus_stop, park, college_gate).
+- VARIETY: this is one episode of a long series, so do not repeat the stock moves (a ramp jump, a chase, a hug).
+  Use at least two of the COMIC ACTIONS and one prop in a way that pays off, bring in a ready-made side character
+  when the story has a third voice, and give the episode its own setting.
 - Keep it PG: cute, cringe, funny or emotional. No real people, brands or places, no hate, no real violence.
 - The voice actor only gets the words, so put the feeling into them: exclamations, "arre", "uff", "haha",
   "hmm...", question marks and pauses ("...") where they belong.
@@ -291,6 +355,12 @@ def side_cast(ai_cast, problems):
         if len(out) >= MAX_SIDE:
             problems.append("too many side characters")
             break
+        pid = c.get("preset") if c.get("preset") in PRESETS else (cid if cid in PRESETS else None)
+        if pid:
+            base_p = PRESETS[pid]
+            mine = c.get("look") if isinstance(c.get("look"), dict) else {}
+            c = {**base_p, **{k: v for k, v in c.items() if k != "look"}, "look": {**base_p["look"], **mine}}
+            c.setdefault("name", pid)
         look_in = c.get("look") if isinstance(c.get("look"), dict) else {}
         style = look_in.get("style") if look_in.get("style") in STYLES else ("girl" if c.get("gender") == "female" else "boy")
         female = style in ("girl", "woman", "oldwoman")
@@ -465,7 +535,7 @@ class Stage:
                 self.beats.append({"do": "corner", "car": "van"})
                 self.wait("cornered", 30)
                 self.chasing, self.parked = False, True
-        elif act in ("fight", "punch"):
+        elif act in ("fight", "punch", "slap", "push"):
             hero = who if who in ("babu", "shona") or who in self.side else "babu"
             targets = self.names(to) - {hero}
             if not targets:
@@ -676,10 +746,12 @@ def clean(ai, base, mood):
             if act in FOOT or act in ("exit_car", "enter_car"):
                 who = str(b.get("who", "")).lower().replace(" ", "")
                 ok = who == "both" or (who and all(w in ("babu", "shona") or w in side for w in who.split(",")))
-                d["who"] = who if ok else ("babu" if act in ("kneel", "fall") else "both")
+                d["who"] = who if ok else ("babu" if act in ("kneel", "fall") + tuple(GESTURE_ACTS) else "both")
+                if act in GESTURE_ACTS and isinstance(b.get("to"), str) and b["to"].lower() in speakers:
+                    d["to"] = b["to"].lower()
                 if b.get("car") == "van":
                     d["car"] = "van"
-            if act in ("arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot", "foot_chase"):
+            if act in ("arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "slap", "push", "look", "appear", "shot", "foot_chase"):
                 for k in ("who", "to", "at"):
                     if isinstance(b.get(k), str):
                         d[k] = b[k].lower().replace(" ", "")
@@ -782,6 +854,18 @@ def clean(ai, base, mood):
     return sp, problems
 
 
+def variety_hint(rng=None):
+    """A nudge so that episodes written one after another do not all use the same moves."""
+    import random
+    r = rng or random.Random()
+    acts = r.sample(GESTURE_ACTS + ["slap", "push"], 3)
+    who = r.choice(sorted(PRESETS))
+    place = r.choice([x for x in SPOTS])
+    prop = r.choice(PROPS)
+    return (f"For variety, if it fits the idea, build in: the actions {', '.join(acts)}; the ready-made side character "
+            f"\"{who}\"; the place \"{place}\"; the prop \"{prop}\". Drop any of these that do not fit.\n")
+
+
 def needs_foot_chase(idea, template="auto"):
     """Catch explicit English/Hinglish/Hindi requests; the template is an unambiguous override."""
     if template == "police_foot_chase":
@@ -860,6 +944,7 @@ def main():
                   + (f"Episode number: {a.episode}.\n" if a.episode else "")
                   + f"Suggested ending for this mood: {MOOD_ENDING.get(mood, 'your choice')}."
                   + (f"\nUse this recipe: {TEMPLATES[a.template]}" if a.template in TEMPLATES else "")
+                  + "\n" + variety_hint()
                   + (DARK_MODE if mood == "dark" else ""))
         if needs_foot_chase(a.idea, a.template):
             prompt += "\nRequired: show an on-foot police chase using foot_chase with who=police. Keep the requested runner on foot."

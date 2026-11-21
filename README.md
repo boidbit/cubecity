@@ -140,6 +140,14 @@ cream, a glass of chai, flowers, a ring ...). Each episode gets background music
 made from scratch by `tools/story/music.py` (no samples, so nothing to license), which dips under
 the voices and comes up for the end card. The director runs in a scripted mode for this: nothing happens by itself;
 the police, the helicopter, a jump or a roadblock only appear when the episode asks for them.
+Comic kit: on foot the characters can slap and push (a "THAPPAD!" pop and a stagger), shrug, facepalm, clap,
+wave, spin, hop, bow, take a phone call, hide, faint, stumble and point; there are more props (phone, balloon,
+cake, umbrella, bag, camera, megaphone), four more faces (excited, jealous, worried, proud), a library of
+ready-made side characters (papa, mummy, dadi, bhai, dost, saheli, teacher, uncle, aunty, kid, goon, doctor,
+delivery; up to 4 in an episode) and an episode can use two places (get back in, drive on, park somewhere
+else). The AI writer is nudged each time to use some of them (`variety_hint` in `tools/story/write.py`).
+`story/screenplays/ep11_comic_kit.json` shows it all and is part of the smoke test.
+
 Everything is in `story/` and `tools/story/`; the game only reads `--story`, and `story/` is left
 out of the Android build (`exclude_filter` in `export_presets.cfg`).
 

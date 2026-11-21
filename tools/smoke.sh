@@ -72,6 +72,22 @@ PY
     echo "::error::the on-foot story did not play through (park, get out, walk)"
     status=1
   fi
+  # the comic kit: a slap, a push, gestures and props, ready-made side characters, two places in one episode
+  run bot-story-comic --fixed-fps 60 --quit-after $(( 120 * 60 )) -- \
+    --bot=chase --duration=100 --seed=11 --story=res://story/screenplays/ep11_comic_kit.json --story_log="$OUT/story_comic.out"
+  if ! python3 - "$OUT/story_comic.out" <<'PY'
+import json, sys
+log = json.load(open(sys.argv[1]))
+done = {a["do"] for a in log.get("actions", [])}
+seen = {e["type"] for e in log.get("events", [])}
+need = {"facepalm", "point_at", "slap", "shrug", "bow", "hide", "clap", "hop", "park", "exit_car", "enter_car"}
+print(f"comic story: {len(log['lines'])} lines, actions missing {sorted(need - done)}, events {sorted(seen & {'slapped'})}, ending {log['ending']}")
+sys.exit(0 if need <= done and "slapped" in seen and len(log["lines"]) >= 12 else 1)
+PY
+  then
+    echo "::error::the comic-kit story did not play through (a slap, gestures, two places)"
+    status=1
+  fi
   # a set on the pavement: the ice-cream cart, its vendor, handing things over
   run bot-story-spot --fixed-fps 60 --quit-after $(( 75 * 60 )) -- \
     --bot=chase --duration=60 --seed=7 --story=res://story/screenplays/ep4_icecream.json --story_log="$OUT/story_spot.out"

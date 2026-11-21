@@ -44,7 +44,8 @@ SR = 44100
 ENV_HZ = 20
 # how much faster / higher an emotion speaks, added to the character's own rate (%) and pitch (Hz)
 EMO_EDGE = {"shock": (6, 3), "angry": (4, 2), "sad": (-8, -3), "love": (-3, 1), "laugh": (3, 3),
-            "cry": (-10, -2), "shy": (-4, 2), "scared": (6, 4), "think": (-6, 0)}
+            "cry": (-10, -2), "shy": (-4, 2), "scared": (6, 4), "think": (-6, 0),
+            "excited": (8, 4), "jealous": (-2, -2), "worried": (2, 3), "proud": (-2, 1)}
 # Gemini is given only the line itself as the text: directions such as "Say angrily:" in the
 # text were read out (an extra phrase and a pause at the start of the clip). How to say it
 # goes in the part's speech_metadata.style instead, which is not read out.
@@ -53,7 +54,9 @@ GEMINI_STYLE = {"shock": "shocked, gasping, voice rising", "angry": "angry, rais
                 "laugh": "laughing while talking", "happy": "happy, bright and cheerful",
                 "smug": "smug, teasing, showing off", "cry": "crying, voice breaking, sniffling",
                 "shy": "shy and embarrassed, soft, hesitant", "scared": "scared, trembling, fast",
-                "think": "thoughtful, slow, wondering", "neutral": "natural, conversational"}
+                "think": "thoughtful, slow, wondering", "neutral": "natural, conversational",
+                "excited": "excited, fast and bubbly, voice high", "jealous": "jealous, tight and sulky, clipped",
+                "worried": "worried, anxious, voice a little shaky", "proud": "proud, chest out, warm and confident"}
 
 
 def gemini_style(line):

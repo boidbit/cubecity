@@ -1,0 +1,350 @@
+{
+  "id": "ep11_comic_kit",
+  "title": "BABU & SHONA",
+  "episode": "EP 11: SURPRISE!",
+  "end_text": "PAPA KA BIRTHDAY",
+  "mood": "funny",
+  "time": "day",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "props": [],
+  "start": 2.8,
+  "gap": 0.3,
+  "start_on_foot": true,
+  "start_spot": "bus_stop",
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      },
+      "start": {
+        "at": "spot"
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      },
+      "start": {
+        "at": "spot"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    },
+    "dost": {
+      "name": "DOST",
+      "color": "#22aa66",
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#3b2a1a",
+        "shirt": "#f1c40f",
+        "pants": "#34495e",
+        "hair_style": "spiky",
+        "acc": [
+          "cap"
+        ]
+      },
+      "voice": {
+        "gemini": "Alnilam",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+10%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 35,
+        "style": "Babu's best friend, a goofy gossip who ruins plans"
+      },
+      "start": {
+        "at": "ahead",
+        "dist": 9.0
+      }
+    },
+    "papa": {
+      "name": "PAPA",
+      "color": "#aa6622",
+      "look": {
+        "style": "oldman",
+        "skin": "#c98b5e",
+        "hair": "#cfcfcf",
+        "shirt": "#e8d8b0",
+        "pants": "#4a4a52",
+        "hair_style": "bald",
+        "outfit": "kurta",
+        "acc": [
+          "mustache",
+          "glasses"
+        ]
+      },
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+0%",
+        "pitch": "+6Hz",
+        "espeak_pitch": 35,
+        "style": "Shona's strict, funny papa; overprotective"
+      },
+      "start": {
+        "at": "ahead",
+        "dist": 30.0
+      }
+    }
+  },
+  "beats": [
+    {
+      "do": "hold",
+      "who": "babu",
+      "prop": "cake"
+    },
+    {
+      "do": "appear",
+      "who": "dost",
+      "at": "ahead",
+      "dist": 7
+    },
+    {
+      "say": "dost",
+      "sub": "Babu bhai! Sab ready hai na? Aaj ka SURPRISE?",
+      "tts": "बाबू भाई! सब रेडी है ना? आज का सरप्राइज़?",
+      "emotion": "excited",
+      "react": "shock",
+      "id": "b01"
+    },
+    {
+      "do": "facepalm",
+      "who": "babu",
+      "to": "dost"
+    },
+    {
+      "say": "babu",
+      "sub": "Chup! Shona sun legi!",
+      "tts": "चुप! शोना सुन लेगी!",
+      "emotion": "worried",
+      "react": "jealous",
+      "id": "b02"
+    },
+    {
+      "say": "shona",
+      "sub": "Kaunsa surprise? Ye cake kiske liye hai?",
+      "tts": "कौनसा सरप्राइज़? ये केक किसके लिए है?",
+      "emotion": "jealous",
+      "react": "worried",
+      "id": "b03"
+    },
+    {
+      "do": "point_at",
+      "who": "shona",
+      "to": "babu"
+    },
+    {
+      "say": "babu",
+      "sub": "Woh... ek ladki ke liye... matlab... uff!",
+      "tts": "वो... एक लड़की के लिए... मतलब... उफ़!",
+      "emotion": "worried",
+      "react": "angry",
+      "id": "b04"
+    },
+    {
+      "do": "slap",
+      "who": "shona",
+      "to": "babu"
+    },
+    {
+      "wait": 2.6
+    },
+    {
+      "say": "babu",
+      "sub": "Arre! Papa ke liye tha ye cake!",
+      "tts": "अरे! पापा के लिए था ये केक!",
+      "emotion": "sad",
+      "react": "shock",
+      "id": "b05"
+    },
+    {
+      "do": "shrug",
+      "who": "dost"
+    },
+    {
+      "say": "shona",
+      "sub": "Papa ke liye?! Oh no... sorry!",
+      "tts": "पापा के लिए?! ओह नो... सॉरी!",
+      "emotion": "shock",
+      "react": "sad",
+      "id": "b06"
+    },
+    {
+      "do": "bow",
+      "who": "shona",
+      "to": "babu"
+    },
+    {
+      "wait": 1.6
+    },
+    {
+      "say": "babu",
+      "sub": "Chalo, papa ka birthday hai. Late ho gaye!",
+      "tts": "चलो, पापा का बर्थडे है। लेट हो गए!",
+      "emotion": "proud",
+      "react": "happy",
+      "id": "b07"
+    },
+    {
+      "do": "enter_car",
+      "who": "both"
+    },
+    {
+      "wait_for": "seated",
+      "max_wait": 14
+    },
+    {
+      "do": "go"
+    },
+    {
+      "do": "park",
+      "at": "icecream"
+    },
+    {
+      "say": "shona",
+      "sub": "Papa ne yahin bulaya hai, ice cream pe!",
+      "tts": "पापा ने यहीं बुलाया है, आइसक्रीम पे!",
+      "emotion": "excited",
+      "react": "worried",
+      "on": "parked",
+      "max_wait": 24,
+      "id": "b08"
+    },
+    {
+      "do": "exit_car",
+      "who": "both"
+    },
+    {
+      "wait_for": "exited",
+      "max_wait": 14
+    },
+    {
+      "do": "appear",
+      "who": "papa",
+      "at": "ahead",
+      "dist": 5
+    },
+    {
+      "do": "hide",
+      "who": "babu"
+    },
+    {
+      "say": "papa",
+      "sub": "Kaun hai ye ladka? Mere ghar ke bahar!",
+      "tts": "कौन है ये लड़का? मेरे घर के बाहर!",
+      "emotion": "angry",
+      "react": "scared",
+      "id": "b09"
+    },
+    {
+      "say": "shona",
+      "sub": "Papa! Ye Babu hai. Aapke liye cake laya hai!",
+      "tts": "पापा! ये बाबू है। आपके लिए केक लाया है!",
+      "emotion": "happy",
+      "react": "worried",
+      "id": "b10"
+    },
+    {
+      "do": "stand",
+      "who": "babu"
+    },
+    {
+      "do": "hold",
+      "who": "babu",
+      "prop": "cake"
+    },
+    {
+      "say": "babu",
+      "sub": "Happy birthday, papa ji! Dar ke maare... matlab pyaar se!",
+      "tts": "हैप्पी बर्थडे, पापा जी! डर के मारे... मतलब प्यार से!",
+      "emotion": "worried",
+      "react": "smug",
+      "id": "b11"
+    },
+    {
+      "do": "give",
+      "who": "babu",
+      "to": "both"
+    },
+    {
+      "say": "papa",
+      "sub": "Cake itna chhota? Hmm... damaad achha hai!",
+      "tts": "केक इतना छोटा? हम्म... दामाद अच्छा है!",
+      "emotion": "proud",
+      "react": "shock",
+      "id": "b12"
+    },
+    {
+      "do": "clap",
+      "who": "papa"
+    },
+    {
+      "do": "hop",
+      "who": "shona"
+    },
+    {
+      "end": "happy"
+    },
+    {
+      "say": "dost",
+      "sub": "Aur mera hissa? Bhai?",
+      "tts": "और मेरा हिस्सा? भाई?",
+      "emotion": "excited",
+      "react": "laugh",
+      "id": "b13"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "Shona ne SLAP kar diya 😂 Cake kiske liye tha?",
+      "Babu ka surprise FAIL 🎂😂"
+    ],
+    "description": "Ek cake, ek galatfehmi, aur ek thappad. Papa ke birthday pe kya hua?",
+    "hashtags": [
+      "#shorts",
+      "#desicomedy",
+      "#babushona"
+    ]
+  }
+}

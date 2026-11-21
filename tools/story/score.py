@@ -160,6 +160,17 @@ def plan(sp, log, mood, seconds):
             cue(t + 2.8, "tension", True)
         elif kind == "kneel":
             effect(t + 0.2, "heartbeat", 0.6)
+        elif kind == "stumble":
+            effect(t + 0.2, "boing", 0.8)
+        elif kind == "faint":
+            effect(t + 0.1, "slide_down", 0.9)
+            effect(t + 1.1, "bonk", 0.6)
+        elif kind == "facepalm" and comic:
+            effect(t + 0.4, "rimshot", 0.7)
+        elif kind in ("hide", "spin"):
+            effect(t, "whoosh", 0.6)
+        elif kind in ("clap", "hop"):
+            effect(t, "ding", 0.5)
         elif kind in ("exit_car", "park"):
             pass
     for e in events:
@@ -178,6 +189,11 @@ def plan(sp, log, mood, seconds):
             cue(t, base, True)
         elif kind == "hit":
             effect(t, "punch", 0.9)
+        elif kind == "slapped":
+            effect(t, "punch", 0.9)
+            effect(t + 0.2, "boing", 0.5)
+        elif kind == "pushed":
+            effect(t, "bonk", 0.8)
         elif kind == "ko":
             effect(t, "punch", 1.0)
             effect(t + 0.25, "bonk", 0.8)
