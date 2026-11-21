@@ -24,6 +24,125 @@ def draft(chase=True, on_foot=True):
     return {"episode": "Wrong Turn", "start_on_foot": on_foot, "beats": beats}
 
 
+def comic_draft():
+    say = lambda who, n: {"say": who, "sub": f"Line number {n} here.", "emotion": "shock"}
+    beats = [say("babu", 1), say("shona", 2),
+             {"do": "park", "at": "park"}, {"do": "exit_car", "who": "both"},
+             {"do": "slap", "who": "shona", "to": "babu"}, {"do": "facepalm", "who": "shona", "to": "babu"},
+             {"do": "phone", "who": "babu"}, {"do": "stand", "who": "babu"},
+             {"do": "hold", "who": "shona", "prop": "balloon"},
+             {"do": "push", "who": "dost", "to": "babu"}, {"do": "faint", "who": "dost"}]
+    beats += [say("babu", n) for n in range(3, 10)] + [{"end": "happy"}]
+    return {"episode": "Comic Kit", "start_on_foot": False, "beats": beats,
+            "cast": {"dost": {"preset": "dost", "start": {"at": "ahead", "dist": 8}},
+                     "papa": {}, "teacher": {}, "kid": {}, "mummy": {}}}
+
+
+class ComicKitTests(unittest.TestCase):
+    def setUp(self):
+        self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))
+
+    def test_presets_give_looks_and_voices_and_four_side_characters_fit(self):
+        problems = []
+        cast = write.side_cast({"papa": {}, "dost": {"preset": "dost", "name": "Raju"}, "teacher": {}, "kid": {}, "mummy": {}}, problems)
+        self.assertEqual(sorted(cast), ["dost", "kid", "papa", "teacher"])       # MAX_SIDE = 4
+        self.assertEqual(cast["dost"]["name"], "RAJU")                              # what the writer says wins
+        self.assertEqual(cast["papa"]["look"]["style"], "oldman")
+        self.assertIn("mustache", cast["papa"]["look"]["acc"])
+        self.assertEqual(len({c["voice"]["gemini"] for c in cast.values()}), 4)
+        self.assertTrue(any("too many" in p for p in problems))
+
+    def test_every_preset_is_buildable(self):
+        for pid, p in write.PRESETS.items():
+            self.assertIn(p["look"]["style"], write.STYLES, pid)
+            self.assertTrue(all(a in write.ACCESSORIES for a in p["look"].get("acc", [])), pid)
+            self.assertIn(p["voice"], write.MALE_VOICES + write.FEMALE_VOICES, pid)
+
+    def test_comic_actions_survive_clean_in_order(self):
+        sp, problems = write.clean(comic_draft(), self.base, "funny")
+        acts = [b["do"] for b in sp["beats"] if "do" in b]
+        for a in ("slap", "facepalm", "phone", "push", "faint"):
+            self.assertIn(a, acts)
+        slap = next(b for b in sp["beats"] if b.get("do") == "slap")
+        self.assertEqual((slap["who"], slap["to"]), ("shona", "babu"))
+        face = next(b for b in sp["beats"] if b.get("do") == "facepalm")
+        self.assertEqual(face.get("to"), "babu")
+        # whoever slaps is out of the car first, and the car is parked before that
+        self.assertLess(acts.index("park"), acts.index("exit_car"))
+        self.assertLess(acts.index("exit_car"), acts.index("slap"))
+        self.assertFalse([p for p in problems if "unknown action" in p], problems)
+
+    def test_gestures_are_dropped_while_driving(self):
+        d = {"episode": "Wrong", "start_on_foot": False, "beats": [
+            {"say": "babu", "sub": "Line one is here.", "emotion": "shock"}, {"do": "shrug", "who": "babu"}] +
+            [{"say": "shona", "sub": f"Line {n} is here.", "emotion": "shock"} for n in range(9)] + [{"end": "happy"}]}
+        sp, _ = write.clean(d, self.base, "funny")
+        acts = [b["do"] for b in sp["beats"] if "do" in b]
+        self.assertEqual(acts.count("shrug"), 1)
+        self.assertLess(acts.index("park"), acts.index("shrug"))               # the car parks first
+
+    def test_new_props_are_known_to_the_writer_and_the_game(self):
+        game = (ROOT / "story/props.gd").read_text(encoding="utf-8")
+        for prop in write.PROPS:
+            self.assertIn(f'"{prop}"', game, prop)
+
+    def test_every_action_the_writer_may_use_is_handled_by_the_game(self):
+        game = (ROOT / "story/story.gd").read_text(encoding="utf-8")
+        for act in write.GESTURE_ACTS + ["slap", "push"]:
+            self.assertIn(f'"{act}"', game, act)
+
+    def test_variety_hint_mentions_real_things(self):
+        import random
+        hint = write.variety_hint(random.Random(3))
+        self.assertTrue(any(a in hint for a in write.GESTURE_ACTS + ["slap", "push"]))
+        self.assertTrue(any(f'"{p}"' in hint for p in write.PRESETS))
+
+
+class KidsModeTests(unittest.TestCase):
+    def setUp(self):
+        self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))
+
+    def draft(self):
+        d = comic_draft()
+        d["beats"].insert(3, {"do": "fight", "who": "dost", "to": "babu"})
+        d["beats"].insert(3, {"do": "hug"})
+        d["beats"][-1] = {"end": "crash"}
+        d["cast"] = {"dost": {"preset": "dost"}, "goon": {"preset": "goon"}, "papa": {}}
+        return d
+
+    def test_kids_mode_drops_fights_slaps_goons_and_bad_endings(self):
+        sp, _ = write.clean(self.draft(), self.base, "happy", kids=True)
+        acts = {b["do"] for b in sp["beats"] if "do" in b}
+        self.assertFalse(acts & set(write.KIDS_BANNED), acts & set(write.KIDS_BANNED))
+        self.assertIn("facepalm", acts)                                   # the harmless gestures stay
+        self.assertEqual([b["end"] for b in sp["beats"] if "end" in b], ["happy"])
+        self.assertEqual(sp.get("audience"), "kids")
+
+    def test_the_same_draft_is_unchanged_for_everyone_else(self):
+        sp, _ = write.clean(self.draft(), self.base, "funny")
+        acts = {b["do"] for b in sp["beats"] if "do" in b}
+        self.assertTrue({"slap", "push"} <= acts)
+        self.assertNotIn("audience", sp)
+
+    def test_kids_variety_hint_has_no_slaps_or_goons(self):
+        import random
+        for n in range(40):
+            hint = write.variety_hint(random.Random(n), kids=True)
+            self.assertNotIn("slap", hint)
+            self.assertNotIn("push", hint)
+            self.assertNotIn('"goon"', hint)
+
+    def test_the_prompt_for_kids_forbids_the_unsafe_things(self):
+        for word in ("NEVER", "slap", "police", "romance", "hook", "catchphrase"):
+            self.assertIn(word.lower(), write.KIDS_MODE.lower())
+
+    def test_upload_text_tells_you_to_mark_it_made_for_kids(self):
+        sys.path.insert(0, str(ROOT / "tools" / "story"))
+        import text
+        out = text.build({"audience": "kids", "upload": {"titles": ["A"], "description": "d", "hashtags": []}})
+        self.assertIn("made for kids", out)
+
+
 class WriterTests(unittest.TestCase):
     def setUp(self):
         self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))

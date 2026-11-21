@@ -14,12 +14,15 @@ extends RefCounted
 #   punch      {"who", "to", "ko"}     a single punch
 #   look       {"who", "to"}           who turns to look at somebody
 #   appear     {"who", "at": ahead | back | near:<who>, "dist"}   a side character walks on
+#   slap / push {"who", "to"}          who walks up and slaps / shoves them (THAPPAD!, DHAKKA!)
 #   shot       {"type": zoom | pov | wide, "who", "to", "dur"}    a dramatic camera shot
 # Events: car_arrived, grabbed, fled, cornered, won.
 
 const Van := preload("res://story/van.gd")
-const KINDS := ["arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot", "foot_chase"]
+const KINDS := ["arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot", "foot_chase", "slap", "push"]
 const POPS := ["DHISHUM!", "POW!", "BAM!", "DHISHKYAON!"]
+const SLAPS := ["THAPPAD!", "PLAK!", "CHAAT!"]
+const PUSHES := ["DHAKKA!", "OOF!", "HATT!"]
 
 var s                        # the story node
 var cars := {}               # id -> van
@@ -262,6 +265,40 @@ func run(a: Dictionary, t: float) -> bool:
 				return true
 			fights.append({"a": who, "list": [to], "i": 0, "phase": "one", "t0": t, "ko": bool(a.get("ko", false))})
 			return true
+		"slap", "push":
+			# who walks up to "to" and slaps / shoves them (a comic hit: a pop, a crash, a stagger)
+			var ha = s._rig_of(who)
+			var hb = s._rig_of(to)
+			if ha == null or hb == null or ha == hb:
+				return true
+			if ha.seated or hb.seated:
+				return false
+			var hd: Vector3 = hb.global_position - ha.global_position
+			hd.y = 0.0
+			if not a.has("_hit_t"):
+				if hd.length() > 1.25:
+					if ha.arrived():
+						ha.stand_up()
+						ha.walk_to(_route(ha.global_position, _outside(hb.global_position - hd.normalized() * 1.0)), true)
+					return false
+				if not ha.arrived():
+					return false
+				a["_hit_t"] = t
+				ha.face_point = hb.global_position
+				hb.face_point = ha.global_position
+				ha.act(kind)
+				return false
+			var since: float = t - float(a["_hit_t"])
+			if not a.has("_landed") and since > (0.3 if kind == "slap" else 0.2):
+				a["_landed"] = true
+				hb.act("slapped" if kind == "slap" else "pushed")
+				var hat: Vector3 = hb.head.global_position + Vector3(0, 0.5, 0)
+				var words: Array = SLAPS if kind == "slap" else PUSHES
+				_pop(words[randi() % words.size()], hat, Color(1.0, 0.7, 0.15) if kind == "slap" else Color(1.0, 0.55, 0.3))
+				s.main.play_sfx("crash_a", hat, -13.0)
+				s.main.shake_cam(0.3)
+				_event("slapped" if kind == "slap" else "pushed", t)
+			return a.has("_landed") and since > 1.0
 		"look":
 			if to == "":
 				looks.erase(who)

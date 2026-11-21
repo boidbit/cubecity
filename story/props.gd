@@ -3,7 +3,8 @@ extends RefCounted
 # Built from boxes like everything else. A prop sits on the dashboard; fly() throws it out
 # of the car as a little physics body (the pizza flying off on a jump).
 
-const KINDS := ["pizza", "flowers", "gift", "ring", "teddy", "icecream", "chai"]
+const KINDS := ["pizza", "flowers", "gift", "ring", "teddy", "icecream", "chai",
+		"phone", "balloon", "cake", "umbrella", "bag", "camera", "megaphone"]
 # where props sit in car space (first on the passenger side of the dashboard, then the
 # driver side, then the rear deck)
 const SLOTS := [Vector3(-0.42, 1.36, -0.46), Vector3(0.05, 1.36, -0.46), Vector3(0.0, 1.06, 1.42)]
@@ -68,6 +69,32 @@ static func build(kind: String) -> Node3D:
 		"chai":
 			# a small glass of cutting chai
 			_box(n, Vector3(0.09, 0.1, 0.09), Vector3(0, 0.05, 0), Color(0.72, 0.45, 0.22))
+		"phone":
+			_box(n, Vector3(0.07, 0.13, 0.02), Vector3(0, 0.06, 0), Color(0.08, 0.08, 0.1))
+			_box(n, Vector3(0.055, 0.1, 0.005), Vector3(0, 0.06, -0.012), Color(0.45, 0.75, 1.0))
+		"balloon":
+			_box(n, Vector3(0.01, 0.4, 0.01), Vector3(0, 0.2, 0), Color(0.9, 0.9, 0.9))
+			_box(n, Vector3(0.24, 0.3, 0.24), Vector3(0, 0.55, 0), Color(0.95, 0.15, 0.25))
+			_box(n, Vector3(0.05, 0.05, 0.05), Vector3(0, 0.38, 0), Color(0.8, 0.1, 0.2))
+		"cake":
+			_box(n, Vector3(0.34, 0.12, 0.34), Vector3(0, 0.06, 0), Color(0.95, 0.85, 0.7))
+			_box(n, Vector3(0.36, 0.05, 0.36), Vector3(0, 0.145, 0), Color(1.0, 0.6, 0.75))
+			_box(n, Vector3(0.025, 0.1, 0.025), Vector3(0, 0.22, 0), Color(1.0, 0.95, 0.4))
+			_box(n, Vector3(0.03, 0.03, 0.03), Vector3(0, 0.29, 0), Color(1.0, 0.55, 0.1))
+		"umbrella":
+			_box(n, Vector3(0.02, 0.5, 0.02), Vector3(0, 0.25, 0), Color(0.2, 0.2, 0.22))
+			_box(n, Vector3(0.62, 0.07, 0.62), Vector3(0, 0.55, 0), Color(0.9, 0.25, 0.3))
+			_box(n, Vector3(0.38, 0.06, 0.38), Vector3(0, 0.6, 0), Color(0.95, 0.35, 0.4))
+		"bag":
+			_box(n, Vector3(0.3, 0.26, 0.12), Vector3(0, 0.13, 0), Color(0.25, 0.45, 0.8))
+			_box(n, Vector3(0.18, 0.04, 0.04), Vector3(0, 0.28, 0), Color(0.15, 0.25, 0.5))
+		"camera":
+			_box(n, Vector3(0.18, 0.11, 0.1), Vector3(0, 0.06, 0), Color(0.12, 0.12, 0.14))
+			_box(n, Vector3(0.07, 0.07, 0.06), Vector3(0, 0.06, -0.07), Color(0.3, 0.3, 0.34))
+			_box(n, Vector3(0.04, 0.03, 0.03), Vector3(0.05, 0.13, 0), Color(1, 1, 0.85))
+		"megaphone":
+			_box(n, Vector3(0.08, 0.08, 0.14), Vector3(0, 0.06, 0.04), Color(0.9, 0.85, 0.2))
+			_box(n, Vector3(0.2, 0.2, 0.14), Vector3(0, 0.06, -0.09), Color(0.95, 0.9, 0.3))
 			_box(n, Vector3(0.1, 0.03, 0.1), Vector3(0, 0.11, 0), Color(0.9, 0.94, 0.97))
 	return n
 

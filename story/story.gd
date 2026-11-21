@@ -18,6 +18,8 @@ extends Node
 #                         walk straight to it), walk / run ("who", "to": ahead | back | car |
 #                         other | spot, "dist" m), sit (on the bench if there is one), stand,
 #                         kneel, fall, dance, cheer ("who"), hug
+#         comic gestures: shrug, facepalm, clap, wave, spin, hop, bow, phone, hide, faint, stumble, point_at
+#                         ("who", optional "to" to face); slap / push ("who" walks up to "to"; story/action.gd)
 #         in the hand:    hold ("who", "prop"), give ("who" gives "to" someone; the vendor
 #                         hands out "prop", by default what the stall sells)
 #         action:         arrive, grab, drive_off, chase, corner, fight, punch, look, appear,
@@ -40,6 +42,8 @@ extends Node
 # tools/story/voices.py. The start time of every line goes to --story_log for tools/story/mix.py.
 # Old screenplays with "lines" / "reactions" still play.
 
+# timed gestures (rig.act): who, and an optional "to" they face
+const GESTURES := ["shrug", "facepalm", "clap", "wave", "spin", "hop", "bow", "phone", "hide", "faint", "stumble", "point_at"]
 const Rig := preload("res://story/rig.gd")
 const Roadster := preload("res://story/roadster.gd")
 const Props := preload("res://story/props.gd")
@@ -548,7 +552,8 @@ func _do(b: Dictionary, t: float) -> void:
 				park_t = t
 				spot_kind = str(b.get("at", ""))
 		"exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer", "hold", "give", \
-				"arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot", "foot_chase":
+				"arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot", "foot_chase", \
+				"slap", "push", "shrug", "facepalm", "clap", "wave", "spin", "hop", "bow", "phone", "hide", "faint", "stumble", "point_at":
 			var a := b.duplicate()
 			a.erase("do")
 			a.merge({"kind": kind, "who": str(b.get("who", "both")), "to": str(b.get("to", "")),
@@ -576,7 +581,7 @@ func _actions(t: float) -> void:
 			ok = act.chase_jump()
 		elif kind in ["hold", "give"]:
 			ok = _hand_action(a, t)
-		elif kind in ["exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer", "go"]:
+		elif kind in ["exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer", "go"] or kind in GESTURES:
 			ok = _foot_action(a, t)
 		elif dir != null:
 			var arg: float = t - float(a["from"]) if kind == "jump" else float(a.get("arg", 0.0))
@@ -931,6 +936,18 @@ func _foot_action(a: Dictionary, t: float) -> bool:
 					r.sit_on([spot.stand[k], spot.seats[k]], atan2(-spot.face.x, -spot.face.z), Spots.BENCH_H)
 				else:
 					r.sit_down()
+		"shrug", "facepalm", "clap", "wave", "spin", "hop", "bow", "phone", "hide", "faint", "stumble", "point_at":
+			var face = _rig_of(str(a.get("to", "")))
+			for k: String in ks:
+				var r: Rig = _rig_of(k)
+				if r == null or r.seated:
+					continue
+				r.stand_up()
+				if face != null and face != r:
+					r.face_point = face.global_position
+				r.act(kind)
+				if kind == "phone" and (r.held == null or not is_instance_valid(r.held)):
+					r.hold(Props.build("phone"))
 		"dance":
 			for k: String in ks:
 				_rig_of(k).dance()

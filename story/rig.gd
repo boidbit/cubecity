@@ -23,6 +23,10 @@ const EMOTIONS := {
 	"shy": {"eyes": "shy", "mouth": "small", "blush": true, "brows": "soft"},
 	"scared": {"eyes": "scared", "mouth": "wavy", "brows": "up"},
 	"think": {"eyes": "think", "mouth": "flat", "brows": "one"},
+	"excited": {"eyes": "happy", "mouth": "open", "blush": true, "brows": "up"},
+	"jealous": {"eyes": "angry", "mouth": "frown", "brows": "one"},
+	"worried": {"eyes": "sad", "mouth": "wavy", "brows": "up"},
+	"proud": {"eyes": "smug", "mouth": "smile", "blush": true, "brows": "soft"},
 }
 static var face_cache := {}
 static var heart_tex: ImageTexture
@@ -572,6 +576,28 @@ func cheer() -> void:
 	pose_t = 0.0
 
 
+# Timed gestures: each plays for this long and then the character stands again. A length of 0
+# means it holds until stand_up() (hiding, a phone call, a faint).
+const ACT_LEN := {"slap": 0.7, "slapped": 1.3, "push": 0.6, "pushed": 1.2, "stumble": 1.4, "shrug": 2.0,
+	"facepalm": 2.4, "clap": 2.4, "wave": 2.4, "spin": 1.7, "hop": 1.1, "bow": 1.9, "point_at": 2.0,
+	"hide": 0.0, "phone": 0.0, "faint": 0.0}
+# these keep facing whatever the character looks at while they play
+const FACING := ["slap", "slapped", "push", "shrug", "facepalm", "clap", "wave", "bow", "point_at", "phone", "stumble"]
+const ACT_FEEL := {"slap": "angry", "slapped": "shock", "push": "angry", "pushed": "shock", "stumble": "shock",
+	"shrug": "think", "facepalm": "sad", "clap": "happy", "wave": "happy", "spin": "laugh", "hop": "happy",
+	"bow": "shy", "hide": "scared", "phone": "neutral", "faint": "shock", "point_at": "angry"}
+
+
+# One of the timed gestures above.
+func act(name: String) -> void:
+	path.clear()
+	pose = name
+	pose_t = 0.0
+	rotation.x = 0.0
+	if ACT_FEEL.has(name):
+		set_state(ACT_FEEL[name], "idle", speaking)
+
+
 # Fighting: a stance, a punch, being hit (back to the stance), knocked out (stays down).
 func set_pose(p: String) -> void:
 	if p != "fight":
@@ -620,6 +646,9 @@ func kneel() -> void:
 func stand_up() -> void:
 	pose = "stand"
 	rotation.x = 0.0
+	if held != null and is_instance_valid(held) and str(held.name) == "phone":
+		held.queue_free()       # the call is over
+		held = null
 
 
 func fall_down() -> void:
@@ -686,7 +715,7 @@ func _locomotion(dt: float) -> void:
 				want_speed = minf(want_speed, sqrt(2.0 * 6.5 * d.length()))
 			distance_moved = minf(speed_now * dt, d.length())
 			global_position += d.normalized() * distance_moved
-	elif face_point != Vector3.INF and pose in ["stand", "dance", "cheer", "fight"]:
+	elif face_point != Vector3.INF and (pose in ["stand", "dance", "cheer", "fight"] or pose in FACING):
 		rotation.y = lerp_angle(rotation.y, _yaw_to(face_point), minf(5.0 * dt, 1.0))
 	var acceleration := (6.0 if want_speed > speed_now else 7.5) if staged_run else 9.0
 	speed_now = move_toward(speed_now, want_speed, acceleration * dt)
@@ -713,7 +742,57 @@ func _locomotion(dt: float) -> void:
 		kl = lerpf(kl, left.y, run_blend)
 		kr = lerpf(kr, right.y, run_blend)
 	pose_t += dt
+	if ACT_LEN.has(pose) and ACT_LEN[pose] > 0.0 and pose_t > ACT_LEN[pose]:
+		pose = "stand"
+		pose_t = 0.0
 	match pose:
+		"hide":
+			# crouched low, hands over the head
+			hl = 1.5
+			hr = 1.5
+			kl = -1.55
+			kr = -1.55
+			lift = 0.46
+		"hop":
+			lift = LEG + sin(minf(pose_t / ACT_LEN["hop"], 1.0) * PI) * 0.6
+			hl = 0.3
+			hr = 0.3
+			kl = -0.5
+			kr = -0.5
+		"spin":
+			rotation.y += dt * 7.5
+			lift = LEG + absf(sin(pose_t * 6.0)) * 0.05
+		"stumble":
+			# a trip: pitched forward, feet scrambling, then caught
+			var k := sin(minf(pose_t / ACT_LEN["stumble"], 1.0) * PI)
+			tilt = -0.6 * k
+			hl = 0.6 * sin(pose_t * 18.0)
+			hr = -hl
+			kl = -0.4 * absf(hl)
+			kr = -0.4 * absf(hr)
+		"pushed":
+			# shoved back: leans away, shuffles backwards, steadies
+			tilt = 0.55 * maxf(0.0, 1.0 - pose_t / 1.0)
+			hl = 0.35
+			hr = -0.25
+			kl = -0.35
+			kr = -0.2
+			if pose_t < 0.45:
+				global_position += global_transform.basis.z * 2.6 * dt
+		"slapped":
+			# head snapped round: the body twists and sways
+			tilt = 0.22 * maxf(0.0, 1.0 - pose_t / 0.5)
+			hl = 0.15
+			hr = -0.1
+			if pose_t < 0.2:
+				global_position += global_transform.basis.z * 0.9 * dt
+		"faint":
+			# a slow dramatic swoon onto the back
+			var k2 := minf(pose_t / 1.1, 1.0)
+			tilt = k2 * 1.45
+			lift = lerpf(LEG, 0.3, k2)
+			hl = 0.2
+			hr = 0.1
 		"sit":
 			hl = 1.45
 			hr = 1.45
@@ -797,6 +876,10 @@ func _locomotion(dt: float) -> void:
 	var lean := 0.0
 	if running and speed_now > 1.0:
 		lean = -lerpf(0.10, 0.27, run_blend) if staged_run else -0.22
+	elif pose == "bow":
+		lean = -0.9 * sin(minf(pose_t / ACT_LEN["bow"], 1.0) * PI)
+	elif pose == "facepalm":
+		lean = -0.2
 	elif pose == "stand" and path.is_empty():
 		lean = {"sad": -0.1, "cry": -0.14, "angry": -0.1, "shock": 0.12, "scared": 0.1, "laugh": -0.08 + 0.08 * sin(t * 9.0),
 			"shy": -0.05, "smug": 0.06}.get(emotion, 0.0)
@@ -916,6 +999,16 @@ func _feeling_arms() -> Array:
 			return [1.0, -0.6, 2.35, -0.75]
 		"happy":
 			return [0.25 + 0.1 * w, 0.1, 0.25 - 0.1 * w, -0.1]
+		"excited":
+			# little fists pumping
+			return [1.4 + 0.3 * sin(t * 11.0), 0.2, 1.4 + 0.3 * sin(t * 11.0 + 1.5), -0.2]
+		"jealous":
+			# arms folded
+			return [1.05, -0.9, 1.05, 0.9]
+		"worried":
+			return [2.0, -0.4, 2.0, 0.4]
+		"proud":
+			return [0.35, 0.8, 0.35, -0.8]
 	return []
 
 
@@ -967,6 +1060,70 @@ func _arms(dt: float, toward: float) -> void:
 		elif pose == "carried":
 			lx = 2.4 + 0.6 * sin(t * 12.0)
 			rx = 2.4 + 0.6 * sin(t * 12.0 + 2.0)
+		elif pose == "slap":
+			# wind up, then a flat hand across
+			var k3 := pose_t / 0.7
+			rx = 1.5
+			ry = -1.1 if k3 < 0.3 else 0.9
+			lx = 0.2
+		elif pose == "slapped":
+			rx = 2.2
+			ry = -0.5
+			lx = 0.4
+		elif pose == "push":
+			lx = 1.0 if pose_t < 0.15 else 1.6
+			rx = lx
+			ly = 0.2
+			ry = -0.2
+		elif pose in ["pushed", "stumble"]:
+			lx = 2.4 + 0.5 * sin(pose_t * 14.0)
+			rx = 2.4 + 0.5 * sin(pose_t * 14.0 + 2.0)
+			ly = 0.5
+			ry = -0.5
+		elif pose == "shrug":
+			lx = 0.9
+			rx = 0.9
+			ly = 0.8
+			ry = -0.8
+		elif pose == "facepalm":
+			rx = 2.5
+			ry = -0.3
+			lx = 0.15
+		elif pose == "clap":
+			var cl := 0.5 + 0.5 * sin(pose_t * 16.0)
+			lx = 1.55
+			rx = 1.55
+			ly = 0.7 * cl
+			ry = -0.7 * cl
+		elif pose == "wave":
+			rx = 2.7 + 0.35 * sin(pose_t * 10.0)
+			ry = -0.3
+		elif pose == "point_at":
+			rx = 1.55
+			ry = 0.0
+		elif pose == "bow":
+			lx = 0.4
+			rx = 0.4
+		elif pose == "hop":
+			lx = 3.0
+			rx = 3.0
+		elif pose == "spin":
+			lx = 1.6
+			rx = 1.6
+			ly = 1.0
+			ry = -1.0
+		elif pose == "hide":
+			lx = 2.7
+			rx = 2.7
+			ly = 0.2
+			ry = -0.2
+		elif pose == "phone":
+			rx = 2.55
+			ry = -0.55
+			lx = 0.12
+		elif pose == "faint":
+			lx = 2.9
+			rx = 2.9
 	elif not driver:
 		lx = 0.95
 		rx = 0.95
@@ -1006,7 +1163,7 @@ func _arms(dt: float, toward: float) -> void:
 				rx = 1.25
 		"wave":
 			rx = 2.6 + 0.4 * sin(t * 10.0)
-	if held != null and is_instance_valid(held) and pose not in ["fall", "dance", "cheer"]:
+	if held != null and is_instance_valid(held) and pose not in ["fall", "dance", "cheer", "phone", "facepalm", "wave", "clap", "hop", "spin", "slap", "push", "faint", "hide", "pushed", "stumble"]:
 		# holding it up in front; food goes to the mouth now and then
 		rx = 0.95
 		ry = 0.0

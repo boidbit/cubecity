@@ -1,0 +1,221 @@
+{
+  "id": "ep12_kids_gubbara",
+  "title": "BABU & SHONA",
+  "episode": "GUBBARA KAHAN GAYA?",
+  "end_text": "KAL: BILLU KA BIRTHDAY!",
+  "mood": "happy",
+  "audience": "kids",
+  "time": "day",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "props": [],
+  "start": 2.8,
+  "gap": 0.3,
+  "start_on_foot": true,
+  "start_spot": "park",
+  "cast": {
+    "babu": {
+      "name": "BABU",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#3b7ddd"
+      },
+      "start": {
+        "at": "spot"
+      }
+    },
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ff7ab8"
+      },
+      "start": {
+        "at": "spot"
+      }
+    },
+    "police": {
+      "name": "POLICE",
+      "color": "#2f6bff",
+      "radio": true,
+      "voice": {
+        "gemini": "Charon",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+5%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 20,
+        "style": "a stern Indian police officer on a megaphone"
+      }
+    },
+    "billu": {
+      "name": "BILLU",
+      "color": "#22aa66",
+      "look": {
+        "style": "kid",
+        "skin": "#e3a373",
+        "hair": "#1d1714",
+        "shirt": "#e67e22",
+        "pants": "#2980b9"
+      },
+      "voice": {
+        "gemini": "Sadachbia",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+10%",
+        "pitch": "-8Hz",
+        "espeak_pitch": 35,
+        "style": "a cheeky kid who knows too much"
+      },
+      "start": {
+        "at": "ahead",
+        "dist": 8.0
+      }
+    }
+  },
+  "beats": [
+    {
+      "do": "hold",
+      "who": "shona",
+      "prop": "balloon"
+    },
+    {
+      "say": "shona",
+      "sub": "Arre! Mera gubbara kahan gaya?!",
+      "tts": "अरे! मेरा गुब्बारा कहाँ गया?!",
+      "emotion": "shock",
+      "react": "worried",
+      "id": "b01"
+    },
+    {
+      "do": "shrug",
+      "who": "babu"
+    },
+    {
+      "say": "babu",
+      "sub": "Chalo chalo! Dhoondhte hain!",
+      "tts": "चलो चलो! ढूँढते हैं!",
+      "emotion": "excited",
+      "react": "excited",
+      "id": "b02"
+    },
+    {
+      "do": "hop",
+      "who": "babu"
+    },
+    {
+      "do": "appear",
+      "who": "billu",
+      "at": "ahead",
+      "dist": 6
+    },
+    {
+      "say": "shona",
+      "sub": "Billu! Tune dekha mera gubbara?",
+      "tts": "बिल्लू! तूने देखा मेरा गुब्बारा?",
+      "emotion": "think",
+      "react": "shy",
+      "id": "b03"
+    },
+    {
+      "say": "billu",
+      "sub": "Maine? Nahi toh! Hehe!",
+      "tts": "मैंने? नहीं तो! हेहे!",
+      "emotion": "shy",
+      "react": "think",
+      "id": "b04"
+    },
+    {
+      "do": "stumble",
+      "who": "billu"
+    },
+    {
+      "say": "babu",
+      "sub": "Arre! Billu ki jeb me kuch hai!",
+      "tts": "अरे! बिल्लू की जेब में कुछ है!",
+      "emotion": "shock",
+      "react": "laugh",
+      "id": "b05"
+    },
+    {
+      "do": "hold",
+      "who": "billu",
+      "prop": "balloon"
+    },
+    {
+      "say": "billu",
+      "sub": "Sorry! Mujhe bhi chahiye tha! Dhamaka!",
+      "tts": "सॉरी! मुझे भी चाहिए था! धमाका!",
+      "emotion": "excited",
+      "react": "happy",
+      "id": "b06"
+    },
+    {
+      "do": "give",
+      "who": "billu",
+      "to": "shona"
+    },
+    {
+      "say": "shona",
+      "sub": "Koi baat nahi! Ab teeno khelte hain! Chalo chalo!",
+      "tts": "कोई बात नहीं! अब तीनों खेलते हैं! चलो चलो!",
+      "emotion": "happy",
+      "react": "excited",
+      "id": "b07"
+    },
+    {
+      "do": "spin",
+      "who": "shona"
+    },
+    {
+      "do": "clap",
+      "who": "babu"
+    },
+    {
+      "say": "babu",
+      "sub": "Aapko kaun sa gubbara pasand hai? Dhamaka!",
+      "tts": "आपको कौन सा गुब्बारा पसंद है? धमाका!",
+      "emotion": "excited",
+      "react": "laugh",
+      "id": "b08"
+    },
+    {
+      "end": "happy"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "Gubbara kahan gaya? 🎈 Babu Shona kids cartoon",
+      "Billu ne kya kiya? 😂🎈"
+    ],
+    "description": "Shona ka gubbara gayab! Kisne liya? Dekho aur batao!",
+    "hashtags": [
+      "#shorts",
+      "#kidscartoon",
+      "#babushona"
+    ]
+  }
+}
