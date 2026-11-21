@@ -27,9 +27,9 @@ ACTIONS = ["police", "calm", "heli", "heli_off", "jump", "roadblock", "crossers"
            "park", "exit_car", "enter_car", "walk", "run", "sit", "stand", "kneel", "fall", "hug",
            "dance", "cheer", "hold", "give",
            "arrive", "grab", "drive_off", "chase", "corner", "fight", "punch", "look", "appear", "shot",
-           "foot_chase"]
+           "foot_chase", "reaction"]
 FOOT = ["walk", "run", "sit", "stand", "kneel", "fall", "hug", "dance", "cheer"]
-SPOTS = ["bench", "icecream", "chai"]       # sets put up where the car parks (park "at")
+SPOTS = ["bench", "icecream", "chai", "college_gate", "bus_stop", "park"]       # sets put up where the car parks (park "at")
 STALLS = ["icecream", "chai"]               # these come with a vendor who can speak
 CAR_ONLY = ["police", "jump", "roadblock", "crossers", "boom", "train", "prop_fly"]   # need the car to be driving
 EVENTS = ["takeoff", "big_air", "prop_fly", "near_miss", "cop_wrecked", "roadblock",
@@ -50,7 +50,8 @@ MALE_VOICES = ["Algenib", "Charon", "Fenrir", "Orus", "Achird", "Iapetus", "Umbr
 FEMALE_VOICES = ["Kore", "Aoede", "Callirrhoe", "Autonoe", "Despina", "Erinome", "Laomedeia", "Achernar",
                  "Gacrux", "Pulcherrima", "Vindemiatrix", "Sulafat", "Zephyr"]
 RESERVED = {"babu", "shona", "police", "vendor", "both", "all"}
-TEMPLATES = {"kidnap_rescue": "kidnap & rescue (villains in the van, a chase, a fight)",
+TEMPLATES = {"campus_action": "a staged campus car chase with helicopter, blast and railway crossing",
+             "kidnap_rescue": "kidnap & rescue (villains in the van, a chase, a fight)",
              "jealous_reveal": "jealous reveal (a misunderstanding on foot, a twist, they make up)",
              "date": "a date at a place (bench, ice cream or chai)",
              "proposal": "a proposal out of the car",
@@ -174,6 +175,15 @@ RECIPES (use one when the idea or the template fits; fill in the dialogue and th
 Props (P): pizza, flowers, gift, ring, teddy, icecream, chai. List the ones in the car at the start in "props".
 
 WRITING RULES:
+- A college_gate chase is a short film. Open on the hook, use short spoken lines (one thought each),
+  and save the reaction for the reveal. Skip generic exposition and long ellipses. Place the runner
+  at "spot". Use look.outfit="kurta" for a kurta and choose a height and build for each lead.
+- For a 10-15 second sketch set "format":"short"; 2-4 short lines are allowed.
+- Custom lead names and looks go in cast.babu and cast.shona (internal actor ids); use names for display labels.
+  A/B in the creator script map to babu/shona. Preserve their given dialogues and clothing colours.
+- Extra start_spot / park at locations: college_gate, bus_stop, park (outdoor pavement sets).
+- Reaction bundle: {"do":"reaction","who":"babu","effect":"shock_freeze","dur":1.2} combines shock,
+  sweat, freeze, zoom and record scratch. Other effects: sweat, sparkle. Do not add a duplicate wait.
 - The creator's explicit actions, travel mode, characters and premise are requirements. Preserve them.
   Never replace a requested on-foot chase with driving, or invent pizza/theft as a substitute premise.
   If a required action cannot be staged using the vocabulary above, answer
@@ -292,6 +302,10 @@ def side_cast(ai_cast, problems):
             look["hair_style"] = look_in["hair_style"]
         if look_in.get("build") in BUILDS:
             look["build"] = look_in["build"]
+        if isinstance(look_in.get("height"), (float, int)) and not isinstance(look_in["height"], bool):
+            look["height"] = max(0.75, min(1.2, look_in["height"]))
+        if look_in.get("outfit") in ("kurta", "uniform"):
+            look["outfit"] = look_in["outfit"]
         acc = [a for a in (look_in.get("acc") or []) if a in ACCESSORIES][:3]
         if acc:
             look["acc"] = acc
@@ -390,7 +404,10 @@ class Stage:
         """The kidnap / chase / fight vocabulary. Returns True when handled."""
         act = d["do"]
         who, to = d.get("who", ""), d.get("to", "")
-        if act == "foot_chase":
+        if act == "reaction":
+            self.beats.append(d)
+            self.beats.append({"wait": d["dur"]})
+        elif act == "foot_chase":
             if self.chasing or who != "police" or to not in ("babu", "shona") or to in self.in_van:
                 self.problems.append("invalid foot_chase: use police pursuing babu or shona on the pavement")
                 return True
@@ -547,6 +564,13 @@ def clean(ai, base, mood):
     """A screenplay the game can play, built from the model's answer. Returns (screenplay, problems)."""
     sp = copy.deepcopy(base)
     problems = []
+    for lead in ("babu", "shona"):
+        requested = ai.get("cast", {}).get(lead, {}) if isinstance(ai.get("cast"), dict) else {}
+        if isinstance(requested, dict) and requested.get("look"):
+            checked = side_cast({"actor": requested}, problems)["actor"]
+            sp["cast"][lead]["look"] = checked["look"]
+            if requested.get("name"):
+                sp["cast"][lead]["name"] = checked["name"]
     names = ai.get("names") if isinstance(ai.get("names"), dict) else {}
     for k in ("babu", "shona"):
         if names.get(k):
@@ -634,6 +658,13 @@ def clean(ai, base, mood):
                 problems.append(f"unknown action {act!r}")
                 continue
             d = {"do": act}
+            if act == "reaction":
+                d["who"] = b.get("who", "babu")
+                d["effect"] = b.get("effect", "shock_freeze")
+                if d["who"] not in speakers or d["effect"] not in ("shock_freeze", "sweat", "sparkle"):
+                    problems.append("unsupported reaction actor or effect")
+                    continue
+                d["dur"] = max(0.5, min(3.0, float(b.get("dur", 1.2))))
             if act == "police":
                 d["stars"] = max(1, min(3, int(b.get("stars", 1) or 1)))
             if act.startswith("prop_"):
@@ -726,8 +757,12 @@ def clean(ai, base, mood):
     if any(b.get("do") == "foot_chase" for b in beats):
         sp["cast"]["police"]["look"] = copy.deepcopy(POLICE_LOOK)
         sp["cast"]["police"].pop("radio", None)
+        if sp.get("start_spot") == "college_gate":
+            sp["cinematic"] = True
+            sp["cast"]["police"]["look"].update(build="big", height=1.12, outfit="uniform")
     lines = sum(1 for b in beats if "say" in b)
-    if lines < 6:
+    minimum = 2 if ai.get("format") == "short" else 6
+    if lines < minimum:
         problems.append(f"only {lines} lines (need 9 to 14)")
     while sum(1 for b in beats if "say" in b) > 16:
         for i in range(len(beats) - 1, -1, -1):
@@ -828,17 +863,23 @@ def main():
                   + (DARK_MODE if mood == "dark" else ""))
         if needs_foot_chase(a.idea, a.template):
             prompt += "\nRequired: show an on-foot police chase using foot_chase with who=police. Keep the requested runner on foot."
+        campus = a.template == "campus_action"
+        system = SYSTEM
+        if campus:
+            import campus_action
+            system = campus_action.SYSTEM
+            prompt = f"Creator idea: {a.idea.strip() or 'Surprise me within the fixed campus route'}.\nLanguage: {a.language}."
         feedback = ""
         for attempt in range(2):
             try:
-                ai, model = gemini.write_json(prompt + feedback, SYSTEM, temperature=1.0)
+                ai, model = gemini.write_json(prompt + feedback, system, temperature=1.0)
             except Exception as e:
                 print(f"::warning::Gemini could not write the episode: {e}")
                 failure = f"Gemini request failed: {e}. Check the key, quota and provider availability, then retry."
                 break
             with open(os.path.join(out_dir, f"ai_answer_{attempt + 1}.json"), "w", encoding="utf-8") as f:
                 json.dump(ai, f, ensure_ascii=False, indent=1)
-            if mood == "dark" and isinstance(ai, dict):
+            if not campus and mood == "dark" and isinstance(ai, dict):
                 # dark humour is where the platforms' rules bite: a second read against the rules
                 try:
                     fixed, _ = gemini.write_json(REVIEW + "\n\n" + json.dumps(ai, ensure_ascii=False), temperature=0.3)
@@ -852,11 +893,14 @@ def main():
                 failure = "Unsupported story request: " + str(ai["unsupported_reason"])
                 break
             try:
-                cand, problems = clean(ai if isinstance(ai, dict) else {}, base, mood)
-                problems.extend(intent_problems(cand, a.idea, a.template))
+                if campus:
+                    cand, problems = campus_action.compile_story(ai), []
+                else:
+                    cand, problems = clean(ai if isinstance(ai, dict) else {}, base, mood)
+                    problems.extend(intent_problems(cand, a.idea, a.template))
             except (TypeError, ValueError, KeyError, AttributeError) as e:
                 failure = f"The AI returned malformed screenplay data: {e}"
-                feedback = "\nYour last response contained invalid field types. Return a complete valid screenplay JSON."
+                feedback = f"\nYour last response could not be used: {e}. Return valid JSON."
                 continue
             bad = unsafe_words(ai)
             if bad:

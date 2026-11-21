@@ -92,34 +92,111 @@ jobs:
           path: ~/godot
           key: godot-4.4.1-stable
       - name: Install recording tools on the GitHub runner
+        timeout-minutes: 4
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends xvfb xauth ffmpeg fonts-dejavu-core libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
-          pip install --quiet numpy
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 update -q
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 install -y -q --no-install-recommends xvfb xauth ffmpeg fonts-dejavu-core libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxrandr2 libxi6 libxkbcommon0 libxkbcommon-x11-0
+          pip install --quiet --timeout 15 --retries 2 numpy edge-tts
           echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
       - name: On-foot chase runtime test (capture and escape)
         run: bash tools/run_test.sh "$GODOT" story story-checks --bot=chase --duration=180 --orientation=vertical --story=res://story/screenplays/ep7_foot_chase.json
-      - name: Record the saved on-foot story demo
+      - name: Render and verify the 28-second campus action film
         env:
           MODE: chase
           ORIENTATION: vertical
           FPS: "30"
           SEED: "7"
           SCALE: "0.5"
-          TIME: day
+          TIME: dusk
+          STORY_SCENE: campus_action
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || secrets.GOOGLE_API_KEY || secrets.GEMINI_KEY || secrets.GEMINI || secrets.GEMINI_API_KEY_1 || vars.GEMINI_API_KEY }}
         run: |
           mkdir -p story-demo story-checks
-          python3 tools/story/voices.py story/screenplays/ep7_foot_chase.json story-demo --provider none
+          python3 tools/story/voices.py story/screenplays/ep10_campus_action.json story-demo --provider auto
           export DURATION=$(python3 -c "import json; print(json.load(open('story-demo/timed.json'))['duration_hint'])")
           export EXTRA_ARGS="--story=$PWD/story-demo/timed.json --story_log=$PWD/story-checks/story_log.json"
           tools/record.sh "$GODOT" story-checks
           python3 tools/story/verify.py story-demo/timed.json story-checks/story_log.json story-checks/godot.log
-          python3 tools/story/mix.py story-checks/video.mp4 story-checks/story_log.json story-demo/timed.json story-checks/story-demo.mp4 --music action
+          python3 tools/story/mix.py story-checks/video.mp4 story-checks/story_log.json story-demo/timed.json story-checks/campus-action.mp4 --music action
+          ffprobe -v error -show_entries stream=codec_type:format=duration -of json story-checks/campus-action.mp4
+          test ! -e story-checks/campus-action_nomusic.mp4
+          python3 -c "import json; from pathlib import Path; cues=json.loads(Path('story-checks/story_log.json').read_text())['actions']; score=Path('story-checks/campus-action_score.txt').read_text().splitlines(); assert sum('sfx:' in line for line in score) == sum(c['do'] == 'sfx' for c in cues), 'The mix dropped a timed effect'"
+          ffmpeg -v error -y -i story-checks/campus-action.mp4 -vf "select=eq(n\\,18)+eq(n\\,156)+eq(n\\,285)+eq(n\\,399)+eq(n\\,427)+eq(n\\,673)+eq(n\\,696)+eq(n\\,760)+eq(n\\,810),scale=216:384,tile=3x3" -frames:v 1 -update 1 story-checks/contact-sheet.jpg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: story-chase-checks
+          name: campus-action-film
           path: |
-            story-checks/
+            story-checks/campus-action.mp4
+            story-checks/contact-sheet.jpg
+            story-checks/story_log.json
+            story-checks/campus-action_score.txt
+            story-checks/godot.log
+            story-checks/story-test.log
             story-demo/timed.json
+          retention-days: 7
+
+  physics-chase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-4.4.1-stable
+      - name: Locate Godot
+        run: echo "GODOT=$(tools/install_godot.sh ~/godot)" >> "$GITHUB_ENV"
+      - name: Drive the ramp at normal speed and check the wheels
+        run: |
+          mkdir -p physics-preview
+          timeout 120 "$GODOT" --headless --import --path . > physics-preview/import.log 2>&1
+          timeout 75 "$GODOT" --headless --fixed-fps 60 --resolution 540x960 res://story/physics_chase.tscn -- --seed=7 --time=dusk --orientation=vertical --summary="$PWD/physics-preview/headless.json" > physics-preview/headless.log 2>&1
+          if grep -E 'SCRIPT ERROR|Parse Error' physics-preview/headless.log; then exit 1; fi
+          python3 tools/tests/verify_physics_chase.py physics-preview/headless.json physics-preview/headless-check.json
+      - name: Install recording tools on the runner
+        timeout-minutes: 4
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v xvfb-run >/dev/null; then
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=12 update -q
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=12 install -y -q --no-install-recommends xvfb xauth ffmpeg libgl1-mesa-dri
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet --timeout 15 --retries 2 numpy
+      - name: Record the uninterrupted ten-second clip with music
+        env:
+          MODE: chase
+          STORY_SCENE: physics_chase
+          ORIENTATION: vertical
+          TIME: dusk
+          FPS: "60"
+          DURATION: "12"
+          SEED: "7"
+          SCALE: "0.5"
+        run: |
+          tools/record.sh "$GODOT" physics-preview/recording
+          if grep -E 'SCRIPT ERROR|Parse Error' physics-preview/recording/godot.log; then exit 1; fi
+          python3 tools/tests/verify_physics_chase.py physics-preview/recording/summary.json physics-preview/verified.json
+          python3 tools/story/music.py physics-preview/music.wav --mood action --seconds 10 --seed 7 --intro 0
+          start=$(python3 -c "import json; print(json.load(open('physics-preview/verified.json'))['preview_start_s'])")
+          ffmpeg -v error -y -ss "$start" -i physics-preview/recording/video.mp4 -i physics-preview/music.wav -t 10 -filter_complex "[0:a]highpass=f=70,volume=0.55[drive];[1:a]volume=0.42[music];[drive][music]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.92[a]" -map 0:v -map "[a]" -c:v libx264 -preset medium -crf 21 -c:a aac -movflags +faststart physics-preview/physics-chase.mp4
+          ffprobe -v error -show_entries stream=codec_type,avg_frame_rate:format=duration -of json physics-preview/physics-chase.mp4 > physics-preview/media.json
+          python3 -c "import json; from pathlib import Path; p=json.loads(Path('physics-preview/media.json').read_text()); assert 9.98 <= float(p['format']['duration']) <= 10.05; assert any(s['codec_type']=='video' and s['avg_frame_rate']=='60/1' for s in p['streams']); assert any(s['codec_type']=='audio' for s in p['streams'])"
+          jump=$(python3 -c "import json; print(max(0, json.load(open('physics-preview/verified.json'))['takeoff_s'] - .48))")
+          ffmpeg -v error -y -ss "$jump" -i physics-preview/physics-chase.mp4 -vf "fps=8,scale=162:288,tile=4x3" -frames:v 1 -update 1 physics-preview/contact-sheet.jpg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-physics-chase
+          path: |
+            physics-preview/physics-chase.mp4
+            physics-preview/contact-sheet.jpg
+            physics-preview/verified.json
+            physics-preview/media.json
+            physics-preview/headless*.json
+            physics-preview/*.log
+            physics-preview/recording/summary.json
+            physics-preview/recording/godot.log
           retention-days: 7

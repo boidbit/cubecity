@@ -1,0 +1,102 @@
+{
+  "id": "ep8_park",
+  "title": "A & B",
+  "episode": "BLOCK KA SACH",
+  "end_text": "TAG YOUR BLOCK MASTER",
+  "mood": "funny",
+  "time": "dusk",
+  "car": {
+    "color": "#ff5c9a"
+  },
+  "props": [],
+  "start": 2.8,
+  "gap": 0.3,
+  "cast": {
+    "babu": {
+      "name": "A",
+      "color": "#3b8cff",
+      "seat": "driver",
+      "voice": {
+        "gemini": "Puck",
+        "edge": "hi-IN-MadhurNeural",
+        "rate": "+18%",
+        "pitch": "-2Hz",
+        "espeak_pitch": 30,
+        "style": "a cheeky, over-confident young Indian guy"
+      },
+      "look": {
+        "style": "boy",
+        "skin": "#e3a373",
+        "hair": "#2b1d16",
+        "shirt": "#2266ee"
+      },
+      "start": {
+        "at": "spot"
+      }
+    },
+    "shona": {
+      "name": "B",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+18%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#ffdc22"
+      },
+      "start": {
+        "at": "spot"
+      }
+    }
+  },
+  "beats": [
+    {
+      "say": "babu",
+      "sub": "Tune mujhe shakal dekh ke block kiya?",
+      "tts": "तूने मुझे शकल देख के ब्लॉक किया?",
+      "emotion": "sad",
+      "react": "smug",
+      "id": "b01"
+    },
+    {
+      "say": "shona",
+      "sub": "Nahi, roz ke GOOD MORNING se bachne ke liye!",
+      "tts": "नहीं, रोज़ के गुड मॉर्निंग से बचने के लिए!",
+      "emotion": "smug",
+      "react": "shock",
+      "id": "b02"
+    },
+    {
+      "do": "reaction",
+      "who": "babu",
+      "effect": "shock_freeze",
+      "dur": 1.2
+    },
+    {
+      "wait": 1.2
+    },
+    {
+      "end": "happy"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "BLOCK KA SACH"
+    ],
+    "description": "Ek reply, seedha shock!",
+    "hashtags": [
+      "#shorts",
+      "#desicomedy"
+    ]
+  },
+  "start_on_foot": true,
+  "start_spot": "park"
+}

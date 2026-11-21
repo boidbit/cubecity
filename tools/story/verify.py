@@ -19,6 +19,18 @@ def problems(screenplay, log, engine_log=""):
     wanted = ["foot_caught" if b.get("outcome") == "caught" else "foot_escaped" for b in expected]
     if results != wanted:
         errors.append("The recorded on-foot chase outcome does not match the screenplay.")
+    if screenplay.get("scene") == "campus_action":
+        expected_events = ["campus_established", "helicopter_tracks_chase", "van_barrel_blast",
+                           "annex_facade_collapses", "car_clears_before_train", "train_blocks_van",
+                           "wrong_bag_revealed", "prize_in_van"]
+        if events != expected_events:
+            errors.append(f"Campus stunt sequence incomplete: {events}")
+        planned = [(beat["at"], beat["sfx"]) for beat in screenplay["beats"] if "sfx" in beat]
+        recorded = [(action["t"], action["type"]) for action in log["actions"] if action["do"] == "sfx"]
+        if planned != recorded:
+            errors.append("Campus sound effects are missing or out of sync.")
+        if [line["id"] for line in log["lines"]] != [beat["id"] for beat in screenplay["beats"] if "say" in beat]:
+            errors.append("The campus reveal line was not staged.")
     return errors
 
 
@@ -37,7 +49,7 @@ def main():
     for error in errors:
         print("::error::" + error)
     if not errors:
-        print("Story recording verified: completed with all requested on-foot chase outcomes.")
+        print("Story recording verified: completed with the expected stunt outcomes.")
     return 1 if errors else 0
 
 

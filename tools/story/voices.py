@@ -331,6 +331,10 @@ def main():
 
     order = {"auto": ["gemini", "edge", "espeak", "none"], "gemini": ["gemini", "edge", "none"],
              "edge": ["edge", "none"], "espeak": ["espeak", "none"], "none": ["none"]}[a.provider]
+    if sp.get("cinematic"):
+        if a.provider not in ("auto", "gemini", "edge"):
+            sys.exit("Cinematic stories require spoken dialogue. Select auto, gemini or edge.")
+        order = [p for p in order if p in ("gemini", "edge")]
     used, results = "none", {}
     for prov in order:
         if prov == "gemini":
@@ -355,6 +359,8 @@ def main():
             break
         except Exception as e:
             print(f"::warning::voice provider {prov} failed: {e}")
+    if sp.get("cinematic") and any(not results.get(line_id) for line_id in ids):
+        sys.exit("Cinematic dialogue could not be synthesized. Check the voice provider and retry.")
     for l in spoken(sp):
         r = results.get(l["id"])
         if r:
@@ -364,8 +370,26 @@ def main():
         else:
             l["dur"] = round(est_dur(l), 2)
             l["audio"] = ""
+    if sp.get("scene") == "campus_action":
+        for line in spoken(sp):
+            available = 27.92 - float(line["at"])
+            if line["dur"] <= available:
+                continue
+            tempo = line["dur"] / available
+            if tempo > 1.22:
+                sys.exit("The campus reveal line is too long for the 28-second cut. Use fewer words.")
+            original = os.path.join(a.out, line["audio"])
+            adjusted = original + ".retimed.wav"
+            result = sh(["ffmpeg", "-y", "-v", "error", "-i", original, "-af", f"atempo={tempo:.4f}", adjusted])
+            if result.returncode != 0:
+                sys.exit("Could not fit the campus reveal audio into its shot.")
+            os.replace(adjusted, original)
+            duration, envelope = analyze(original)
+            line.update(dur=round(duration, 2), env=envelope)
+            if float(line["at"]) + duration > 28.0:
+                sys.exit("The retimed campus reveal still runs past the end of the film.")
     sp["provider"] = used
-    plain, worst = simulate(sp)
+    plain, worst = (28.0, 28.0) if sp.get("scene") == "campus_action" else simulate(sp)
     sp["est_end"] = round(plain, 1)
     sp["duration_hint"] = int(math.ceil(worst + 4.0))
     with open(os.path.join(a.out, "timed.json"), "w", encoding="utf-8") as f:

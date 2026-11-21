@@ -38,14 +38,36 @@ class WriterTests(unittest.TestCase):
         self.out = case_dir / "screenplay.json"
         self.summary = case_dir / "summary.md"
 
-    def generate(self, answers=None, key="test-key", idea="Babu police se paidal bhag raha hai"):
-        args = ["write.py", "--out", str(self.out), "--idea", idea]
+    def generate(self, answers=None, key="test-key", idea="Babu police se paidal bhag raha hai", template="auto"):
+        args = ["write.py", "--out", str(self.out), "--idea", idea, "--template", template]
         with patch.object(sys, "argv", args), patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(self.summary), "GITHUB_OUTPUT": ""}), \
                 patch.object(write.gemini, "key", return_value=key), \
                 patch.object(write.gemini, "write_json", side_effect=answers) as api, \
                 contextlib.redirect_stdout(io.StringIO()):
             result = write.main()
         return result, api.call_count
+
+    def test_campus_idea_preserves_stunts_and_changes_visible_props(self):
+        draft = {"episode": "MEDAL MISSION", "hook": "THE TRAIN IS HERE",
+                 "mission": "SAVE THE COLLEGE MEDAL", "prize": "medal", "reveal_prop": "books",
+                 "sub": "These are my books!", "tts": "These are my books!", "end_text": "THE VAN HAS THE MEDAL"}
+        result, calls = self.generate([(draft, "mock-model")], idea="Save the college medal, reveal books",
+                                      template="campus_action")
+        self.assertEqual((result, calls), (0, 1))
+        saved = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual((saved["scene"], saved["prize"], saved["reveal_prop"]),
+                         ("campus_action", "medal", "books"))
+        self.assertEqual(next(b["sub"] for b in saved["beats"] if "say" in b), draft["sub"])
+        self.assertIn("train_horn", [b.get("sfx") for b in saved["beats"]])
+        self.assertIn("blast_hit", [b.get("sfx") for b in saved["beats"]])
+
+    def test_campus_rejects_unsupported_prop_without_replaying_demo(self):
+        draft = {"episode": "MEDAL MISSION", "hook": "THE TRAIN IS HERE",
+                 "mission": "SAVE THE COLLEGE MEDAL", "prize": "medal", "reveal_prop": "robot",
+                 "sub": "That is a robot!", "tts": "That is a robot!", "end_text": "THE VAN HAS THE MEDAL"}
+        result, calls = self.generate([(draft, "mock-model")] * 2, idea="Reveal a robot", template="campus_action")
+        self.assertEqual(calls, 2)
+        self.assertIn("wrong bag", self.assert_failed(result)["reason"])
 
     def assert_failed(self, result):
         self.assertEqual(result, 1)
@@ -144,6 +166,34 @@ class WriterTests(unittest.TestCase):
         self.assertFalse(write.needs_foot_chase("Babu police se gaadi bhaga raha hai"))
         self.assertFalse(write.needs_foot_chase("Babu and Shona walk to the chai stall"))
         self.assertTrue(write.needs_foot_chase("", "police_foot_chase"))
+
+
+class SceneTests(unittest.TestCase):
+    def setUp(self):
+        self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))
+
+    def test_short_sketch_locations_and_reaction(self):
+        for location in ("college_gate", "bus_stop", "park"):
+            ai = {"format": "short", "start_on_foot": True, "start_spot": location,
+                  "cast": {"babu": {"name": "A", "look": {"style": "boy", "shirt": "#2266ee"}},
+                           "shona": {"name": "B", "look": {"style": "girl", "shirt": "#ffdc22"}}},
+                  "beats": [{"say": "babu", "sub": "Why did you block me?"},
+                            {"say": "shona", "sub": "Too many good morning messages!"},
+                            {"do": "reaction", "who": "babu", "effect": "shock_freeze", "dur": 1.2},
+                            {"end": "happy"}]}
+            sp, issues = write.clean(ai, self.base, "funny")
+            self.assertEqual(issues, [])
+            self.assertEqual(sp["start_spot"], location)
+            self.assertEqual(sp["cast"]["babu"]["name"], "A")
+            self.assertEqual(sp["cast"]["shona"]["look"]["shirt"], "#ffdc22")
+            reaction = next(i for i, b in enumerate(sp["beats"]) if b.get("do") == "reaction")
+            self.assertEqual(sp["beats"][reaction + 1], {"wait": 1.2})
+
+    def test_unknown_reaction_is_rejected(self):
+        ai = draft()
+        ai["beats"].insert(0, {"do": "reaction", "who": "babu", "effect": "teleport"})
+        _, issues = write.clean(ai, self.base, "funny")
+        self.assertIn("unsupported reaction actor or effect", issues)
 
 
 class RecordingTests(unittest.TestCase):

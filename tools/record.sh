@@ -7,6 +7,7 @@
 # Settings come from the environment (all optional):
 #   MODE=escape|chase|destroy|survive|stunt|heli|rush|race|swarm  ORIENTATION=vertical|horizontal  DURATION=55  FPS=60
 #   SEED=123  TIME=dusk|day|night  TITLE="..."  SCALE=1 (0.5 for a quick half-size preview)
+#   STORY_SCENE=campus_action  use the staged campus film instead of the city game scene
 #   EXTRA_ARGS="--story=... --story_log=..."  more game arguments (the story lab uses this; swarm takes --intensity=0..1)
 set -euo pipefail
 GODOT=$1
@@ -31,11 +32,18 @@ echo "Recording $MODE $ORIENTATION ${W}x${H} ${DURATION}s @ ${FPS}fps seed=$SEED
 export LIBGL_ALWAYS_SOFTWARE=1
 # registers the script classes (class_name) the game needs; without it nothing loads
 timeout 300 "$GODOT" --headless --import > "$OUT/import.log" 2>&1 || true
+scene_args=()
+case "${STORY_SCENE:-}" in
+  "") ;;
+  campus_action) scene_args=(res://story/campus_action.tscn) ;;
+  physics_chase) scene_args=(res://story/physics_chase.tscn) ;;
+  *) echo "::error::Unknown story scene: $STORY_SCENE"; exit 1 ;;
+esac
 start=$(date +%s)
 set +e
 timeout 18000 xvfb-run -a -s "-screen 0 1920x1920x24" \
   "$GODOT" --path . --rendering-driver opengl3 --write-movie "$OUT/take.avi" \
-  --fixed-fps "$FPS" --resolution "${W}x${H}" --quit-after $(( (${DURATION%.*} + 20) * FPS )) -- \
+  --fixed-fps "$FPS" --resolution "${W}x${H}" --quit-after $(( (${DURATION%.*} + 20) * FPS )) "${scene_args[@]}" -- \
   --bot="$MODE" --orientation="$ORIENTATION" --duration="$DURATION" --seed="$SEED" --trace \
   --time="$TIME" --title="$TITLE" --summary="$OUT/summary.json" ${EXTRA_ARGS:-} > "$OUT/godot.log" 2>&1
 rc=$?

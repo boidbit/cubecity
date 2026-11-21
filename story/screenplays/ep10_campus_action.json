@@ -1,0 +1,148 @@
+{
+  "id": "ep10_campus_action",
+  "episode": "CAMPUS UNDER FIRE",
+  "title": "CUBE CITY COLLEGE",
+  "end_text": "TROPHY VAN MEIN HAI!",
+  "mood": "action",
+  "time": "dusk",
+  "cinematic": true,
+  "scene": "campus_action",
+  "prize": "trophy",
+  "reveal_prop": "tiffin",
+  "hook": "SHONA KE PAAS 8 SECOND HAIN",
+  "mission": "COLLEGE KI TROPHY BACHANI HAI",
+  "cast": {
+    "shona": {
+      "name": "SHONA",
+      "color": "#ff5fa8",
+      "seat": "passenger",
+      "voice": {
+        "gemini": "Leda",
+        "edge": "hi-IN-SwaraNeural",
+        "rate": "+2%",
+        "pitch": "+0Hz",
+        "espeak_pitch": 70,
+        "style": "a cute, dramatic young Indian girl"
+      },
+      "look": {
+        "style": "girl",
+        "skin": "#f0b48f",
+        "hair": "#4a2616",
+        "shirt": "#f5c841",
+        "height": 0.91,
+        "build": "slim",
+        "outfit": "kurta",
+        "hair_style": "ponytail",
+        "pants": "#35386a"
+      },
+      "start": {
+        "at": "spot"
+      }
+    }
+  },
+  "beats": [
+    {
+      "at": 0,
+      "music": "tension"
+    },
+    {
+      "at": 0.18,
+      "sfx": "train_horn"
+    },
+    {
+      "at": 1.8,
+      "sfx": "riser"
+    },
+    {
+      "at": 2.4,
+      "music": "action"
+    },
+    {
+      "at": 5.5,
+      "sfx": "whoosh"
+    },
+    {
+      "at": 7.8,
+      "sfx": "tyre_skid"
+    },
+    {
+      "at": 8.5,
+      "sfx": "rotor_pass"
+    },
+    {
+      "at": 11.8,
+      "sfx": "tyre_skid"
+    },
+    {
+      "at": 13.05,
+      "sfx": "blast_hit"
+    },
+    {
+      "at": 13.35,
+      "sfx": "facade_fall"
+    },
+    {
+      "at": 14.8,
+      "sfx": "tyre_skid"
+    },
+    {
+      "at": 19.8,
+      "music": "tension"
+    },
+    {
+      "at": 20.3,
+      "sfx": "train_horn"
+    },
+    {
+      "at": 21.32,
+      "sfx": "barrier_snap"
+    },
+    {
+      "at": 22.33,
+      "sfx": "train_pass"
+    },
+    {
+      "at": 23.2,
+      "sfx": "tyre_skid"
+    },
+    {
+      "at": 24.65,
+      "music": "silence"
+    },
+    {
+      "at": 25.26,
+      "sfx": "scratch"
+    },
+    {
+      "at": 25.36,
+      "say": "shona",
+      "id": "b01",
+      "sub": "Arre, mera tiffin?!",
+      "tts": "अरे, मेरा टिफ़िन?!",
+      "emotion": "neutral"
+    },
+    {
+      "at": 26.33,
+      "music": "tension"
+    },
+    {
+      "at": 26.35,
+      "sfx": "sting"
+    },
+    {
+      "end": "cliffhanger"
+    }
+  ],
+  "upload": {
+    "titles": [
+      "Shona ka campus chase",
+      "Ek Train. Do Gaadiyan. Galat Bag."
+    ],
+    "description": "College ki trophy bachane nikli Shona aur railway crossing par sab ulat gaya.",
+    "hashtags": [
+      "#shorts",
+      "#animation",
+      "#carchase"
+    ]
+  }
+}

@@ -46,6 +46,13 @@ var hip_l: Node3D
 var hip_r: Node3D
 var knee_l: Node3D
 var knee_r: Node3D
+var foot_l: Node3D
+var foot_r: Node3D
+var staged_run := false
+var following_runner := false
+var run_cycle := 0.0
+var run_blend := 0.0
+const RUN_STEP := 0.93  # one step, in metres at rig scale
 # out of the car
 const LEG := 0.93           # hip height when standing
 const WALK_SPEED := 1.7
@@ -126,6 +133,12 @@ func build(who_id: String, cfg: Dictionary, is_driver: bool, x: float) -> void:
 	# slim, Roblox-like proportions: narrow shoulders, long legs
 	var tw := (0.38 if female else 0.42) * build_k
 	var td := 0.24 * maxf(build_k, 1.0)
+	var outfit := str(cfg.get("outfit", ""))
+	if outfit == "uniform":
+		tw *= 1.10
+		td *= 1.12
+	elif outfit == "kurta":
+		tw *= 0.94
 
 	torso = Node3D.new()
 	add_child(torso)
@@ -133,6 +146,16 @@ func build(who_id: String, cfg: Dictionary, is_driver: bool, x: float) -> void:
 	if female:
 		# a kurti / dress flaring out over the hips
 		_box(torso, Vector3(tw + 0.08, 0.18, td + 0.06), Vector3(0, 0.04, 0), shirt.darkened(0.08))
+	if outfit == "uniform":
+		var trim := shirt.darkened(0.48)
+		_box(torso, Vector3(tw + 0.02, 0.075, td + 0.045), Vector3(0, 0.08, 0), trim)
+		_box(torso, Vector3(0.085, 0.065, 0.025), Vector3(0, 0.08, -td * 0.55), Color(0.72, 0.58, 0.30))
+		for side in [-1.0, 1.0]:
+			var shoulder: float = side * tw * 0.39
+			_box(torso, Vector3(0.14, 0.035, td * 0.74), Vector3(shoulder, 0.5, 0), trim)
+	elif outfit == "kurta":
+		_box(torso, Vector3(tw + 0.08, 0.27, td + 0.05), Vector3(0, -0.09, 0), shirt)
+		_box(torso, Vector3(0.14, 0.42, 0.035), Vector3(-tw * 0.23, 0.25, -td * 0.62), shirt.darkened(0.27))
 	# legs: hip and knee pivots; rotating about x swings them forward. Seated, the thighs point
 	# forward and the shins down (hidden inside the car body).
 	var legs := []
@@ -146,12 +169,17 @@ func build(who_id: String, cfg: Dictionary, is_driver: bool, x: float) -> void:
 		knee.position = Vector3(0, -0.45, 0)
 		hip.add_child(knee)
 		_box(knee, Vector3(lw * 0.92, 0.42, 0.18), Vector3(0, -0.21, 0), pants)
-		_box(knee, Vector3(lw, 0.09, 0.28), Vector3(0, -0.44, -0.05), Color(0.12, 0.1, 0.1))
-		legs.append([hip, knee])
+		var foot := Node3D.new()
+		foot.position.y = -0.44
+		knee.add_child(foot)
+		_box(foot, Vector3(lw, 0.09, 0.28), Vector3(0, 0, -0.05), Color(0.12, 0.1, 0.1))
+		legs.append([hip, knee, foot])
 	hip_l = legs[0][0]
 	knee_l = legs[0][1]
 	hip_r = legs[1][0]
 	knee_r = legs[1][1]
+	foot_l = legs[0][2]
+	foot_r = legs[1][2]
 	for hip: Node3D in [hip_l, hip_r]:
 		hip.rotation.x = PI * 0.5
 	for knee: Node3D in [knee_l, knee_r]:
@@ -491,6 +519,9 @@ func sit_in_car(seat: Vector3) -> void:
 	pose = "seated"
 	path.clear()
 	speed_now = 0.0
+	run_blend = 0.0
+	foot_l.rotation.x = 0.0
+	foot_r.rotation.x = 0.0
 	position = seat
 	rotation = Vector3.ZERO
 	torso.rotation = Vector3.ZERO
@@ -602,6 +633,28 @@ func _yaw_to(p: Vector3) -> float:
 	return atan2(-d.x, -d.z)
 
 
+# Keep the stance foot still in world space on the straight. The swing foot clears the
+# ground, then meets it at the front of the next step.
+func _run_leg(cycle: float, reach: float, hip_height: float) -> Vector2:
+	var phase_in_step := fposmod(cycle, 1.0)
+	var stance := 0.44
+	var forward := 0.0
+	var rise := 0.0
+	if phase_in_step < stance:
+		forward = lerpf(reach, -reach, phase_in_step / stance)
+	else:
+		var swing := (phase_in_step - stance) / (1.0 - stance)
+		forward = lerpf(-reach, reach, smoothstep(0.0, 1.0, swing))
+		rise = sin(swing * PI) * 0.31 * run_blend
+	var down := hip_height + 0.02 - 0.045 - rise
+	var thigh := 0.45
+	var shin := 0.44
+	var length := clampf(Vector2(forward, down).length(), 0.12, thigh + shin - 0.005)
+	var hip_angle := atan2(forward, down) + acos(clampf((thigh * thigh + length * length - shin * shin) / (2.0 * thigh * length), -1.0, 1.0))
+	var knee_angle := acos(clampf((length * length - thigh * thigh - shin * shin) / (2.0 * thigh * shin), -1.0, 1.0))
+	return Vector2(hip_angle, -knee_angle)
+
+
 func _locomotion(dt: float) -> void:
 	if pose == "carried":
 		pose_t += dt
@@ -614,11 +667,13 @@ func _locomotion(dt: float) -> void:
 		return
 	var ground := 0.0
 	var want_speed := 0.0
+	var distance_moved := 0.0
 	if not path.is_empty():
 		var tgt := path[0]
 		var here := Vector3(global_position.x, 0.0, global_position.z)
 		var d := tgt - here
-		if d.length() < 0.25:
+		var arrival_radius := 0.06 if staged_run and running else 0.25
+		if d.length() < arrival_radius:
 			path.pop_front()
 			if path.is_empty() and then_pose != "":
 				pose = then_pose
@@ -627,11 +682,14 @@ func _locomotion(dt: float) -> void:
 		else:
 			want_speed = RUN_SPEED * run_pace if running else WALK_SPEED * pace
 			rotation.y = lerp_angle(rotation.y, atan2(-d.x, -d.z), minf(10.0 * dt, 1.0))
-			var step := minf(speed_now * dt, d.length())
-			global_position += d.normalized() * step
+			if staged_run and running and not following_runner and path.size() == 1:
+				want_speed = minf(want_speed, sqrt(2.0 * 6.5 * d.length()))
+			distance_moved = minf(speed_now * dt, d.length())
+			global_position += d.normalized() * distance_moved
 	elif face_point != Vector3.INF and pose in ["stand", "dance", "cheer", "fight"]:
 		rotation.y = lerp_angle(rotation.y, _yaw_to(face_point), minf(5.0 * dt, 1.0))
-	speed_now = move_toward(speed_now, want_speed, 9.0 * dt)
+	var acceleration := (6.0 if want_speed > speed_now else 7.5) if staged_run else 9.0
+	speed_now = move_toward(speed_now, want_speed, acceleration * dt)
 	stride += dt * speed_now * (2.3 if running else 3.4)
 	var sw := sin(stride)
 	var amp := clampf(speed_now / WALK_SPEED, 0.0, 1.0) * (0.95 if running else 0.55)
@@ -641,6 +699,19 @@ func _locomotion(dt: float) -> void:
 	var kr := -maxf(0.0, sw) * amp * 1.4
 	var lift := LEG
 	var tilt := 0.0
+	var active_run := staged_run and running and pose == "stand"
+	run_blend = move_toward(run_blend, smoothstep(0.0, 2.2, speed_now) if active_run else 0.0, dt * 7.0)
+	if run_blend > 0.001:
+		var step_length := lerpf(0.49, RUN_STEP, run_blend)
+		run_cycle += distance_moved / (2.0 * step_length * size)
+		lift = lerpf(LEG, 0.80 + absf(sin(run_cycle * TAU)) * 0.035, run_blend)
+		var reach := step_length * 0.44
+		var left := _run_leg(run_cycle, reach, lift)
+		var right := _run_leg(run_cycle + 0.5, reach, lift)
+		hl = lerpf(hl, left.x, run_blend)
+		hr = lerpf(hr, right.x, run_blend)
+		kl = lerpf(kl, left.y, run_blend)
+		kr = lerpf(kr, right.y, run_blend)
 	pose_t += dt
 	match pose:
 		"sit":
@@ -718,11 +789,14 @@ func _locomotion(dt: float) -> void:
 	hip_r.rotation.x = lerpf(hip_r.rotation.x, hr, minf(14.0 * dt, 1.0))
 	knee_l.rotation.x = lerpf(knee_l.rotation.x, kl, minf(14.0 * dt, 1.0))
 	knee_r.rotation.x = lerpf(knee_r.rotation.x, kr, minf(14.0 * dt, 1.0))
-	global_position.y = lerpf(global_position.y, ground + (lift + absf(sw) * 0.05 * amp) * size, minf(12.0 * dt, 1.0))
+	foot_l.rotation.x = -(hip_l.rotation.x + knee_l.rotation.x) * run_blend
+	foot_r.rotation.x = -(hip_r.rotation.x + knee_r.rotation.x) * run_blend
+	var bob := absf(sw) * 0.05 * amp * (1.0 - run_blend)
+	global_position.y = lerpf(global_position.y, ground + (lift + bob) * size, minf(12.0 * dt, 1.0))
 	rotation.x = lerpf(rotation.x, tilt, minf(10.0 * dt, 1.0))
 	var lean := 0.0
 	if running and speed_now > 1.0:
-		lean = -0.22
+		lean = -lerpf(0.10, 0.27, run_blend) if staged_run else -0.22
 	elif pose == "stand" and path.is_empty():
 		lean = {"sad": -0.1, "cry": -0.14, "angry": -0.1, "shock": 0.12, "scared": 0.1, "laugh": -0.08 + 0.08 * sin(t * 9.0),
 			"shy": -0.05, "smug": 0.06}.get(emotion, 0.0)
@@ -855,6 +929,10 @@ func _arms(dt: float, toward: float) -> void:
 		var sw := sin(stride) * clampf(speed_now / WALK_SPEED, 0.0, 1.0) * (0.9 if running else 0.5)
 		lx = 0.08 - sw
 		rx = 0.08 + sw
+		if run_blend > 0.001:
+			var pump := cos(run_cycle * TAU) * 0.47
+			lx = lerpf(lx, 0.60 - pump, run_blend)
+			rx = lerpf(rx, 0.60 + pump, run_blend)
 		if pose in ["sit", "bench"]:
 			lx = 0.7
 			rx = 0.7
@@ -902,7 +980,7 @@ func _arms(dt: float, toward: float) -> void:
 		ry = feel[3]
 	# talking adds hands on top of the feeling (bigger when excited)
 	var big := emotion in ["angry", "shock", "laugh", "happy"]
-	match gesture:
+	match ("idle" if run_blend > 0.35 and gesture == "talk" else gesture):
 		"talk":
 			if not seated:
 				if feel.is_empty() or emotion in ["neutral", "happy", "sad"]:
