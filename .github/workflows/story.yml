@@ -24,7 +24,7 @@ on:
       story_type:
         description: "Mood of the episode"
         type: choice
-        options: [funny, romantic, cringe, happy, sad, action, twist, drama, dark]
+        options: [funny, romantic, cringe, happy, sad, action, twist, drama, dark, kids]
         default: funny
       idea:
         description: "Your idea in a few words (blank = AI decides). Example: Shona's birthday, Babu forgot the cake"

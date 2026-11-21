@@ -62,6 +62,11 @@ TEMPLATES = {"campus_action": "a staged campus car chase with helicopter, blast 
              "proposal": "a proposal out of the car",
              "police_foot_chase": "an on-foot police chase: start_on_foot, foot_chase with who=police, no car chase"}
 MAX_SIDE = 4
+# KIDS MODE: nothing that could be copied into a fight, no villains, no police, no romance. The writer is told so in
+# KIDS_MODE; whatever still comes back is dropped here
+KIDS_BANNED = ["slap", "push", "fight", "punch", "grab", "police", "calm", "heli", "heli_off", "roadblock", "foot_chase",
+               "drive_off", "chase", "corner", "arrive", "boom", "crossers", "kneel", "hug"]
+KIDS_PRESETS_OUT = ["goon", "doctor"]
 CAR_COLORS = {"van": "#26262b"}
 PLACES = ["ahead", "back", "car", "other", "spot"]
 ENDINGS = ["happy", "caught", "crash", "cliffhanger"]
@@ -292,6 +297,24 @@ NEVER = """Never (hard rules, even if the idea asks for it):
   never down
 If the idea needs something on this list, keep the dark tone but swap in a safe target."""
 
+KIDS_MODE = """
+
+KIDS MODE (this episode is for children of about 4 to 9; they must stay hooked and the parents must be happy)
+Make it a bright, silly mini-adventure with two friends, Babu and Shona. Rules:
+- HOOK in the first line: a funny problem, a surprise or a question a child wants answered ("Arre! Mera cake kahan gaya?").
+- Very simple words, at most 8 words a line, 7 to 11 lines. Lots of "haha", "arre", "wow", "uff".
+- A CATCHPHRASE: one short funny phrase (say "Dhamaka!" or "Chalo chalo!") said three times, so children can shout it.
+- A tiny mystery or riddle the children can guess, and the answer is a surprise at the end ("Kaun hai chor? Billu!").
+- Slapstick without hurting anyone: use stumble, faint, hop, spin, clap, wave, bow, hide, phone, fall, shrug,
+  facepalm. Props like balloon, cake, umbrella, bag. Colourful, loud, happy.
+- A kind lesson, never preachy: sharing, honesty, helping, being brave. The problem is solved by cleverness or
+  kindness, never by hitting.
+- NEVER: slap, push, fight, punch, grabbing, police, helicopters, chases, villains, goons, kidnap, scary or sad
+  endings, romance, kissing, dating, weapons, danger a child could copy. Babu and Shona are best friends.
+- End: happy, a last funny line, and then a question to the children ("Aapko kaun sa gubbara pasand hai?"),
+  and "end_text" teases the next part ("KAL: BILLU KA BIRTHDAY!").
+- Use the emotions excited, happy, laugh, shock, shy, think; the music will be bright.
+"""
 DARK_MODE = """
 
 DARK HUMOR MODE (this episode's mood is "dark")
@@ -630,7 +653,7 @@ def ending_for(kind, stage):
     return kind
 
 
-def clean(ai, base, mood):
+def clean(ai, base, mood, kids=False):
     """A screenplay the game can play, built from the model's answer. Returns (screenplay, problems)."""
     sp = copy.deepcopy(base)
     problems = []
@@ -649,6 +672,8 @@ def clean(ai, base, mood):
     sp["episode"] = clip(ai.get("episode") or "NEW EPISODE", 34).upper()
     sp["end_text"] = clip(ai.get("end_text") or "PART 2 JALDI...", 28).upper()
     sp["mood"] = mood
+    if kids:
+        sp["audience"] = "kids"
     sp["time"] = ai.get("time") if ai.get("time") in TIMES else MOOD_TIME.get(mood, "dusk")
     sp["props"] = [p for p in (ai.get("props") or []) if p in PROPS][:2]
     if isinstance(ai.get("upload"), dict):
@@ -660,6 +685,8 @@ def clean(ai, base, mood):
     stage = Stage(beats, problems)
     # side characters, where everybody starts
     side = side_cast(ai.get("cast"), problems)
+    if kids:
+        side = {k: v for k, v in side.items() if k not in KIDS_PRESETS_OUT and "mask" not in v["look"].get("acc", [])}
     sp["cast"].update(side)
     stage.side = set(side)
     for k, c in side.items():
@@ -726,6 +753,8 @@ def clean(ai, base, mood):
             act = str(b.get("do", "")).lower()
             if act not in ACTIONS:
                 problems.append(f"unknown action {act!r}")
+                continue
+            if kids and act in KIDS_BANNED:
                 continue
             d = {"do": act}
             if act == "reaction":
@@ -817,7 +846,7 @@ def clean(ai, base, mood):
                 continue
             stage.finish_foot_chase()
             endings += 1
-            beats.append({"end": ending_for(b["end"] if b["end"] in ENDINGS else MOOD_ENDING.get(mood, "happy"), stage)})
+            beats.append({"end": ending_for("happy" if kids else (b["end"] if b["end"] in ENDINGS else MOOD_ENDING.get(mood, "happy")), stage)})
     if endings == 0:
         stage.finish_foot_chase()
         problems.append("no ending")
@@ -854,12 +883,12 @@ def clean(ai, base, mood):
     return sp, problems
 
 
-def variety_hint(rng=None):
+def variety_hint(rng=None, kids=False):
     """A nudge so that episodes written one after another do not all use the same moves."""
     import random
     r = rng or random.Random()
-    acts = r.sample(GESTURE_ACTS + ["slap", "push"], 3)
-    who = r.choice(sorted(PRESETS))
+    acts = r.sample(GESTURE_ACTS if kids else GESTURE_ACTS + ["slap", "push"], 3)
+    who = r.choice([p for p in sorted(PRESETS) if not (kids and p in KIDS_PRESETS_OUT)])
     place = r.choice([x for x in SPOTS])
     prop = r.choice(PROPS)
     return (f"For variety, if it fits the idea, build in: the actions {', '.join(acts)}; the ready-made side character "
@@ -930,6 +959,7 @@ def main():
     with open(a.base, encoding="utf-8") as f:
         base = json.load(f)
     mood = a.type.lower()
+    kids = mood == "kids"
     out_dir = os.path.dirname(os.path.abspath(a.out))
     os.makedirs(out_dir, exist_ok=True)
 
@@ -944,8 +974,8 @@ def main():
                   + (f"Episode number: {a.episode}.\n" if a.episode else "")
                   + f"Suggested ending for this mood: {MOOD_ENDING.get(mood, 'your choice')}."
                   + (f"\nUse this recipe: {TEMPLATES[a.template]}" if a.template in TEMPLATES else "")
-                  + "\n" + variety_hint()
-                  + (DARK_MODE if mood == "dark" else ""))
+                  + "\n" + variety_hint(kids=kids)
+                  + (DARK_MODE if mood == "dark" else "") + (KIDS_MODE if kids else ""))
         if needs_foot_chase(a.idea, a.template):
             prompt += "\nRequired: show an on-foot police chase using foot_chase with who=police. Keep the requested runner on foot."
         campus = a.template == "campus_action"
@@ -981,7 +1011,7 @@ def main():
                 if campus:
                     cand, problems = campus_action.compile_story(ai), []
                 else:
-                    cand, problems = clean(ai if isinstance(ai, dict) else {}, base, mood)
+                    cand, problems = clean(ai if isinstance(ai, dict) else {}, base, "happy" if kids else mood, kids=kids)
                     problems.extend(intent_problems(cand, a.idea, a.template))
             except (TypeError, ValueError, KeyError, AttributeError) as e:
                 failure = f"The AI returned malformed screenplay data: {e}"

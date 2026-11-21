@@ -147,6 +147,11 @@ ready-made side characters (papa, mummy, dadi, bhai, dost, saheli, teacher, uncl
 delivery; up to 4 in an episode) and an episode can use two places (get back in, drive on, park somewhere
 else). The AI writer is nudged each time to use some of them (`variety_hint` in `tools/story/write.py`).
 `story/screenplays/ep11_comic_kit.json` shows it all and is part of the smoke test.
+Kids mode: `story_type` = `kids` in the story workflow writes a children's episode (ages about 4-9): a hook in the
+first line, a catchphrase said three times, a small riddle, slapstick that hurts nobody, a kind lesson and a
+question to the children at the end. No police, chases, fights, slaps, villains or romance (the writer is told so,
+and `clean()` drops them if they come back anyway). The upload text reminds you to mark the video "made for kids"
+in YouTube Studio. `ep12_kids_gubbara.json` is an example (about 30 s) and is in the smoke test.
 
 Everything is in `story/` and `tools/story/`; the game only reads `--story`, and `story/` is left
 out of the Android build (`exclude_filter` in `export_presets.cfg`).

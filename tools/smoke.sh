@@ -88,6 +88,21 @@ PY
     echo "::error::the comic-kit story did not play through (a slap, gestures, two places)"
     status=1
   fi
+  # the kids episode: nothing violent, a catchphrase, a question at the end
+  run bot-story-kids --fixed-fps 60 --quit-after $(( 70 * 60 )) -- \
+    --bot=chase --duration=55 --seed=11 --story=res://story/screenplays/ep12_kids_gubbara.json --story_log="$OUT/story_kids.out"
+  if ! python3 - "$OUT/story_kids.out" <<'PY'
+import json, sys
+log = json.load(open(sys.argv[1]))
+done = {a["do"] for a in log.get("actions", [])}
+bad = done & {"slap", "push", "fight", "punch", "grab", "police", "foot_chase"}
+print(f"kids story: {len(log['lines'])} lines, violent actions {sorted(bad)}, ending {log['ending']}")
+sys.exit(0 if not bad and len(log["lines"]) >= 8 and log["ending"] == "happy" else 1)
+PY
+  then
+    echo "::error::the kids story did not play through (or has something violent in it)"
+    status=1
+  fi
   # a set on the pavement: the ice-cream cart, its vendor, handing things over
   run bot-story-spot --fixed-fps 60 --quit-after $(( 75 * 60 )) -- \
     --bot=chase --duration=60 --seed=7 --story=res://story/screenplays/ep4_icecream.json --story_log="$OUT/story_spot.out"

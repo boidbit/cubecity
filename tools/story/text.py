@@ -20,6 +20,9 @@ def from_writer(sp, up):
             "BEFORE YOU PUBLISH",
             "- YouTube Studio > Details > 'Altered content': answer YES (the voices are synthetic)",
             f"- Episode: {sp.get('title', '')} / {sp.get('episode', '')} (written by {sp.get('writer', 'hand')})"]
+    if sp.get("audience") == "kids":
+        out[out.index("PINNED COMMENT") + 1] = "Aapko kya pasand aaya? Comment karo, agle part me bolenge! (comments are off for kids videos: ask it in the video instead)"
+        out.append("- YouTube Studio > Details > Audience: answer YES, it is made for kids (the law requires it; comments and some ads switch off)")
     return "\n".join(out) + "\n"
 
 
@@ -50,10 +53,14 @@ def build(sp):
     out.append("")
     out.append("Made with a game I am building in Godot. The voices are AI-generated.")
     out.append("")
-    out.append("#shorts #couplegoals #cringe #funny #carchase #gaming #hindi #lovestory")
+    kids = sp.get("audience") == "kids"
+    if kids:
+        out.append("#shorts #kidscartoon #kidsvideo #funnyforkids #hindikids #babushona")
+    else:
+        out.append("#shorts #couplegoals #cringe #funny #carchase #gaming #hindi #lovestory")
     out.append("")
     out.append("TAGS")
-    out.append("cringe couple, couple goals, funny couple, hindi comedy, love story, car chase, police chase, "
+    out.append("kids cartoon, hindi kids stories, funny kids video, cartoon for kids, babu shona, hindi cartoon, kids comedy" if kids else "cringe couple, couple goals, funny couple, hindi comedy, love story, car chase, police chase, "
                "cartoon couple, date night, babu shona, indie game, godot")
     out.append("")
     out.append("PINNED COMMENT")
@@ -61,6 +68,8 @@ def build(sp):
     out.append("")
     out.append("BEFORE YOU PUBLISH")
     out.append("- YouTube Studio > Details > 'Altered content': answer YES (the voices are synthetic)")
+    if sp.get("audience") == "kids":
+        out.append("- YouTube Studio > Details > Audience: answer YES, it is made for kids (the law requires it; comments and some ads switch off)")
     out.append(f"- Last line of this episode, for the thumbnail text if you want one: {last}")
     return "\n".join(out) + "\n"
 

@@ -98,6 +98,51 @@ class ComicKitTests(unittest.TestCase):
         self.assertTrue(any(f'"{p}"' in hint for p in write.PRESETS))
 
 
+class KidsModeTests(unittest.TestCase):
+    def setUp(self):
+        self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))
+
+    def draft(self):
+        d = comic_draft()
+        d["beats"].insert(3, {"do": "fight", "who": "dost", "to": "babu"})
+        d["beats"].insert(3, {"do": "hug"})
+        d["beats"][-1] = {"end": "crash"}
+        d["cast"] = {"dost": {"preset": "dost"}, "goon": {"preset": "goon"}, "papa": {}}
+        return d
+
+    def test_kids_mode_drops_fights_slaps_goons_and_bad_endings(self):
+        sp, _ = write.clean(self.draft(), self.base, "happy", kids=True)
+        acts = {b["do"] for b in sp["beats"] if "do" in b}
+        self.assertFalse(acts & set(write.KIDS_BANNED), acts & set(write.KIDS_BANNED))
+        self.assertIn("facepalm", acts)                                   # the harmless gestures stay
+        self.assertEqual([b["end"] for b in sp["beats"] if "end" in b], ["happy"])
+        self.assertEqual(sp.get("audience"), "kids")
+
+    def test_the_same_draft_is_unchanged_for_everyone_else(self):
+        sp, _ = write.clean(self.draft(), self.base, "funny")
+        acts = {b["do"] for b in sp["beats"] if "do" in b}
+        self.assertTrue({"slap", "push"} <= acts)
+        self.assertNotIn("audience", sp)
+
+    def test_kids_variety_hint_has_no_slaps_or_goons(self):
+        import random
+        for n in range(40):
+            hint = write.variety_hint(random.Random(n), kids=True)
+            self.assertNotIn("slap", hint)
+            self.assertNotIn("push", hint)
+            self.assertNotIn('"goon"', hint)
+
+    def test_the_prompt_for_kids_forbids_the_unsafe_things(self):
+        for word in ("NEVER", "slap", "police", "romance", "hook", "catchphrase"):
+            self.assertIn(word.lower(), write.KIDS_MODE.lower())
+
+    def test_upload_text_tells_you_to_mark_it_made_for_kids(self):
+        sys.path.insert(0, str(ROOT / "tools" / "story"))
+        import text
+        out = text.build({"audience": "kids", "upload": {"titles": ["A"], "description": "d", "hashtags": []}})
+        self.assertIn("made for kids", out)
+
+
 class WriterTests(unittest.TestCase):
     def setUp(self):
         self.base = json.loads((ROOT / "story/screenplays/ep1_date_night.json").read_text(encoding="utf-8"))
